@@ -6,6 +6,6 @@ namespace LLMGateway.Interfaces
     public interface IChatClientCreator
     {
         string Type { get; }
-        IChatClient CreateClient(LLMModelInfo model);
+        IChatClient CreateClient(ModelDeployment deployment);
     }
 }

@@ -10,18 +10,19 @@ namespace LLMGateway.Services.LLMCreators
     {
         public string Type => "Ollama";
 
-        public IChatClient CreateClient(LLMModelInfo model)
+        public IChatClient CreateClient(ModelDeployment deployment)
         {
-            // Ollama предоставляет OpenAI-совместимый эндпоинт на /v1
-            var endpoint = model.Endpoint.TrimEnd('/') + "/v1";
+            var endpoint = deployment.Endpoint.TrimEnd('/');
+            if (!endpoint.EndsWith("/v1", StringComparison.OrdinalIgnoreCase))
+                endpoint += "/v1";
             var options = new OpenAIClientOptions
             {
                 Endpoint = new Uri(endpoint),
                 NetworkTimeout = TimeSpan.FromMinutes(3)
             };
 
-            var client = new OpenAIClient(new ApiKeyCredential(string.Empty), options);
-            return client.GetChatClient(model.ModelId).AsIChatClient();
+            var client = new OpenAIClient(new ApiKeyCredential(deployment.ApiKey ?? "ollama"), options);
+            return client.GetChatClient(deployment.ProviderModelId).AsIChatClient();
         }
     }
 }

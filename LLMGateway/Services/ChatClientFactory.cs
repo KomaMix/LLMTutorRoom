@@ -13,12 +13,17 @@ namespace LLMGateway.Services
             _creators = creators.ToDictionary(c => c.Type, c => c);
         }
 
-        public IChatClient CreateClient(LLMModelInfo model)
+        public IChatClient CreateClient(ModelDeployment deployment)
         {
-            if (!_creators.TryGetValue(model.Type, out var creator))
-                throw new NotSupportedException($"Unsupported model type: {model.Type}");
+            if (!_creators.TryGetValue(deployment.ProviderType, out var creator))
+                throw new NotSupportedException($"Unsupported provider type: {deployment.ProviderType}");
 
-            return creator.CreateClient(model);
+            return creator.CreateClient(deployment);
+        }
+
+        public bool SupportsProvider(string providerType)
+        {
+            return _creators.ContainsKey(providerType);
         }
     }
 }

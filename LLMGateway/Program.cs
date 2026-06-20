@@ -14,6 +14,7 @@ builder.Services.AddSingleton<IChatClientCreator, OllamaChatClientCreator>();
 builder.Services.AddSingleton<IChatClientCreator, OpenAiCompatibleChatClientCreator>();
 
 builder.Services.AddSingleton<ChatClientFactory>();
+builder.Services.AddScoped<RateLimitService>();
 
 builder.Services.AddControllers();
 

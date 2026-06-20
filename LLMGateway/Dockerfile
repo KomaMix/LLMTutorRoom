@@ -1,7 +1,6 @@
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /src
 COPY ["LLMGateway/LLMGateway.csproj", "LLMGateway/"]
-COPY ["Proto/", "Proto/"]
 RUN dotnet restore "LLMGateway/LLMGateway.csproj"
 COPY . .
 WORKDIR "/src/LLMGateway"

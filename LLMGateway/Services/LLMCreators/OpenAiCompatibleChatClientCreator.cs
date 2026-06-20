@@ -10,18 +10,18 @@ namespace LLMGateway.Services.LLMCreators
     {
         public string Type => "OpenAiCompatible";
 
-        public IChatClient CreateClient(LLMModelInfo model)
+        public IChatClient CreateClient(ModelDeployment deployment)
         {
-            if (string.IsNullOrEmpty(model.ApiKey))
-                throw new InvalidOperationException($"API key is required");
+            if (string.IsNullOrEmpty(deployment.ApiKey))
+                throw new InvalidOperationException("API key is required.");
 
             var options = new OpenAIClientOptions
             {
-                Endpoint = new Uri(model.Endpoint),
+                Endpoint = new Uri(deployment.Endpoint),
                 NetworkTimeout = TimeSpan.FromMinutes(3)
             };
-            var client = new OpenAIClient(new ApiKeyCredential(model.ApiKey), options);
-            return client.GetChatClient(model.ModelId).AsIChatClient();
+            var client = new OpenAIClient(new ApiKeyCredential(deployment.ApiKey), options);
+            return client.GetChatClient(deployment.ProviderModelId).AsIChatClient();
         }
     }
 }
