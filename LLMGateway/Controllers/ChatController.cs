@@ -49,9 +49,6 @@ namespace LLMGateway.Controllers
                 return Ok(new LLMGateway.DTOs.ChatResponse
                 {
                     Model = request.Model,
-                    DeploymentId = deployment.Id,
-                    ProviderType = deployment.ProviderType,
-                    ProviderModelId = deployment.ProviderModelId,
                     Text = response.Text
                 });
             }
