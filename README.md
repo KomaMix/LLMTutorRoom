@@ -22,6 +22,20 @@ database before running `database update`.
 
 ## API
 
+List available model keys:
+
+```http
+GET /api/models
+```
+
+```json
+[
+  "gpt-5.4-mini",
+  "mistral-large-latest",
+  "mistral:7b"
+]
+```
+
 Create the logical model:
 
 ```http

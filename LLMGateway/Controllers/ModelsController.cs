@@ -21,16 +21,16 @@ namespace LLMGateway.Controllers
         }
 
         [HttpGet]
-        public async Task<ActionResult<IReadOnlyCollection<ModelResponse>>> GetModels(CancellationToken cancellationToken)
+        public async Task<ActionResult<IReadOnlyCollection<string>>> GetModels(CancellationToken cancellationToken)
         {
             var models = await _dbContext.Models
                 .AsNoTracking()
-                .Include(m => m.Deployments)
-                    .ThenInclude(d => d.RateLimitRules)
+                .Where(m => m.Deployments.Any(d => d.IsEnabled))
                 .OrderBy(m => m.Key)
+                .Select(m => m.Key)
                 .ToListAsync(cancellationToken);
 
-            return Ok(models.Select(ToResponse).ToList());
+            return Ok(models);
         }
 
         [HttpPost]
