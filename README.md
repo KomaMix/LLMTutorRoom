@@ -1,14 +1,14 @@
 # LLMGateway
 
-Local ASP.NET Core gateway for chat requests to a configured language model.
+Локальный ASP.NET Core gateway для отправки чат-запросов к настроенным языковым моделям.
 
-`Model` stores the stable key used by callers, for example `mistral:7b`.
-One model can have multiple deployments, such as a local Ollama instance and a
-remote OpenAI-compatible API. Deployments are selected by ascending `priority`.
+`Model` хранит стабильный ключ, по которому вызывающие проекты обращаются к модели, например `mistral:7b`.
+Одна модель может иметь несколько deployment-ов: локальный Ollama и удаленный OpenAI-совместимый API.
+Gateway выбирает доступный deployment с наименьшим значением `priority`.
 
-## Setup
+## Запуск
 
-Configure the local PostgreSQL connection without putting its password in Git:
+Настройте подключение к PostgreSQL через User Secrets, не добавляя пароль в Git:
 
 ```powershell
 dotnet user-secrets set "ConnectionStrings:DefaultConnection" "Host=localhost;Database=llm_infos;Username=postgres;Password=your-password" --project LLMGateway
@@ -16,13 +16,13 @@ dotnet ef database update --project LLMGateway
 dotnet run --project LLMGateway --launch-profile http
 ```
 
-The old database schema is incompatible with the new initial migration. For a
-development database created by the prior version, drop and recreate the
-database before running `database update`.
+Схема старой базы несовместима с текущей начальной миграцией. Для базы разработки,
+созданной предыдущей версией проекта, удалите и создайте базу заново перед запуском
+`database update`.
 
 ## API
 
-List available model keys:
+Получить ключи доступных моделей:
 
 ```http
 GET /api/models
@@ -36,7 +36,7 @@ GET /api/models
 ]
 ```
 
-Create the logical model:
+Создать логическую модель:
 
 ```http
 POST /api/models
@@ -44,12 +44,12 @@ Content-Type: application/json
 
 {
   "key": "mistral:7b",
-  "displayName": "mistral-7b-local",
-  "description": "Mistral 7B deployment group"
+  "displayName": "Mistral 7B",
+  "description": "Mistral 7B с локальным и удаленным deployment-ами"
 }
 ```
 
-Add a local Ollama deployment:
+Добавить локальный deployment через Ollama:
 
 ```http
 POST /api/models/mistral:7b/deployments
@@ -64,7 +64,7 @@ Content-Type: application/json
 }
 ```
 
-Add a rate-limit rule for a deployment:
+Добавить ограничение запросов для deployment-а:
 
 ```http
 POST /api/models/deployments/1/rate-limits
@@ -76,7 +76,7 @@ Content-Type: application/json
 }
 ```
 
-Send a chat request:
+Отправить чат-запрос:
 
 ```http
 POST /api/chat
@@ -86,8 +86,8 @@ Content-Type: application/json
   "model": "mistral:7b",
   "temperature": 0.7,
   "messages": [
-    { "role": "system", "content": "Answer briefly." },
-    { "role": "user", "content": "Who are you?" }
+    { "role": "system", "content": "Отвечай кратко." },
+    { "role": "user", "content": "Кто ты?" }
   ]
 }
 ```
