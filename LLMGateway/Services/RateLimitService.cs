@@ -15,17 +15,18 @@ namespace LLMGateway.Services
         }
 
         public async Task<bool> TryConsumeAsync(
-            ICollection<ModelRateLimitRule> rules,
+            IEnumerable<ModelRateLimitRule> rules,
             CancellationToken cancellationToken)
         {
-            if (rules.Count == 0)
+            var rateLimitRules = rules as ModelRateLimitRule[] ?? rules.ToArray();
+            if (rateLimitRules.Length == 0)
                 return true;
 
             await using var transaction = await _dbContext.Database.BeginTransactionAsync(
                 IsolationLevel.Serializable,
                 cancellationToken);
 
-            foreach (var rule in rules)
+            foreach (var rule in rateLimitRules)
             {
                 var now = DateTime.UtcNow;
                 var windowStartedAt = new DateTime(

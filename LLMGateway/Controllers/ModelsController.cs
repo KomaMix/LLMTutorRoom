@@ -1,6 +1,6 @@
 using LLMGateway.Data;
 using LLMGateway.Data.Models;
-using LLMGateway.DTOs;
+using LLMGateway.DTOs.Models;
 using LLMGateway.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -72,13 +72,14 @@ namespace LLMGateway.Controllers
             if (model is null)
                 return NotFound();
 
-            if (!_chatClientFactory.SupportsProvider(request.ProviderType))
-                return BadRequest($"Unsupported provider type '{request.ProviderType}'.");
+            var providerType = request.ProviderType!.Value;
+            if (!_chatClientFactory.SupportsProvider(providerType))
+                return BadRequest($"Unsupported provider type '{providerType}'.");
 
             var deployment = new ModelDeployment
             {
                 ModelId = model.Id,
-                ProviderType = request.ProviderType,
+                ProviderType = providerType,
                 Endpoint = request.Endpoint,
                 ApiKey = request.ApiKey,
                 ProviderModelId = request.ProviderModelId,
@@ -90,6 +91,35 @@ namespace LLMGateway.Controllers
             await _dbContext.SaveChangesAsync(cancellationToken);
 
             return CreatedAtAction(nameof(GetModel), new { modelKey }, ToResponse(deployment));
+        }
+
+        [HttpPut("deployments/{deploymentId:int}")]
+        public async Task<ActionResult<ModelDeploymentResponse>> UpdateDeployment(
+            [FromRoute] int deploymentId,
+            [FromBody] UpdateModelDeploymentRequest request,
+            CancellationToken cancellationToken)
+        {
+            var deployment = await _dbContext.ModelDeployments
+                .Include(d => d.RateLimitRules)
+                .SingleOrDefaultAsync(d => d.Id == deploymentId, cancellationToken);
+            if (deployment is null)
+                return NotFound();
+
+            var providerType = request.ProviderType!.Value;
+            if (!_chatClientFactory.SupportsProvider(providerType))
+                return BadRequest($"Unsupported provider type '{providerType}'.");
+
+            deployment.ProviderType = providerType;
+            deployment.Endpoint = request.Endpoint;
+            deployment.ApiKey = request.ApiKey;
+            deployment.ProviderModelId = request.ProviderModelId;
+            deployment.IsEnabled = request.IsEnabled;
+            deployment.Priority = request.Priority;
+            deployment.MaxConcurrentRequests = request.MaxConcurrentRequests;
+            deployment.UpdatedAt = DateTime.UtcNow;
+
+            await _dbContext.SaveChangesAsync(cancellationToken);
+            return Ok(ToResponse(deployment));
         }
 
         [HttpPost("deployments/{deploymentId:int}/rate-limits")]
@@ -113,6 +143,18 @@ namespace LLMGateway.Controllers
             await _dbContext.SaveChangesAsync(cancellationToken);
 
             return Ok(ToResponse(rule));
+        }
+
+        [HttpDelete("rate-limits/{rateLimitRuleId:int}")]
+        public async Task<IActionResult> DeleteRateLimitRule(
+            [FromRoute] int rateLimitRuleId,
+            CancellationToken cancellationToken)
+        {
+            var deletedRows = await _dbContext.ModelRateLimitRules
+                .Where(r => r.Id == rateLimitRuleId)
+                .ExecuteDeleteAsync(cancellationToken);
+
+            return deletedRows == 0 ? NotFound() : NoContent();
         }
 
         private Task<Model?> GetModelWithDeploymentsAsync(string modelKey, CancellationToken cancellationToken)

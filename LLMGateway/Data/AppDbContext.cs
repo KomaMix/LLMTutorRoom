@@ -23,7 +23,9 @@ namespace LLMGateway.Data
 
             modelBuilder.Entity<ModelDeployment>(entity =>
             {
-                entity.Property(d => d.ProviderType).HasMaxLength(100);
+                entity.Property(d => d.ProviderType)
+                    .HasConversion<string>()
+                    .HasMaxLength(100);
                 entity.Property(d => d.ProviderModelId).HasMaxLength(200);
                 entity.HasOne(d => d.Model)
                     .WithMany(m => m.Deployments)

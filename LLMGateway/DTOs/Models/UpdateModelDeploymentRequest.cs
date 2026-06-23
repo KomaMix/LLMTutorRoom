@@ -1,11 +1,12 @@
 using System.ComponentModel.DataAnnotations;
+using LLMGateway.Data.Models;
 
-namespace LLMGateway.DTOs
+namespace LLMGateway.DTOs.Models
 {
-    public class CreateModelDeploymentRequest
+    public class UpdateModelDeploymentRequest
     {
-        [Required, MaxLength(100)]
-        public string ProviderType { get; set; } = string.Empty;
+        [Required, EnumDataType(typeof(ModelProviderType))]
+        public ModelProviderType? ProviderType { get; set; }
 
         [Required, Url, MaxLength(2000)]
         public string Endpoint { get; set; } = string.Empty;
@@ -15,7 +16,7 @@ namespace LLMGateway.DTOs
         [Required, MaxLength(200)]
         public string ProviderModelId { get; set; } = string.Empty;
 
-        public bool IsEnabled { get; set; } = true;
+        public bool IsEnabled { get; set; }
         public int Priority { get; set; }
 
         [Range(1, 1000)]

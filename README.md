@@ -76,6 +76,28 @@ Content-Type: application/json
 }
 ```
 
+Изменить реализацию модели:
+
+```http
+PUT /api/models/deployments/1
+Content-Type: application/json
+
+{
+  "providerType": "Ollama",
+  "endpoint": "http://localhost:11434",
+  "providerModelId": "mistral:7b",
+  "isEnabled": true,
+  "priority": 0,
+  "maxConcurrentRequests": 1
+}
+```
+
+Удалить правило ограничения:
+
+```http
+DELETE /api/models/rate-limits/1
+```
+
 Отправить чат-запрос:
 
 ```http

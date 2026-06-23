@@ -1,4 +1,4 @@
-namespace LLMGateway.DTOs
+namespace LLMGateway.DTOs.Models
 {
     public class ModelResponse
     {

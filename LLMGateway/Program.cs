@@ -3,6 +3,7 @@ using LLMGateway.Interfaces;
 using LLMGateway.Services;
 using LLMGateway.Services.LLMCreators;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -15,8 +16,11 @@ builder.Services.AddSingleton<IChatClientCreator, OpenAiCompatibleChatClientCrea
 
 builder.Services.AddSingleton<ChatClientFactory>();
 builder.Services.AddScoped<RateLimitService>();
+builder.Services.AddScoped<ChatExecutionService>();
 
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+        options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
@@ -36,3 +40,7 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
+
+public partial class Program
+{
+}

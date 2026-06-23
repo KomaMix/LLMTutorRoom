@@ -8,7 +8,7 @@ namespace LLMGateway.Services.LLMCreators
 {
     public class OllamaChatClientCreator : IChatClientCreator
     {
-        public string Type => "Ollama";
+        public ModelProviderType ProviderType => ModelProviderType.Ollama;
 
         public IChatClient CreateClient(ModelDeployment deployment)
         {

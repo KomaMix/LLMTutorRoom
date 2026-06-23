@@ -8,7 +8,7 @@ namespace LLMGateway.Services.LLMCreators
 {
     public class OpenAiCompatibleChatClientCreator : IChatClientCreator
     {
-        public string Type => "OpenAiCompatible";
+        public ModelProviderType ProviderType => ModelProviderType.OpenAiCompatible;
 
         public IChatClient CreateClient(ModelDeployment deployment)
         {

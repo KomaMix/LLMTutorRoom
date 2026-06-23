@@ -1,9 +1,11 @@
-namespace LLMGateway.DTOs
+using LLMGateway.Data.Models;
+
+namespace LLMGateway.DTOs.Models
 {
     public class ModelDeploymentResponse
     {
         public int Id { get; set; }
-        public string ProviderType { get; set; } = string.Empty;
+        public ModelProviderType ProviderType { get; set; }
         public string Endpoint { get; set; } = string.Empty;
         public string ProviderModelId { get; set; } = string.Empty;
         public bool IsEnabled { get; set; }

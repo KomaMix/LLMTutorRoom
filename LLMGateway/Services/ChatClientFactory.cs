@@ -6,11 +6,11 @@ namespace LLMGateway.Services
 {
     public class ChatClientFactory
     {
-        private readonly Dictionary<string, IChatClientCreator> _creators;
+        private readonly Dictionary<ModelProviderType, IChatClientCreator> _creators;
 
         public ChatClientFactory(IEnumerable<IChatClientCreator> creators)
         {
-            _creators = creators.ToDictionary(c => c.Type, c => c);
+            _creators = creators.ToDictionary(c => c.ProviderType, c => c);
         }
 
         public IChatClient CreateClient(ModelDeployment deployment)
@@ -21,7 +21,7 @@ namespace LLMGateway.Services
             return creator.CreateClient(deployment);
         }
 
-        public bool SupportsProvider(string providerType)
+        public bool SupportsProvider(ModelProviderType providerType)
         {
             return _creators.ContainsKey(providerType);
         }

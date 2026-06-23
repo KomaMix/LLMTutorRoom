@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace LLMGateway.DTOs
+namespace LLMGateway.DTOs.Chat
 {
     public class ChatRequest
     {
