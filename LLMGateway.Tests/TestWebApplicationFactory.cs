@@ -10,8 +10,7 @@ namespace LLMGateway.Tests
 {
     public sealed class TestWebApplicationFactory : WebApplicationFactory<Program>, IAsyncLifetime
     {
-        private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder()
-            .WithImage("postgres:16-alpine")
+        private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:16-alpine")
             .WithDatabase("llmgateway_tests")
             .WithUsername("postgres")
             .WithPassword("postgres")
@@ -37,10 +36,10 @@ namespace LLMGateway.Tests
             await dbContext.Database.MigrateAsync();
         }
 
-        public async Task DisposeAsync()
+        async Task IAsyncLifetime.DisposeAsync()
         {
             await _postgres.DisposeAsync();
-            Dispose();
+            await base.DisposeAsync();
         }
     }
 }
