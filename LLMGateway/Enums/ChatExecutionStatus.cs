@@ -3,7 +3,10 @@ namespace LLMGateway.Enums
     public enum ChatExecutionStatus
     {
         Completed,
+        ModelNotFound,
         NoAvailableDeployment,
-        RateLimitExceeded
+        RateLimitExceeded,
+        ProviderFailed,
+        ProviderTimedOut
     }
 }

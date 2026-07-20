@@ -12,93 +12,119 @@ namespace LLMGateway.Services
         private readonly AppDbContext _dbContext;
         private readonly ChatClientFactory _chatClientFactory;
         private readonly RateLimitService _rateLimitService;
+        private readonly ILogger<ChatExecutionService> _logger;
 
         public ChatExecutionService(
             AppDbContext dbContext,
             ChatClientFactory chatClientFactory,
-            RateLimitService rateLimitService)
+            RateLimitService rateLimitService,
+            ILogger<ChatExecutionService> logger)
         {
             _dbContext = dbContext;
             _chatClientFactory = chatClientFactory;
             _rateLimitService = rateLimitService;
+            _logger = logger;
         }
 
-        public async Task<(ChatCompletionResponse? Response, ChatExecutionStatus Status)> ExecuteAsync(
+        public async Task<(
+            ChatExecutionStatus Status,
+            ChatCompletionResponse? Response)> ExecuteAsync(
             ChatRequest request,
             CancellationToken cancellationToken)
         {
-            var deployment = await TryAcquireDeploymentAsync(request.Model, cancellationToken);
-            if (deployment is null)
-                return (null, ChatExecutionStatus.NoAvailableDeployment);
+            var model = await _dbContext.Models
+                .AsNoTracking()
+                .Include(m => m.Deployments)
+                .SingleOrDefaultAsync(m => m.Key == request.Model, cancellationToken);
 
-            try
-            {
-                if (!await _rateLimitService.TryConsumeAsync(deployment.RateLimitRules, cancellationToken))
-                    return (null, ChatExecutionStatus.RateLimitExceeded);
-
-                var client = _chatClientFactory.CreateClient(deployment);
-                var response = await client.GetResponseAsync(
-                    request.Messages.Select(ToChatMessage).ToList(),
-                    new ChatOptions { Temperature = request.Temperature },
-                    cancellationToken);
-
+            if (model is null)
                 return (
-                    new ChatCompletionResponse
+                    ChatExecutionStatus.ModelNotFound,
+                    null);
+
+            var deployments = model.Deployments
+                .Where(d => d.IsEnabled)
+                .OrderBy(d => d.Priority)
+                .ThenBy(d => d.Id)
+                .ToList();
+
+            if (deployments.Count == 0)
+                return (
+                    ChatExecutionStatus.NoAvailableDeployment,
+                    null);
+
+            var messages = request.Messages.Select(ToChatMessage).ToList();
+            var sawRateLimitedDeployment = false;
+            var sawProviderFailure = false;
+            var sawProviderTimeout = false;
+
+            foreach (var deployment in deployments)
+            {
+                try
+                {
+                    if (!_rateLimitService.TryConsume(
+                            deployment.Id,
+                            deployment.RateLimitRules))
                     {
-                        Model = request.Model,
-                        Text = response.Text
-                    },
-                    ChatExecutionStatus.Completed);
-            }
-            finally
-            {
-                await ReleaseDeploymentAsync(deployment.Id, CancellationToken.None);
-            }
-        }
+                        sawRateLimitedDeployment = true;
+                        continue;
+                    }
 
-        private async Task<ModelDeployment?> TryAcquireDeploymentAsync(
-            string modelKey,
-            CancellationToken cancellationToken)
-        {
-            while (true)
-            {
-                var deployment = await _dbContext.ModelDeployments
-                    .AsNoTracking()
-                    .Include(d => d.RateLimitRules)
-                    .Where(d => d.Model.Key == modelKey
-                        && d.IsEnabled
-                        && d.CurrentRequestCount < d.MaxConcurrentRequests)
-                    .OrderBy(d => d.Priority)
-                    .ThenBy(d => d.Id)
-                    .FirstOrDefaultAsync(cancellationToken);
-
-                if (deployment is null)
-                    return null;
-
-                var updatedRows = await _dbContext.ModelDeployments
-                    .Where(d => d.Id == deployment.Id
-                        && d.IsEnabled
-                        && d.CurrentRequestCount < d.MaxConcurrentRequests)
-                    .ExecuteUpdateAsync(
-                        setters => setters
-                            .SetProperty(d => d.CurrentRequestCount, d => d.CurrentRequestCount + 1)
-                            .SetProperty(d => d.UpdatedAt, DateTime.UtcNow),
+                    var client = _chatClientFactory.CreateClient(deployment);
+                    var response = await client.GetResponseAsync(
+                        messages,
+                        new ChatOptions { Temperature = request.Temperature },
                         cancellationToken);
 
-                if (updatedRows == 1)
-                    return deployment;
-            }
-        }
+                    return (
+                        ChatExecutionStatus.Completed,
+                        new ChatCompletionResponse
+                        {
+                            Model = request.Model,
+                            Text = response.Text
+                        });
+                }
+                catch (OperationCanceledException)
+                {
+                    if (cancellationToken.IsCancellationRequested)
+                        throw;
 
-        private Task ReleaseDeploymentAsync(int deploymentId, CancellationToken cancellationToken)
-        {
-            return _dbContext.ModelDeployments
-                .Where(d => d.Id == deploymentId && d.CurrentRequestCount > 0)
-                .ExecuteUpdateAsync(
-                    setters => setters
-                        .SetProperty(d => d.CurrentRequestCount, d => d.CurrentRequestCount - 1)
-                        .SetProperty(d => d.UpdatedAt, DateTime.UtcNow),
-                    cancellationToken);
+                    sawProviderTimeout = true;
+                    _logger.LogWarning(
+                        "Deployment {DeploymentId} for model {ModelKey} timed out.",
+                        deployment.Id,
+                        request.Model);
+                }
+                catch (Exception ex)
+                {
+                    sawProviderFailure = true;
+                    _logger.LogWarning(
+                        ex,
+                        "Deployment {DeploymentId} for model {ModelKey} failed.",
+                        deployment.Id,
+                        request.Model);
+                }
+            }
+
+            if (sawProviderFailure || sawProviderTimeout)
+            {
+                var status = sawProviderFailure
+                    ? ChatExecutionStatus.ProviderFailed
+                    : ChatExecutionStatus.ProviderTimedOut;
+
+                return (
+                    status,
+                    null);
+            }
+
+            if (sawRateLimitedDeployment)
+                return (
+                    ChatExecutionStatus.RateLimitExceeded,
+                    null);
+
+            return (
+                ChatExecutionStatus.NoAvailableDeployment,
+                null);
         }
 
         private static ChatMessage ToChatMessage(ChatMessageRequest message)

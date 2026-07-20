@@ -12,7 +12,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace LLMGateway.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260620083333_InitialCreate")]
+    [Migration("20260720163322_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -20,7 +20,7 @@ namespace LLMGateway.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "8.0.28")
+                .HasAnnotation("ProductVersion", "9.0.17")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -41,13 +41,11 @@ namespace LLMGateway.Migrations
 
                     b.Property<string>("DisplayName")
                         .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
+                        .HasColumnType("text");
 
                     b.Property<string>("Key")
                         .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
+                        .HasColumnType("text");
 
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -74,18 +72,12 @@ namespace LLMGateway.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<int>("CurrentRequestCount")
-                        .HasColumnType("integer");
-
                     b.Property<string>("Endpoint")
                         .IsRequired()
                         .HasColumnType("text");
 
                     b.Property<bool>("IsEnabled")
                         .HasColumnType("boolean");
-
-                    b.Property<int>("MaxConcurrentRequests")
-                        .HasColumnType("integer");
 
                     b.Property<int>("ModelId")
                         .HasColumnType("integer");
@@ -95,13 +87,18 @@ namespace LLMGateway.Migrations
 
                     b.Property<string>("ProviderModelId")
                         .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
+                        .HasColumnType("text");
 
                     b.Property<string>("ProviderType")
                         .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
+                        .HasColumnType("text");
+
+                    b.Property<string>("RateLimitRules")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("RateLimitRules")
+                        .HasDefaultValueSql("'[]'::jsonb");
 
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -111,46 +108,6 @@ namespace LLMGateway.Migrations
                     b.HasIndex("ModelId");
 
                     b.ToTable("ModelDeployments");
-                });
-
-            modelBuilder.Entity("LLMGateway.Data.Models.ModelRateLimitBucket", b =>
-                {
-                    b.Property<int>("ModelRateLimitRuleId")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("WindowStartedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("RequestCount")
-                        .HasColumnType("integer");
-
-                    b.HasKey("ModelRateLimitRuleId", "WindowStartedAt");
-
-                    b.ToTable("ModelRateLimitBuckets");
-                });
-
-            modelBuilder.Entity("LLMGateway.Data.Models.ModelRateLimitRule", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<int>("MaxRequests")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("ModelDeploymentId")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("WindowSeconds")
-                        .HasColumnType("integer");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ModelDeploymentId");
-
-                    b.ToTable("ModelRateLimitRules");
                 });
 
             modelBuilder.Entity("LLMGateway.Data.Models.ModelDeployment", b =>
@@ -164,36 +121,9 @@ namespace LLMGateway.Migrations
                     b.Navigation("Model");
                 });
 
-            modelBuilder.Entity("LLMGateway.Data.Models.ModelRateLimitBucket", b =>
-                {
-                    b.HasOne("LLMGateway.Data.Models.ModelRateLimitRule", "ModelRateLimitRule")
-                        .WithMany()
-                        .HasForeignKey("ModelRateLimitRuleId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("ModelRateLimitRule");
-                });
-
-            modelBuilder.Entity("LLMGateway.Data.Models.ModelRateLimitRule", b =>
-                {
-                    b.HasOne("LLMGateway.Data.Models.ModelDeployment", "ModelDeployment")
-                        .WithMany("RateLimitRules")
-                        .HasForeignKey("ModelDeploymentId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("ModelDeployment");
-                });
-
             modelBuilder.Entity("LLMGateway.Data.Models.Model", b =>
                 {
                     b.Navigation("Deployments");
-                });
-
-            modelBuilder.Entity("LLMGateway.Data.Models.ModelDeployment", b =>
-                {
-                    b.Navigation("RateLimitRules");
                 });
 #pragma warning restore 612, 618
         }

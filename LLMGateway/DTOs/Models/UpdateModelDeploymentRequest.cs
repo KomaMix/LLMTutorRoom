@@ -18,8 +18,5 @@ namespace LLMGateway.DTOs.Models
 
         public bool IsEnabled { get; set; }
         public int Priority { get; set; }
-
-        [Range(1, 1000)]
-        public int MaxConcurrentRequests { get; set; } = 1;
     }
 }

@@ -2,44 +2,27 @@ using LLMGateway.Data;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Testcontainers.PostgreSql;
 
 namespace LLMGateway.Tests
 {
-    public sealed class TestWebApplicationFactory : WebApplicationFactory<Program>, IAsyncLifetime
+    public sealed class TestWebApplicationFactory : WebApplicationFactory<Program>
     {
-        private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:16-alpine")
-            .WithDatabase("llmgateway_tests")
-            .WithUsername("postgres")
-            .WithPassword("postgres")
-            .Build();
+        private readonly string _databaseName = $"llmgateway-tests-{Guid.NewGuid():N}";
 
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
             builder.UseEnvironment("Testing");
             builder.ConfigureServices(services =>
             {
+                services.RemoveAll<IDbContextOptionsConfiguration<AppDbContext>>();
                 services.RemoveAll<DbContextOptions<AppDbContext>>();
                 services.RemoveAll<AppDbContext>();
-                services.AddDbContext<AppDbContext>(options => options.UseNpgsql(_postgres.GetConnectionString()));
+
+                services.AddDbContext<AppDbContext>(options => options.UseInMemoryDatabase(_databaseName));
             });
-        }
-
-        public async Task InitializeAsync()
-        {
-            await _postgres.StartAsync();
-
-            using var scope = Services.CreateScope();
-            var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-            await dbContext.Database.MigrateAsync();
-        }
-
-        async Task IAsyncLifetime.DisposeAsync()
-        {
-            await _postgres.DisposeAsync();
-            await base.DisposeAsync();
         }
     }
 }

@@ -34,21 +34,18 @@ namespace LLMGateway.Tests
         {
             var modelKey = await CreateModelAsync();
             var deploymentId = await CreateDeploymentAsync(modelKey, isEnabled: true);
-            var requestBody = """
-                {
-                  "providerType": "OpenAiCompatible",
-                  "endpoint": "https://example.test/v1",
-                  "apiKey": "test-key",
-                  "providerModelId": "remote-model",
-                  "isEnabled": false,
-                  "priority": 10,
-                  "maxConcurrentRequests": 2
-                }
-                """;
 
-            var response = await _client.PutAsync(
+            var response = await _client.PutAsJsonAsync(
                 $"/api/models/deployments/{deploymentId}",
-                CreateJsonContent(requestBody));
+                new
+                {
+                    providerType = "OpenAiCompatible",
+                    endpoint = "https://example.test/v1",
+                    apiKey = "test-key",
+                    providerModelId = "remote-model",
+                    isEnabled = false,
+                    priority = 10
+                });
 
             response.EnsureSuccessStatusCode();
             using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
@@ -100,19 +97,16 @@ namespace LLMGateway.Tests
 
         private async Task<int> CreateDeploymentAsync(string modelKey, bool isEnabled)
         {
-            var requestBody = $$"""
-                {
-                  "providerType": "Ollama",
-                  "endpoint": "http://localhost:11434",
-                  "providerModelId": "{{modelKey}}",
-                  "isEnabled": {{isEnabled.ToString().ToLowerInvariant()}},
-                  "priority": 0,
-                  "maxConcurrentRequests": 1
-                }
-                """;
-            var response = await _client.PostAsync(
+            var response = await _client.PostAsJsonAsync(
                 $"/api/models/{modelKey}/deployments",
-                CreateJsonContent(requestBody));
+                new
+                {
+                    providerType = "Ollama",
+                    endpoint = "http://localhost:11434",
+                    providerModelId = modelKey,
+                    isEnabled,
+                    priority = 0
+                });
 
             response.EnsureSuccessStatusCode();
             using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());

@@ -1,66 +1,59 @@
-using LLMGateway.Data;
 using LLMGateway.Data.Models;
-using Microsoft.EntityFrameworkCore;
-using System.Data;
 
 namespace LLMGateway.Services
 {
     public class RateLimitService
     {
-        private readonly AppDbContext _dbContext;
+        private readonly object _syncRoot = new();
+        private readonly Dictionary<RateLimitKey, Queue<DateTimeOffset>> _requests = new();
 
-        public RateLimitService(AppDbContext dbContext)
+        public bool TryConsume(
+            int deploymentId,
+            IReadOnlyCollection<ModelRateLimitRule> rules)
         {
-            _dbContext = dbContext;
-        }
-
-        public async Task<bool> TryConsumeAsync(
-            IEnumerable<ModelRateLimitRule> rules,
-            CancellationToken cancellationToken)
-        {
-            var rateLimitRules = rules as ModelRateLimitRule[] ?? rules.ToArray();
-            if (rateLimitRules.Length == 0)
+            if (rules.Count == 0)
                 return true;
 
-            await using var transaction = await _dbContext.Database.BeginTransactionAsync(
-                IsolationLevel.Serializable,
-                cancellationToken);
+            var now = DateTimeOffset.UtcNow;
 
-            foreach (var rule in rateLimitRules)
+            lock (_syncRoot)
             {
-                var now = DateTime.UtcNow;
-                var windowStartedAt = new DateTime(
-                    now.Ticks - now.Ticks % TimeSpan.FromSeconds(rule.WindowSeconds).Ticks,
-                    DateTimeKind.Utc);
-
-                var bucket = await _dbContext.ModelRateLimitBuckets
-                    .SingleOrDefaultAsync(
-                        b => b.ModelRateLimitRuleId == rule.Id && b.WindowStartedAt == windowStartedAt,
-                        cancellationToken);
-
-                if (bucket is null)
+                var allowedQueues = new List<Queue<DateTimeOffset>>();
+                foreach (var rule in rules)
                 {
-                    _dbContext.ModelRateLimitBuckets.Add(new ModelRateLimitBucket
-                    {
-                        ModelRateLimitRuleId = rule.Id,
-                        WindowStartedAt = windowStartedAt,
-                        RequestCount = 1
-                    });
-                    continue;
+                    if (rule.WindowSeconds <= 0 || rule.MaxRequests <= 0)
+                        throw new InvalidOperationException(
+                            $"Rate limit rule '{rule.Id}' has invalid configuration.");
+
+                    var key = new RateLimitKey(deploymentId, rule.Id);
+                    var queue = GetRequestQueue(key);
+                    var window = TimeSpan.FromSeconds(rule.WindowSeconds);
+                    var windowStart = now - window;
+
+                    while (queue.Count > 0 && queue.Peek() <= windowStart)
+                        queue.Dequeue();
+
+                    if (queue.Count >= rule.MaxRequests)
+                        return false;
+
+                    allowedQueues.Add(queue);
                 }
 
-                if (bucket.RequestCount >= rule.MaxRequests)
-                {
-                    await transaction.RollbackAsync(cancellationToken);
-                    return false;
-                }
+                foreach (var queue in allowedQueues)
+                    queue.Enqueue(now);
 
-                bucket.RequestCount++;
+                return true;
             }
-
-            await _dbContext.SaveChangesAsync(cancellationToken);
-            await transaction.CommitAsync(cancellationToken);
-            return true;
         }
+
+        private Queue<DateTimeOffset> GetRequestQueue(RateLimitKey key)
+        {
+            if (!_requests.TryGetValue(key, out var queue))
+                _requests[key] = queue = new Queue<DateTimeOffset>();
+
+            return queue;
+        }
+
+        private readonly record struct RateLimitKey(int DeploymentId, int RuleId);
     }
 }

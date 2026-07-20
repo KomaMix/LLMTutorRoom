@@ -17,8 +17,7 @@ namespace LLMGateway.Services.LLMCreators
 
             var options = new OpenAIClientOptions
             {
-                Endpoint = new Uri(deployment.Endpoint),
-                NetworkTimeout = TimeSpan.FromMinutes(3)
+                Endpoint = new Uri(deployment.Endpoint)
             };
             var client = new OpenAIClient(new ApiKeyCredential(deployment.ApiKey), options);
             return client.GetChatClient(deployment.ProviderModelId).AsIChatClient();

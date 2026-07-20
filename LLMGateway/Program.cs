@@ -15,8 +15,9 @@ builder.Services.AddSingleton<IChatClientCreator, OllamaChatClientCreator>();
 builder.Services.AddSingleton<IChatClientCreator, OpenAiCompatibleChatClientCreator>();
 
 builder.Services.AddSingleton<ChatClientFactory>();
-builder.Services.AddScoped<RateLimitService>();
+builder.Services.AddSingleton<RateLimitService>();
 builder.Services.AddScoped<ChatExecutionService>();
+builder.Services.AddProblemDetails();
 
 builder.Services.AddControllers()
     .AddJsonOptions(options =>
@@ -32,6 +33,19 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI();
 }
+
+app.UseExceptionHandler(exceptionHandlerApp =>
+{
+    exceptionHandlerApp.Run(async context =>
+    {
+        context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+        await Results.Problem(
+            statusCode: StatusCodes.Status500InternalServerError,
+            title: "Unexpected error",
+            detail: "An unexpected server error occurred.")
+            .ExecuteAsync(context);
+    });
+});
 
 app.UseHttpsRedirection();
 

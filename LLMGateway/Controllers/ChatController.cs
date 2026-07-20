@@ -21,15 +21,31 @@ namespace LLMGateway.Controllers
             [FromBody] ChatRequest request,
             CancellationToken cancellationToken)
         {
-            var (response, status) = await _chatExecutionService.ExecuteAsync(request, cancellationToken);
-            return status switch
+            var result = await _chatExecutionService.ExecuteAsync(request, cancellationToken);
+            return result.Status switch
             {
-                ChatExecutionStatus.Completed => Ok(response),
+                ChatExecutionStatus.Completed => Ok(result.Response),
+                ChatExecutionStatus.ModelNotFound =>
+                    Problem(
+                        statusCode: StatusCodes.Status404NotFound,
+                        title: "Model not found"),
                 ChatExecutionStatus.NoAvailableDeployment =>
-                    Conflict($"No enabled deployment for model '{request.Model}' is available."),
+                    Problem(
+                        statusCode: StatusCodes.Status503ServiceUnavailable,
+                        title: "No deployment available"),
                 ChatExecutionStatus.RateLimitExceeded =>
-                    StatusCode(StatusCodes.Status429TooManyRequests, "Rate limit exceeded."),
-                _ => throw new InvalidOperationException($"Unsupported chat execution status: {status}")
+                    Problem(
+                        statusCode: StatusCodes.Status429TooManyRequests,
+                        title: "Rate limit exceeded"),
+                ChatExecutionStatus.ProviderFailed =>
+                    Problem(
+                        statusCode: StatusCodes.Status502BadGateway,
+                        title: "Provider request failed"),
+                ChatExecutionStatus.ProviderTimedOut =>
+                    Problem(
+                        statusCode: StatusCodes.Status504GatewayTimeout,
+                        title: "Provider request timed out"),
+                _ => throw new InvalidOperationException($"Unsupported chat execution status: {result.Status}")
             };
         }
     }

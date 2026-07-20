@@ -17,8 +17,7 @@ namespace LLMGateway.Services.LLMCreators
                 endpoint += "/v1";
             var options = new OpenAIClientOptions
             {
-                Endpoint = new Uri(endpoint),
-                NetworkTimeout = TimeSpan.FromMinutes(3)
+                Endpoint = new Uri(endpoint)
             };
 
             var client = new OpenAIClient(new ApiKeyCredential(deployment.ApiKey ?? "ollama"), options);

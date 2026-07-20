@@ -14,7 +14,9 @@ namespace LLMGateway.Controllers
         private readonly AppDbContext _dbContext;
         private readonly ChatClientFactory _chatClientFactory;
 
-        public ModelsController(AppDbContext dbContext, ChatClientFactory chatClientFactory)
+        public ModelsController(
+            AppDbContext dbContext,
+            ChatClientFactory chatClientFactory)
         {
             _dbContext = dbContext;
             _chatClientFactory = chatClientFactory;
@@ -84,8 +86,7 @@ namespace LLMGateway.Controllers
                 ApiKey = request.ApiKey,
                 ProviderModelId = request.ProviderModelId,
                 IsEnabled = request.IsEnabled,
-                Priority = request.Priority,
-                MaxConcurrentRequests = request.MaxConcurrentRequests
+                Priority = request.Priority
             };
             _dbContext.ModelDeployments.Add(deployment);
             await _dbContext.SaveChangesAsync(cancellationToken);
@@ -100,7 +101,6 @@ namespace LLMGateway.Controllers
             CancellationToken cancellationToken)
         {
             var deployment = await _dbContext.ModelDeployments
-                .Include(d => d.RateLimitRules)
                 .SingleOrDefaultAsync(d => d.Id == deploymentId, cancellationToken);
             if (deployment is null)
                 return NotFound();
@@ -115,7 +115,6 @@ namespace LLMGateway.Controllers
             deployment.ProviderModelId = request.ProviderModelId;
             deployment.IsEnabled = request.IsEnabled;
             deployment.Priority = request.Priority;
-            deployment.MaxConcurrentRequests = request.MaxConcurrentRequests;
             deployment.UpdatedAt = DateTime.UtcNow;
 
             await _dbContext.SaveChangesAsync(cancellationToken);
@@ -128,18 +127,22 @@ namespace LLMGateway.Controllers
             [FromBody] CreateRateLimitRuleRequest request,
             CancellationToken cancellationToken)
         {
-            var deploymentExists = await _dbContext.ModelDeployments
-                .AnyAsync(d => d.Id == deploymentId, cancellationToken);
-            if (!deploymentExists)
+            var deployment = await _dbContext.ModelDeployments
+                .SingleOrDefaultAsync(d => d.Id == deploymentId, cancellationToken);
+            if (deployment is null)
                 return NotFound();
 
+            var rules = deployment.RateLimitRules.ToList();
             var rule = new ModelRateLimitRule
             {
-                ModelDeploymentId = deploymentId,
+                Id = await GetNextRateLimitRuleIdAsync(cancellationToken),
                 WindowSeconds = request.WindowSeconds,
                 MaxRequests = request.MaxRequests
             };
-            _dbContext.ModelRateLimitRules.Add(rule);
+            rules.Add(rule);
+
+            deployment.RateLimitRules = rules.OrderBy(r => r.Id).ToList();
+            deployment.UpdatedAt = DateTime.UtcNow;
             await _dbContext.SaveChangesAsync(cancellationToken);
 
             return Ok(ToResponse(rule));
@@ -150,11 +153,25 @@ namespace LLMGateway.Controllers
             [FromRoute] int rateLimitRuleId,
             CancellationToken cancellationToken)
         {
-            var deletedRows = await _dbContext.ModelRateLimitRules
-                .Where(r => r.Id == rateLimitRuleId)
-                .ExecuteDeleteAsync(cancellationToken);
+            var deployments = await _dbContext.ModelDeployments
+                .ToListAsync(cancellationToken);
 
-            return deletedRows == 0 ? NotFound() : NoContent();
+            foreach (var deployment in deployments)
+            {
+                var rules = deployment.RateLimitRules.ToList();
+                if (rules.All(r => r.Id != rateLimitRuleId))
+                    continue;
+
+                deployment.RateLimitRules = rules
+                    .Where(r => r.Id != rateLimitRuleId)
+                    .OrderBy(r => r.Id)
+                    .ToList();
+                deployment.UpdatedAt = DateTime.UtcNow;
+                await _dbContext.SaveChangesAsync(cancellationToken);
+                return NoContent();
+            }
+
+            return NotFound();
         }
 
         private Task<Model?> GetModelWithDeploymentsAsync(string modelKey, CancellationToken cancellationToken)
@@ -162,7 +179,6 @@ namespace LLMGateway.Controllers
             return _dbContext.Models
                 .AsNoTracking()
                 .Include(m => m.Deployments)
-                    .ThenInclude(d => d.RateLimitRules)
                 .SingleOrDefaultAsync(m => m.Key == modelKey, cancellationToken);
         }
 
@@ -187,7 +203,6 @@ namespace LLMGateway.Controllers
                 ProviderModelId = deployment.ProviderModelId,
                 IsEnabled = deployment.IsEnabled,
                 Priority = deployment.Priority,
-                MaxConcurrentRequests = deployment.MaxConcurrentRequests,
                 RateLimitRules = deployment.RateLimitRules.Select(ToResponse).ToList()
             };
         }
@@ -200,6 +215,20 @@ namespace LLMGateway.Controllers
                 WindowSeconds = rule.WindowSeconds,
                 MaxRequests = rule.MaxRequests
             };
+        }
+
+        private async Task<int> GetNextRateLimitRuleIdAsync(CancellationToken cancellationToken)
+        {
+            var deployments = await _dbContext.ModelDeployments
+                .AsNoTracking()
+                .Select(d => d.RateLimitRules)
+                .ToListAsync(cancellationToken);
+
+            return deployments
+                .SelectMany(rules => rules)
+                .Select(r => r.Id)
+                .DefaultIfEmpty()
+                .Max() + 1;
         }
     }
 }

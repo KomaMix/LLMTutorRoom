@@ -59,8 +59,7 @@ Content-Type: application/json
   "providerType": "Ollama",
   "endpoint": "http://localhost:11434",
   "providerModelId": "mistral:7b",
-  "priority": 0,
-  "maxConcurrentRequests": 1
+  "priority": 0
 }
 ```
 
@@ -87,8 +86,7 @@ Content-Type: application/json
   "endpoint": "http://localhost:11434",
   "providerModelId": "mistral:7b",
   "isEnabled": true,
-  "priority": 0,
-  "maxConcurrentRequests": 1
+  "priority": 0
 }
 ```
 
