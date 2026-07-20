@@ -86,7 +86,8 @@ namespace LLMGateway.Controllers
                 ApiKey = request.ApiKey,
                 ProviderModelId = request.ProviderModelId,
                 IsEnabled = request.IsEnabled,
-                Priority = request.Priority
+                Priority = request.Priority,
+                MaxConcurrentRequests = request.MaxConcurrentRequests
             };
             _dbContext.ModelDeployments.Add(deployment);
             await _dbContext.SaveChangesAsync(cancellationToken);
@@ -115,6 +116,7 @@ namespace LLMGateway.Controllers
             deployment.ProviderModelId = request.ProviderModelId;
             deployment.IsEnabled = request.IsEnabled;
             deployment.Priority = request.Priority;
+            deployment.MaxConcurrentRequests = request.MaxConcurrentRequests;
             deployment.UpdatedAt = DateTime.UtcNow;
 
             await _dbContext.SaveChangesAsync(cancellationToken);
@@ -203,6 +205,7 @@ namespace LLMGateway.Controllers
                 ProviderModelId = deployment.ProviderModelId,
                 IsEnabled = deployment.IsEnabled,
                 Priority = deployment.Priority,
+                MaxConcurrentRequests = deployment.MaxConcurrentRequests,
                 RateLimitRules = deployment.RateLimitRules.Select(ToResponse).ToList()
             };
         }

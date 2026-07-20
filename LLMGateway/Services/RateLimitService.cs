@@ -5,19 +5,24 @@ namespace LLMGateway.Services
     public class RateLimitService
     {
         private readonly object _syncRoot = new();
+        private readonly Dictionary<int, int> _activeRequests = new();
         private readonly Dictionary<RateLimitKey, Queue<DateTimeOffset>> _requests = new();
 
-        public bool TryConsume(
+        public LimitCheckResult TryAcquire(
             int deploymentId,
+            int? maxConcurrentRequests,
             IReadOnlyCollection<ModelRateLimitRule> rules)
         {
-            if (rules.Count == 0)
-                return true;
-
             var now = DateTimeOffset.UtcNow;
+            var concurrencyLimit = maxConcurrentRequests.GetValueOrDefault();
+            var hasConcurrencyLimit = concurrencyLimit > 0;
 
             lock (_syncRoot)
             {
+                _activeRequests.TryGetValue(deploymentId, out var activeRequests);
+                if (hasConcurrencyLimit && activeRequests >= concurrencyLimit)
+                    return LimitCheckResult.ConcurrencyLimitExceeded;
+
                 var allowedQueues = new List<Queue<DateTimeOffset>>();
                 foreach (var rule in rules)
                 {
@@ -34,15 +39,37 @@ namespace LLMGateway.Services
                         queue.Dequeue();
 
                     if (queue.Count >= rule.MaxRequests)
-                        return false;
+                        return LimitCheckResult.RateLimitExceeded;
 
                     allowedQueues.Add(queue);
                 }
 
+                if (hasConcurrencyLimit)
+                    _activeRequests[deploymentId] = activeRequests + 1;
+
                 foreach (var queue in allowedQueues)
                     queue.Enqueue(now);
 
-                return true;
+                return LimitCheckResult.Allowed;
+            }
+        }
+
+        public void Release(
+            int deploymentId,
+            int? maxConcurrentRequests)
+        {
+            if (maxConcurrentRequests.GetValueOrDefault() <= 0)
+                return;
+
+            lock (_syncRoot)
+            {
+                if (!_activeRequests.TryGetValue(deploymentId, out var activeRequests))
+                    return;
+
+                if (activeRequests <= 1)
+                    _activeRequests.Remove(deploymentId);
+                else
+                    _activeRequests[deploymentId] = activeRequests - 1;
             }
         }
 
@@ -55,5 +82,12 @@ namespace LLMGateway.Services
         }
 
         private readonly record struct RateLimitKey(int DeploymentId, int RuleId);
+    }
+
+    public enum LimitCheckResult
+    {
+        Allowed,
+        RateLimitExceeded,
+        ConcurrencyLimitExceeded
     }
 }

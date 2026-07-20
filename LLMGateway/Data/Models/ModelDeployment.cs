@@ -11,6 +11,7 @@ namespace LLMGateway.Data.Models
         public string ProviderModelId { get; set; } = string.Empty;
         public bool IsEnabled { get; set; } = true;
         public int Priority { get; set; }
+        public int? MaxConcurrentRequests { get; set; }
         public List<ModelRateLimitRule> RateLimitRules { get; set; } = new();
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;

@@ -66,6 +66,47 @@ namespace LLMGateway.Tests
             Assert.Equal("secondary response", secondResult.Response?.Text);
         }
 
+        [Fact]
+        public async Task ExecuteAsync_WhenPrimaryDeploymentIsConcurrencyLimited_UsesNextDeployment()
+        {
+            await using var dbContext = CreateDbContext();
+            var creator = new FakeChatClientCreator();
+            var primaryStarted = new TaskCompletionSource<object?>(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+            var releasePrimary = new TaskCompletionSource<object?>(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+
+            creator.Register("primary", new FakeChatClient(async _ =>
+            {
+                primaryStarted.SetResult(null);
+                await releasePrimary.Task;
+                return new ChatResponse(new ChatMessage(ChatRole.Assistant, "primary response"));
+            }));
+            creator.Register("secondary", new FakeChatClient(_ => Task.FromResult(new ChatResponse(
+                new ChatMessage(ChatRole.Assistant, "secondary response")))));
+
+            await AddModelAsync(dbContext, new[]
+            {
+                CreateDeployment("primary", priority: 0, maxConcurrentRequests: 1),
+                CreateDeployment("secondary", priority: 1)
+            });
+
+            var service = CreateService(dbContext, creator);
+
+            var firstTask = service.ExecuteAsync(CreateChatRequest(), CancellationToken.None);
+            await primaryStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+
+            var secondResult = await service.ExecuteAsync(CreateChatRequest(), CancellationToken.None);
+
+            releasePrimary.SetResult(null);
+            var firstResult = await firstTask;
+
+            Assert.Equal(ChatExecutionStatus.Completed, firstResult.Status);
+            Assert.Equal("primary response", firstResult.Response?.Text);
+            Assert.Equal(ChatExecutionStatus.Completed, secondResult.Status);
+            Assert.Equal("secondary response", secondResult.Response?.Text);
+        }
+
         private static ChatExecutionService CreateService(
             AppDbContext dbContext,
             FakeChatClientCreator creator)
@@ -103,7 +144,8 @@ namespace LLMGateway.Tests
         private static ModelDeployment CreateDeployment(
             string providerModelId,
             int priority,
-            IEnumerable<ModelRateLimitRule>? rateLimitRules = null)
+            IEnumerable<ModelRateLimitRule>? rateLimitRules = null,
+            int? maxConcurrentRequests = null)
         {
             var deployment = new ModelDeployment
             {
@@ -111,7 +153,8 @@ namespace LLMGateway.Tests
                 Endpoint = "http://localhost:11434",
                 ProviderModelId = providerModelId,
                 Priority = priority,
-                IsEnabled = true
+                IsEnabled = true,
+                MaxConcurrentRequests = maxConcurrentRequests
             };
 
             deployment.RateLimitRules = (rateLimitRules ?? Array.Empty<ModelRateLimitRule>()).ToList();

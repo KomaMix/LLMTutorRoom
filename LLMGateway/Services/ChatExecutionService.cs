@@ -55,20 +55,34 @@ namespace LLMGateway.Services
 
             var messages = request.Messages.Select(ToChatMessage).ToList();
             var sawRateLimitedDeployment = false;
+            var sawConcurrencyLimitedDeployment = false;
             var sawProviderFailure = false;
             var sawProviderTimeout = false;
 
             foreach (var deployment in deployments)
             {
+                var shouldReleaseConcurrency = false;
                 try
                 {
-                    if (!_rateLimitService.TryConsume(
+                    var limitCheckResult = _rateLimitService.TryAcquire(
                             deployment.Id,
-                            deployment.RateLimitRules))
+                            deployment.MaxConcurrentRequests,
+                            deployment.RateLimitRules);
+
+                    if (limitCheckResult == LimitCheckResult.RateLimitExceeded)
                     {
                         sawRateLimitedDeployment = true;
                         continue;
                     }
+
+                    if (limitCheckResult == LimitCheckResult.ConcurrencyLimitExceeded)
+                    {
+                        sawConcurrencyLimitedDeployment = true;
+                        continue;
+                    }
+
+                    shouldReleaseConcurrency = deployment.MaxConcurrentRequests.HasValue
+                        && deployment.MaxConcurrentRequests.Value > 0;
 
                     var client = _chatClientFactory.CreateClient(deployment);
                     var response = await client.GetResponseAsync(
@@ -104,6 +118,15 @@ namespace LLMGateway.Services
                         deployment.Id,
                         request.Model);
                 }
+                finally
+                {
+                    if (shouldReleaseConcurrency)
+                    {
+                        _rateLimitService.Release(
+                            deployment.Id,
+                            deployment.MaxConcurrentRequests);
+                    }
+                }
             }
 
             if (sawProviderFailure || sawProviderTimeout)
@@ -120,6 +143,11 @@ namespace LLMGateway.Services
             if (sawRateLimitedDeployment)
                 return (
                     ChatExecutionStatus.RateLimitExceeded,
+                    null);
+
+            if (sawConcurrencyLimitedDeployment)
+                return (
+                    ChatExecutionStatus.ConcurrencyLimitExceeded,
                     null);
 
             return (

@@ -76,6 +76,9 @@ namespace LLMGateway.Migrations
                     b.Property<bool>("IsEnabled")
                         .HasColumnType("boolean");
 
+                    b.Property<int?>("MaxConcurrentRequests")
+                        .HasColumnType("integer");
+
                     b.Property<int>("ModelId")
                         .HasColumnType("integer");
 

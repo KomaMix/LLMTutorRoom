@@ -12,7 +12,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace LLMGateway.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260720163322_InitialCreate")]
+    [Migration("20260720164559_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -78,6 +78,9 @@ namespace LLMGateway.Migrations
 
                     b.Property<bool>("IsEnabled")
                         .HasColumnType("boolean");
+
+                    b.Property<int?>("MaxConcurrentRequests")
+                        .HasColumnType("integer");
 
                     b.Property<int>("ModelId")
                         .HasColumnType("integer");

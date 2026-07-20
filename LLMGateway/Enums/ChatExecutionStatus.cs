@@ -6,6 +6,7 @@ namespace LLMGateway.Enums
         ModelNotFound,
         NoAvailableDeployment,
         RateLimitExceeded,
+        ConcurrencyLimitExceeded,
         ProviderFailed,
         ProviderTimedOut
     }

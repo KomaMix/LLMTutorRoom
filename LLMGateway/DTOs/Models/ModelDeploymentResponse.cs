@@ -10,6 +10,7 @@ namespace LLMGateway.DTOs.Models
         public string ProviderModelId { get; set; } = string.Empty;
         public bool IsEnabled { get; set; }
         public int Priority { get; set; }
+        public int? MaxConcurrentRequests { get; set; }
         public IReadOnlyCollection<RateLimitRuleResponse> RateLimitRules { get; set; } = Array.Empty<RateLimitRuleResponse>();
     }
 }

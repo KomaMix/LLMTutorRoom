@@ -44,7 +44,8 @@ namespace LLMGateway.Tests
                     apiKey = "test-key",
                     providerModelId = "remote-model",
                     isEnabled = false,
-                    priority = 10
+                    priority = 10,
+                    maxConcurrentRequests = 3
                 });
 
             response.EnsureSuccessStatusCode();
@@ -52,6 +53,7 @@ namespace LLMGateway.Tests
             Assert.Equal("OpenAiCompatible", document.RootElement.GetProperty("providerType").GetString());
             Assert.Equal("remote-model", document.RootElement.GetProperty("providerModelId").GetString());
             Assert.Equal(10, document.RootElement.GetProperty("priority").GetInt32());
+            Assert.Equal(3, document.RootElement.GetProperty("maxConcurrentRequests").GetInt32());
             Assert.False(document.RootElement.GetProperty("isEnabled").GetBoolean());
             Assert.False(document.RootElement.TryGetProperty("apiKey", out _));
         }
