@@ -30,7 +30,7 @@ namespace LLMGateway.Tests
 
             var service = CreateService(dbContext, creator);
 
-            var result = await service.ExecuteAsync(CreateChatRequest(), CancellationToken.None);
+            var result = await service.ExecuteAsync("test-model", CreateChatRequest(), CancellationToken.None);
 
             Assert.Equal(ChatExecutionStatus.Completed, result.Status);
             Assert.Equal("secondary response", result.Response?.Text);
@@ -57,8 +57,8 @@ namespace LLMGateway.Tests
 
             var service = CreateService(dbContext, creator);
 
-            var firstResult = await service.ExecuteAsync(CreateChatRequest(), CancellationToken.None);
-            var secondResult = await service.ExecuteAsync(CreateChatRequest(), CancellationToken.None);
+            var firstResult = await service.ExecuteAsync("test-model", CreateChatRequest(), CancellationToken.None);
+            var secondResult = await service.ExecuteAsync("test-model", CreateChatRequest(), CancellationToken.None);
 
             Assert.Equal(ChatExecutionStatus.Completed, firstResult.Status);
             Assert.Equal("primary response", firstResult.Response?.Text);
@@ -93,10 +93,10 @@ namespace LLMGateway.Tests
 
             var service = CreateService(dbContext, creator);
 
-            var firstTask = service.ExecuteAsync(CreateChatRequest(), CancellationToken.None);
+            var firstTask = service.ExecuteAsync("test-model", CreateChatRequest(), CancellationToken.None);
             await primaryStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
 
-            var secondResult = await service.ExecuteAsync(CreateChatRequest(), CancellationToken.None);
+            var secondResult = await service.ExecuteAsync("test-model", CreateChatRequest(), CancellationToken.None);
 
             releasePrimary.SetResult(null);
             var firstResult = await firstTask;
@@ -165,7 +165,6 @@ namespace LLMGateway.Tests
         {
             return new ChatRequest
             {
-                Model = "test-model",
                 Messages = new[]
                 {
                     new ChatMessageRequest

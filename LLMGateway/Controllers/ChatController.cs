@@ -16,12 +16,13 @@ namespace LLMGateway.Controllers
             _chatExecutionService = chatExecutionService;
         }
 
-        [HttpPost]
+        [HttpPost("{modelKey}")]
         public async Task<ActionResult<ChatCompletionResponse>> Chat(
+            [FromRoute] string modelKey,
             [FromBody] ChatRequest request,
             CancellationToken cancellationToken)
         {
-            var result = await _chatExecutionService.ExecuteAsync(request, cancellationToken);
+            var result = await _chatExecutionService.ExecuteAsync(modelKey, request, cancellationToken);
             return result.Status switch
             {
                 ChatExecutionStatus.Completed => Ok(result.Response),

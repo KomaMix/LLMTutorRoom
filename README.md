@@ -101,11 +101,10 @@ DELETE /api/models/rate-limits/1
 Отправить чат-запрос:
 
 ```http
-POST /api/chat
+POST /api/chat/mistral:7b
 Content-Type: application/json
 
 {
-  "model": "mistral:7b",
   "temperature": 0.7,
   "messages": [
     { "role": "system", "content": "Отвечай кратко." },

@@ -29,13 +29,14 @@ namespace LLMGateway.Services
         public async Task<(
             ChatExecutionStatus Status,
             ChatCompletionResponse? Response)> ExecuteAsync(
+            string modelKey,
             ChatRequest request,
             CancellationToken cancellationToken)
         {
             var model = await _dbContext.Models
                 .AsNoTracking()
                 .Include(m => m.Deployments)
-                .SingleOrDefaultAsync(m => m.Key == request.Model, cancellationToken);
+                .SingleOrDefaultAsync(m => m.Key == modelKey, cancellationToken);
 
             if (model is null)
                 return (
@@ -94,7 +95,7 @@ namespace LLMGateway.Services
                         ChatExecutionStatus.Completed,
                         new ChatCompletionResponse
                         {
-                            Model = request.Model,
+                            Model = modelKey,
                             Text = response.Text
                         });
                 }
@@ -107,7 +108,7 @@ namespace LLMGateway.Services
                     _logger.LogWarning(
                         "Deployment {DeploymentId} for model {ModelKey} timed out.",
                         deployment.Id,
-                        request.Model);
+                        modelKey);
                 }
                 catch (Exception ex)
                 {
@@ -116,7 +117,7 @@ namespace LLMGateway.Services
                         ex,
                         "Deployment {DeploymentId} for model {ModelKey} failed.",
                         deployment.Id,
-                        request.Model);
+                        modelKey);
                 }
                 finally
                 {
