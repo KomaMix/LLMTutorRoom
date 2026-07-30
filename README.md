@@ -98,6 +98,18 @@ Content-Type: application/json
 DELETE /api/models/rate-limits/1
 ```
 
+Удалить реализацию модели:
+
+```http
+DELETE /api/models/deployments/1
+```
+
+Удалить логическую модель:
+
+```http
+DELETE /api/models/mistral:7b
+```
+
 Отправить чат-запрос:
 
 ```http

@@ -64,6 +64,22 @@ namespace LLMGateway.Controllers
             return model is null ? NotFound() : Ok(ToResponse(model));
         }
 
+        [HttpDelete("{modelKey}")]
+        public async Task<IActionResult> DeleteModel(
+            [FromRoute] string modelKey,
+            CancellationToken cancellationToken)
+        {
+            var model = await _dbContext.Models
+                .Include(m => m.Deployments)
+                .SingleOrDefaultAsync(m => m.Key == modelKey, cancellationToken);
+            if (model is null)
+                return NotFound();
+
+            _dbContext.Models.Remove(model);
+            await _dbContext.SaveChangesAsync(cancellationToken);
+            return NoContent();
+        }
+
         [HttpPost("{modelKey}/deployments")]
         public async Task<ActionResult<ModelDeploymentResponse>> CreateDeployment(
             [FromRoute] string modelKey,
@@ -121,6 +137,21 @@ namespace LLMGateway.Controllers
 
             await _dbContext.SaveChangesAsync(cancellationToken);
             return Ok(ToResponse(deployment));
+        }
+
+        [HttpDelete("deployments/{deploymentId:int}")]
+        public async Task<IActionResult> DeleteDeployment(
+            [FromRoute] int deploymentId,
+            CancellationToken cancellationToken)
+        {
+            var deployment = await _dbContext.ModelDeployments
+                .SingleOrDefaultAsync(d => d.Id == deploymentId, cancellationToken);
+            if (deployment is null)
+                return NotFound();
+
+            _dbContext.ModelDeployments.Remove(deployment);
+            await _dbContext.SaveChangesAsync(cancellationToken);
+            return NoContent();
         }
 
         [HttpPost("deployments/{deploymentId:int}/rate-limits")]

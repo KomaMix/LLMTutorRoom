@@ -59,6 +59,34 @@ namespace LLMGateway.Tests
         }
 
         [Fact]
+        public async Task DeleteDeployment_RemovesTheDeployment()
+        {
+            var modelKey = await CreateModelAsync();
+            var deploymentId = await CreateDeploymentAsync(modelKey, isEnabled: true);
+
+            var deleteResponse = await _client.DeleteAsync($"/api/models/deployments/{deploymentId}");
+            var modelResponse = await _client.GetAsync($"/api/models/{modelKey}");
+
+            Assert.Equal(HttpStatusCode.NoContent, deleteResponse.StatusCode);
+            modelResponse.EnsureSuccessStatusCode();
+            using var model = JsonDocument.Parse(await modelResponse.Content.ReadAsStringAsync());
+            Assert.Equal(0, model.RootElement.GetProperty("deployments").GetArrayLength());
+        }
+
+        [Fact]
+        public async Task DeleteModel_RemovesTheModel()
+        {
+            var modelKey = await CreateModelAsync();
+            await CreateDeploymentAsync(modelKey, isEnabled: true);
+
+            var deleteResponse = await _client.DeleteAsync($"/api/models/{modelKey}");
+            var getResponse = await _client.GetAsync($"/api/models/{modelKey}");
+
+            Assert.Equal(HttpStatusCode.NoContent, deleteResponse.StatusCode);
+            Assert.Equal(HttpStatusCode.NotFound, getResponse.StatusCode);
+        }
+
+        [Fact]
         public async Task DeleteRateLimitRule_RemovesTheRule()
         {
             var modelKey = await CreateModelAsync();
