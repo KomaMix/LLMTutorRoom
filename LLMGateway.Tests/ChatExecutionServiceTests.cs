@@ -7,6 +7,7 @@ using LLMGateway.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging.Abstractions;
+using System.Net;
 using System.Runtime.CompilerServices;
 
 namespace LLMGateway.Tests
@@ -107,14 +108,44 @@ namespace LLMGateway.Tests
             Assert.Equal("secondary response", secondResult.Response?.Text);
         }
 
+        [Fact]
+        public async Task ExecuteAsync_WhenPrimaryDeploymentIsUnavailable_UsesNextDeployment()
+        {
+            await using var dbContext = CreateDbContext();
+            var creator = new FakeChatClientCreator();
+            creator.Register("primary", new FakeChatClient(_ => throw new InvalidOperationException("should not be called")));
+            creator.Register("secondary", new FakeChatClient(_ => Task.FromResult(new ChatResponse(
+                new ChatMessage(ChatRole.Assistant, "secondary response")))));
+
+            await AddModelAsync(dbContext, new[]
+            {
+                CreateDeployment("primary", priority: 0, endpoint: "http://primary.test:11434"),
+                CreateDeployment("secondary", priority: 1, endpoint: "http://secondary.test:11434")
+            });
+
+            var service = CreateService(
+                dbContext,
+                creator,
+                request => request.RequestUri?.Host == "primary.test"
+                    ? new HttpResponseMessage(HttpStatusCode.ServiceUnavailable)
+                    : new HttpResponseMessage(HttpStatusCode.OK));
+
+            var result = await service.ExecuteAsync("test-model", CreateChatRequest(), CancellationToken.None);
+
+            Assert.Equal(ChatExecutionStatus.Completed, result.Status);
+            Assert.Equal("secondary response", result.Response?.Text);
+        }
+
         private static ChatExecutionService CreateService(
             AppDbContext dbContext,
-            FakeChatClientCreator creator)
+            FakeChatClientCreator creator,
+            Func<HttpRequestMessage, HttpResponseMessage>? healthCheckHandler = null)
         {
             return new ChatExecutionService(
                 dbContext,
                 new ChatClientFactory(new[] { creator }),
                 new RateLimitService(),
+                new FakeHttpClientFactory(new FakeHttpMessageHandler(healthCheckHandler)),
                 NullLogger<ChatExecutionService>.Instance);
         }
 
@@ -145,12 +176,13 @@ namespace LLMGateway.Tests
             string providerModelId,
             int priority,
             IEnumerable<ModelRateLimitRule>? rateLimitRules = null,
-            int? maxConcurrentRequests = null)
+            int? maxConcurrentRequests = null,
+            string endpoint = "http://localhost:11434")
         {
             var deployment = new ModelDeployment
             {
                 ProviderType = ModelProviderType.Ollama,
-                Endpoint = "http://localhost:11434",
+                Endpoint = endpoint,
                 ProviderModelId = providerModelId,
                 Priority = priority,
                 IsEnabled = true,
@@ -190,6 +222,38 @@ namespace LLMGateway.Tests
             public void Register(string providerModelId, IChatClient client)
             {
                 _clients.Add(providerModelId, client);
+            }
+        }
+
+        private sealed class FakeHttpClientFactory : IHttpClientFactory
+        {
+            private readonly HttpClient _client;
+
+            public FakeHttpClientFactory(HttpMessageHandler handler)
+            {
+                _client = new HttpClient(handler);
+            }
+
+            public HttpClient CreateClient(string name)
+            {
+                return _client;
+            }
+        }
+
+        private sealed class FakeHttpMessageHandler : HttpMessageHandler
+        {
+            private readonly Func<HttpRequestMessage, HttpResponseMessage> _handler;
+
+            public FakeHttpMessageHandler(Func<HttpRequestMessage, HttpResponseMessage>? handler)
+            {
+                _handler = handler ?? (_ => new HttpResponseMessage(HttpStatusCode.OK));
+            }
+
+            protected override Task<HttpResponseMessage> SendAsync(
+                HttpRequestMessage request,
+                CancellationToken cancellationToken)
+            {
+                return Task.FromResult(_handler(request));
             }
         }
 

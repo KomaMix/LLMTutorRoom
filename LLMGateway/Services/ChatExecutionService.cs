@@ -4,25 +4,31 @@ using LLMGateway.DTOs.Chat;
 using LLMGateway.Enums;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.AI;
+using System.Net.Http.Headers;
 
 namespace LLMGateway.Services
 {
     public class ChatExecutionService
     {
+        private static readonly TimeSpan ProviderHealthCheckTimeout = TimeSpan.FromSeconds(3);
+
         private readonly AppDbContext _dbContext;
         private readonly ChatClientFactory _chatClientFactory;
         private readonly RateLimitService _rateLimitService;
+        private readonly IHttpClientFactory _httpClientFactory;
         private readonly ILogger<ChatExecutionService> _logger;
 
         public ChatExecutionService(
             AppDbContext dbContext,
             ChatClientFactory chatClientFactory,
             RateLimitService rateLimitService,
+            IHttpClientFactory httpClientFactory,
             ILogger<ChatExecutionService> logger)
         {
             _dbContext = dbContext;
             _chatClientFactory = chatClientFactory;
             _rateLimitService = rateLimitService;
+            _httpClientFactory = httpClientFactory;
             _logger = logger;
         }
 
@@ -57,6 +63,7 @@ namespace LLMGateway.Services
             var messages = request.Messages.Select(ToChatMessage).ToList();
             var sawRateLimitedDeployment = false;
             var sawConcurrencyLimitedDeployment = false;
+            var sawProviderUnavailable = false;
             var sawProviderFailure = false;
             var sawProviderTimeout = false;
 
@@ -84,6 +91,17 @@ namespace LLMGateway.Services
 
                     shouldReleaseConcurrency = deployment.MaxConcurrentRequests.HasValue
                         && deployment.MaxConcurrentRequests.Value > 0;
+
+                    var isProviderAvailable = await IsProviderAvailableAsync(
+                        deployment,
+                        modelKey,
+                        cancellationToken);
+
+                    if (!isProviderAvailable)
+                    {
+                        sawProviderUnavailable = true;
+                        continue;
+                    }
 
                     var client = _chatClientFactory.CreateClient(deployment);
                     var response = await client.GetResponseAsync(
@@ -130,11 +148,14 @@ namespace LLMGateway.Services
                 }
             }
 
-            if (sawProviderFailure || sawProviderTimeout)
+            if (sawProviderFailure || sawProviderTimeout || sawProviderUnavailable)
             {
-                var status = sawProviderFailure
-                    ? ChatExecutionStatus.ProviderFailed
-                    : ChatExecutionStatus.ProviderTimedOut;
+                var status = ChatExecutionStatus.ProviderUnavailable;
+
+                if (sawProviderFailure)
+                    status = ChatExecutionStatus.ProviderFailed;
+                else if (sawProviderTimeout)
+                    status = ChatExecutionStatus.ProviderTimedOut;
 
                 return (
                     status,
@@ -166,6 +187,87 @@ namespace LLMGateway.Services
             };
 
             return new ChatMessage(role, message.Content);
+        }
+
+        private async Task<bool> IsProviderAvailableAsync(
+            ModelDeployment deployment,
+            string modelKey,
+            CancellationToken cancellationToken)
+        {
+            var httpClient = _httpClientFactory.CreateClient();
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeoutCts.CancelAfter(ProviderHealthCheckTimeout);
+
+            try
+            {
+                using var request = new HttpRequestMessage(
+                    HttpMethod.Get,
+                    GetModelsEndpoint(deployment));
+
+                if (!string.IsNullOrWhiteSpace(deployment.ApiKey))
+                    request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", deployment.ApiKey);
+
+                using var response = await httpClient.SendAsync(
+                    request,
+                    HttpCompletionOption.ResponseHeadersRead,
+                    timeoutCts.Token);
+
+                if (response.IsSuccessStatusCode)
+                    return true;
+
+                _logger.LogWarning(
+                    "Deployment {DeploymentId} for model {ModelKey} health check returned {StatusCode}.",
+                    deployment.Id,
+                    modelKey,
+                    response.StatusCode);
+
+                return false;
+            }
+            catch (OperationCanceledException)
+            {
+                if (cancellationToken.IsCancellationRequested)
+                    throw;
+
+                _logger.LogWarning(
+                    "Deployment {DeploymentId} for model {ModelKey} health check timed out.",
+                    deployment.Id,
+                    modelKey);
+
+                return false;
+            }
+            catch (HttpRequestException ex)
+            {
+                _logger.LogWarning(
+                    ex,
+                    "Deployment {DeploymentId} for model {ModelKey} health check failed.",
+                    deployment.Id,
+                    modelKey);
+
+                return false;
+            }
+            catch (UriFormatException ex)
+            {
+                _logger.LogWarning(
+                    ex,
+                    "Deployment {DeploymentId} for model {ModelKey} has invalid endpoint.",
+                    deployment.Id,
+                    modelKey);
+
+                return false;
+            }
+        }
+
+        private static Uri GetModelsEndpoint(ModelDeployment deployment)
+        {
+            var endpoint = deployment.Endpoint.TrimEnd('/');
+
+            if (deployment.ProviderType == ModelProviderType.Ollama
+                && !endpoint.EndsWith("/v1", StringComparison.OrdinalIgnoreCase))
+            {
+                endpoint += "/v1";
+            }
+
+            return new Uri($"{endpoint}/models");
         }
     }
 }

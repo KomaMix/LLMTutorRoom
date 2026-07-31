@@ -16,6 +16,7 @@ builder.Services.AddSingleton<IChatClientCreator, OpenAiCompatibleChatClientCrea
 
 builder.Services.AddSingleton<ChatClientFactory>();
 builder.Services.AddSingleton<RateLimitService>();
+builder.Services.AddHttpClient();
 builder.Services.AddScoped<ChatExecutionService>();
 builder.Services.AddProblemDetails();
 

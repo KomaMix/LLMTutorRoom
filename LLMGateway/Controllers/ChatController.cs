@@ -42,6 +42,10 @@ namespace LLMGateway.Controllers
                     Problem(
                         statusCode: StatusCodes.Status429TooManyRequests,
                         title: "Concurrency limit exceeded"),
+                ChatExecutionStatus.ProviderUnavailable =>
+                    Problem(
+                        statusCode: StatusCodes.Status503ServiceUnavailable,
+                        title: "Provider unavailable"),
                 ChatExecutionStatus.ProviderFailed =>
                     Problem(
                         statusCode: StatusCodes.Status502BadGateway,
