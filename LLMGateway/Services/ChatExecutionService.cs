@@ -148,32 +148,29 @@ namespace LLMGateway.Services
                 }
             }
 
-            if (sawProviderFailure || sawProviderTimeout || sawProviderUnavailable)
+            var status = ChatExecutionStatus.NoAvailableDeployment;
+
+            switch (true)
             {
-                var status = ChatExecutionStatus.ProviderUnavailable;
-
-                if (sawProviderFailure)
+                case true when sawProviderFailure:
                     status = ChatExecutionStatus.ProviderFailed;
-                else if (sawProviderTimeout)
+                    break;
+                case true when sawProviderTimeout:
                     status = ChatExecutionStatus.ProviderTimedOut;
-
-                return (
-                    status,
-                    null);
+                    break;
+                case true when sawProviderUnavailable:
+                    status = ChatExecutionStatus.ProviderUnavailable;
+                    break;
+                case true when sawRateLimitedDeployment:
+                    status = ChatExecutionStatus.RateLimitExceeded;
+                    break;
+                case true when sawConcurrencyLimitedDeployment:
+                    status = ChatExecutionStatus.ConcurrencyLimitExceeded;
+                    break;
             }
 
-            if (sawRateLimitedDeployment)
-                return (
-                    ChatExecutionStatus.RateLimitExceeded,
-                    null);
-
-            if (sawConcurrencyLimitedDeployment)
-                return (
-                    ChatExecutionStatus.ConcurrencyLimitExceeded,
-                    null);
-
             return (
-                ChatExecutionStatus.NoAvailableDeployment,
+                status,
                 null);
         }
 
