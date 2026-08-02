@@ -2,11 +2,14 @@ using LLMTutorRoom.Data;
 using LLMTutorRoom.DTOs;
 using LLMTutorRoom.Models;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 
 namespace LLMTutorRoom.Services
 {
     public sealed class ClassroomService
     {
+        private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+
         private readonly TutorRoomDbContext _dbContext;
 
         public ClassroomService(TutorRoomDbContext dbContext)
@@ -28,21 +31,30 @@ namespace LLMTutorRoom.Services
                 Tests = tests,
                 Models = Array.Empty<LanguageModel>(),
                 Reviews = reviews,
+                Attempts = Array.Empty<TestAttemptResponse>(),
                 Metrics = CreateMetrics(tests, reviews)
             };
         }
 
         public async Task<ClassroomOverview> GetStudentOverviewAsync(
-            string studentName,
+            string studentUserName,
+            string studentDisplayName,
             CancellationToken cancellationToken)
         {
+            await ExpireStudentAttemptsAsync(studentUserName, cancellationToken);
+
             var tests = await LoadVisibleTests()
                 .Where(test => test.Status == CourseTestStatus.Published)
                 .OrderBy(test => test.Deadline)
                 .ToListAsync(cancellationToken);
             var reviews = await LoadReviews()
-                .Where(review => review.StudentName.ToLower() == studentName.ToLower())
+                .Where(review => review.StudentName.ToLower() == studentDisplayName.ToLower())
                 .OrderByDescending(review => review.SubmittedAt)
+                .ToListAsync(cancellationToken);
+            var attempts = await _dbContext.TestAttempts
+                .AsNoTracking()
+                .Where(attempt => attempt.StudentUserName.ToLower() == studentUserName.ToLower())
+                .OrderByDescending(attempt => attempt.StartedAt)
                 .ToListAsync(cancellationToken);
 
             return new ClassroomOverview
@@ -50,6 +62,7 @@ namespace LLMTutorRoom.Services
                 Tests = tests,
                 Models = Array.Empty<LanguageModel>(),
                 Reviews = reviews,
+                Attempts = attempts.Select(ToAttemptResponse).ToList(),
                 Metrics = CreateMetrics(tests, reviews)
             };
         }
@@ -213,6 +226,109 @@ namespace LLMTutorRoom.Services
             return true;
         }
 
+        public async Task<TestAttemptResponse?> StartAttemptAsync(
+            string testId,
+            string studentUserName,
+            CancellationToken cancellationToken)
+        {
+            await ExpireStudentAttemptsAsync(studentUserName, cancellationToken);
+
+            var test = await LoadVisibleTests()
+                .SingleOrDefaultAsync(
+                    item => item.Id == testId && item.Status == CourseTestStatus.Published,
+                    cancellationToken);
+
+            if (test is null)
+                return null;
+
+            var existingAttempt = await _dbContext.TestAttempts
+                .SingleOrDefaultAsync(
+                    attempt => attempt.TestId == testId
+                        && attempt.StudentUserName.ToLower() == studentUserName.ToLower(),
+                    cancellationToken);
+
+            if (existingAttempt is not null)
+                return ToAttemptResponse(existingAttempt);
+
+            var now = DateTimeOffset.UtcNow;
+            if (test.Deadline <= now)
+                return null;
+
+            var attempt = new TestAttempt
+            {
+                TestId = test.Id,
+                StudentUserName = studentUserName,
+                Status = TestAttemptStatus.InProgress,
+                StartedAt = now,
+                EndsAt = Min(now.AddMinutes(test.TimeLimitMinutes), test.Deadline),
+                AnswersJson = "{}"
+            };
+
+            _dbContext.TestAttempts.Add(attempt);
+            await _dbContext.SaveChangesAsync(cancellationToken);
+
+            return ToAttemptResponse(attempt);
+        }
+
+        public async Task<TestAttemptResponse?> SaveAttemptAnswersAsync(
+            int attemptId,
+            string studentUserName,
+            Dictionary<string, string> answers,
+            CancellationToken cancellationToken)
+        {
+            var attempt = await _dbContext.TestAttempts
+                .SingleOrDefaultAsync(
+                    item => item.Id == attemptId
+                        && item.StudentUserName.ToLower() == studentUserName.ToLower(),
+                    cancellationToken);
+
+            if (attempt is null)
+                return null;
+
+            var statusChanged = ExpireAttemptIfNeeded(attempt, DateTimeOffset.UtcNow);
+            if (attempt.Status == TestAttemptStatus.InProgress)
+            {
+                attempt.AnswersJson = SerializeAnswers(await FilterAnswersAsync(
+                    attempt.TestId,
+                    answers,
+                    cancellationToken));
+            }
+
+            if (statusChanged || attempt.Status == TestAttemptStatus.InProgress)
+                await _dbContext.SaveChangesAsync(cancellationToken);
+
+            return ToAttemptResponse(attempt);
+        }
+
+        public async Task<TestAttemptResponse?> SubmitAttemptAsync(
+            int attemptId,
+            string studentUserName,
+            CancellationToken cancellationToken)
+        {
+            var attempt = await _dbContext.TestAttempts
+                .SingleOrDefaultAsync(
+                    item => item.Id == attemptId
+                        && item.StudentUserName.ToLower() == studentUserName.ToLower(),
+                    cancellationToken);
+
+            if (attempt is null)
+                return null;
+
+            var now = DateTimeOffset.UtcNow;
+            var statusChanged = ExpireAttemptIfNeeded(attempt, now);
+            if (attempt.Status == TestAttemptStatus.InProgress)
+            {
+                attempt.Status = TestAttemptStatus.Submitted;
+                attempt.SubmittedAt = now;
+                statusChanged = true;
+            }
+
+            if (statusChanged)
+                await _dbContext.SaveChangesAsync(cancellationToken);
+
+            return ToAttemptResponse(attempt);
+        }
+
         public async Task<SubmissionReview?> CreateReviewAsync(
             ReviewRequest request,
             string studentName,
@@ -279,6 +395,43 @@ namespace LLMTutorRoom.Services
             return _dbContext.SubmissionReviews
                 .AsNoTracking()
                 .Include(review => review.TaskResults);
+        }
+
+        private async Task ExpireStudentAttemptsAsync(
+            string studentUserName,
+            CancellationToken cancellationToken)
+        {
+            var now = DateTimeOffset.UtcNow;
+            var attempts = await _dbContext.TestAttempts
+                .Where(attempt => attempt.StudentUserName.ToLower() == studentUserName.ToLower()
+                    && attempt.Status == TestAttemptStatus.InProgress
+                    && attempt.EndsAt <= now)
+                .ToListAsync(cancellationToken);
+
+            if (attempts.Count == 0)
+                return;
+
+            foreach (var attempt in attempts)
+                attempt.Status = TestAttemptStatus.Expired;
+
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+
+        private async Task<Dictionary<string, string>> FilterAnswersAsync(
+            string testId,
+            Dictionary<string, string> answers,
+            CancellationToken cancellationToken)
+        {
+            var taskIds = await _dbContext.TestTasks
+                .AsNoTracking()
+                .Where(task => task.CourseTestId == testId && !task.IsHidden)
+                .Select(task => task.Id)
+                .ToListAsync(cancellationToken);
+            var allowedTaskIds = taskIds.ToHashSet();
+
+            return answers
+                .Where(answer => allowedTaskIds.Contains(answer.Key))
+                .ToDictionary(answer => answer.Key, answer => answer.Value);
         }
 
         private static List<AnswerOption> CreateOptions(
@@ -430,6 +583,54 @@ namespace LLMTutorRoom.Services
                 return "Работа частично соответствует требованиям.";
 
             return "Работа пока не закрывает ключевые требования.";
+        }
+
+        private static bool ExpireAttemptIfNeeded(
+            TestAttempt attempt,
+            DateTimeOffset now)
+        {
+            if (attempt.Status != TestAttemptStatus.InProgress || attempt.EndsAt > now)
+                return false;
+
+            attempt.Status = TestAttemptStatus.Expired;
+            return true;
+        }
+
+        private static TestAttemptResponse ToAttemptResponse(TestAttempt attempt)
+        {
+            return new TestAttemptResponse
+            {
+                Id = attempt.Id,
+                TestId = attempt.TestId,
+                Status = attempt.Status,
+                StartedAt = attempt.StartedAt,
+                EndsAt = attempt.EndsAt,
+                SubmittedAt = attempt.SubmittedAt,
+                Answers = DeserializeAnswers(attempt.AnswersJson)
+            };
+        }
+
+        private static Dictionary<string, string> DeserializeAnswers(string? json)
+        {
+            if (string.IsNullOrWhiteSpace(json))
+                return new Dictionary<string, string>();
+
+            return JsonSerializer.Deserialize<Dictionary<string, string>>(json, JsonOptions)
+                ?? new Dictionary<string, string>();
+        }
+
+        private static string SerializeAnswers(Dictionary<string, string>? answers)
+        {
+            return JsonSerializer.Serialize(answers ?? new Dictionary<string, string>(), JsonOptions);
+        }
+
+        private static DateTimeOffset Min(
+            DateTimeOffset left,
+            DateTimeOffset right)
+        {
+            return left <= right
+                ? left
+                : right;
         }
 
         private static string CreateId(string prefix)

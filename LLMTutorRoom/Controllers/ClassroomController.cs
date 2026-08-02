@@ -3,6 +3,7 @@ using LLMTutorRoom.Models;
 using LLMTutorRoom.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 
 namespace LLMTutorRoom.Controllers
 {
@@ -26,6 +27,7 @@ namespace LLMTutorRoom.Controllers
 
             if (User.IsInRole("Student"))
                 return Ok(await _classroomService.GetStudentOverviewAsync(
+                    GetUserName(),
                     GetDisplayName(),
                     cancellationToken));
 
@@ -151,6 +153,62 @@ namespace LLMTutorRoom.Controllers
         }
 
         [Authorize(Roles = "Student")]
+        [HttpPost("tests/{testId}/attempts/start")]
+        public async Task<ActionResult<TestAttemptResponse>> StartAttempt(
+            string testId,
+            CancellationToken cancellationToken)
+        {
+            var attempt = await _classroomService.StartAttemptAsync(
+                testId,
+                GetUserName(),
+                cancellationToken);
+
+            return attempt is null
+                ? NotFound()
+                : Ok(attempt);
+        }
+
+        [Authorize(Roles = "Student")]
+        [HttpPut("attempts/{attemptId:int}/answers")]
+        public async Task<ActionResult<TestAttemptResponse>> SaveAttemptAnswers(
+            int attemptId,
+            [FromBody] SaveAttemptAnswersRequest request,
+            CancellationToken cancellationToken)
+        {
+            var attempt = await _classroomService.SaveAttemptAnswersAsync(
+                attemptId,
+                GetUserName(),
+                request.Answers,
+                cancellationToken);
+
+            if (attempt is null)
+                return NotFound();
+
+            return attempt.Status == TestAttemptStatus.InProgress
+                ? Ok(attempt)
+                : Conflict(attempt);
+        }
+
+        [Authorize(Roles = "Student")]
+        [HttpPost("attempts/{attemptId:int}/submit")]
+        public async Task<ActionResult<TestAttemptResponse>> SubmitAttempt(
+            int attemptId,
+            CancellationToken cancellationToken)
+        {
+            var attempt = await _classroomService.SubmitAttemptAsync(
+                attemptId,
+                GetUserName(),
+                cancellationToken);
+
+            if (attempt is null)
+                return NotFound();
+
+            return attempt.Status == TestAttemptStatus.Submitted
+                ? Ok(attempt)
+                : Conflict(attempt);
+        }
+
+        [Authorize(Roles = "Student")]
         [HttpPost("reviews")]
         public async Task<ActionResult<SubmissionReview>> CreateReview(
             [FromBody] ReviewRequest request,
@@ -169,6 +227,12 @@ namespace LLMTutorRoom.Controllers
         private string GetDisplayName()
         {
             return User.Identity?.Name ?? "Студент";
+        }
+
+        private string GetUserName()
+        {
+            return User.FindFirstValue(ClaimTypes.NameIdentifier)
+                ?? string.Empty;
         }
 
         private static bool TryValidateTest(

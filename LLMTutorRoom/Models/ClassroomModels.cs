@@ -31,11 +31,19 @@ namespace LLMTutorRoom.Models
         Student
     }
 
+    public enum TestAttemptStatus
+    {
+        InProgress,
+        Submitted,
+        Expired
+    }
+
     public sealed class ClassroomOverview
     {
         public IReadOnlyCollection<CourseTest> Tests { get; set; } = Array.Empty<CourseTest>();
         public IReadOnlyCollection<LanguageModel> Models { get; set; } = Array.Empty<LanguageModel>();
         public IReadOnlyCollection<SubmissionReview> Reviews { get; set; } = Array.Empty<SubmissionReview>();
+        public IReadOnlyCollection<TestAttemptResponse> Attempts { get; set; } = Array.Empty<TestAttemptResponse>();
         public DashboardMetrics Metrics { get; set; } = new();
     }
 
@@ -126,6 +134,31 @@ namespace LLMTutorRoom.Models
         public decimal MaxScore { get; set; }
         public string Summary { get; set; } = string.Empty;
         public List<TaskReviewResult> TaskResults { get; set; } = new();
+    }
+
+    public sealed class TestAttempt
+    {
+        public int Id { get; set; }
+        public string TestId { get; set; } = string.Empty;
+        public string StudentUserName { get; set; } = string.Empty;
+        public TestAttemptStatus Status { get; set; } = TestAttemptStatus.InProgress;
+        public DateTimeOffset StartedAt { get; set; }
+        public DateTimeOffset EndsAt { get; set; }
+        public DateTimeOffset? SubmittedAt { get; set; }
+
+        [JsonIgnore]
+        public string AnswersJson { get; set; } = "{}";
+    }
+
+    public sealed class TestAttemptResponse
+    {
+        public int Id { get; set; }
+        public string TestId { get; set; } = string.Empty;
+        public TestAttemptStatus Status { get; set; }
+        public DateTimeOffset StartedAt { get; set; }
+        public DateTimeOffset EndsAt { get; set; }
+        public DateTimeOffset? SubmittedAt { get; set; }
+        public Dictionary<string, string> Answers { get; set; } = new();
     }
 
     public sealed class TaskReviewResult

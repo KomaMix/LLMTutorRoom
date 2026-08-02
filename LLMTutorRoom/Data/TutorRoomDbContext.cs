@@ -9,6 +9,7 @@ namespace LLMTutorRoom.Data
         public DbSet<AnswerOption> AnswerOptions { get; set; } = null!;
         public DbSet<SubmissionReview> SubmissionReviews { get; set; } = null!;
         public DbSet<TaskReviewResult> TaskReviewResults { get; set; } = null!;
+        public DbSet<TestAttempt> TestAttempts { get; set; } = null!;
         public DbSet<UserAccount> Users { get; set; } = null!;
 
         public TutorRoomDbContext(DbContextOptions<TutorRoomDbContext> options) : base(options) { }
@@ -61,6 +62,20 @@ namespace LLMTutorRoom.Data
                 entity.Property(result => result.FindingsJson)
                     .HasColumnName("Findings")
                     .HasColumnType("jsonb");
+            });
+
+            modelBuilder.Entity<TestAttempt>(entity =>
+            {
+                entity.Property(attempt => attempt.Status).HasConversion<string>();
+                entity.Property(attempt => attempt.AnswersJson)
+                    .HasColumnName("Answers")
+                    .HasColumnType("jsonb");
+                entity.HasIndex(attempt => new { attempt.TestId, attempt.StudentUserName })
+                    .IsUnique();
+                entity.HasOne<CourseTest>()
+                    .WithMany()
+                    .HasForeignKey(attempt => attempt.TestId)
+                    .OnDelete(DeleteBehavior.Cascade);
             });
         }
     }

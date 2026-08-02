@@ -27,4 +27,9 @@ namespace LLMTutorRoom.DTOs
     {
         public bool IsHidden { get; set; }
     }
+
+    public sealed class SaveAttemptAnswersRequest
+    {
+        public Dictionary<string, string> Answers { get; set; } = new();
+    }
 }

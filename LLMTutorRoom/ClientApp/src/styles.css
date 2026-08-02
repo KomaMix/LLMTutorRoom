@@ -530,7 +530,8 @@ button {
 }
 
 .answer-option-list {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 8px;
   margin-top: 12px;
 }
@@ -539,6 +540,7 @@ button {
   display: flex;
   align-items: center;
   gap: 8px;
+  width: 100%;
   min-height: 36px;
   padding: 8px 10px;
   border: 1px solid #dfe8e8;
@@ -555,7 +557,8 @@ button {
 }
 
 .student-option-list {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 8px;
   margin-top: 12px;
 }
@@ -565,6 +568,7 @@ button {
   grid-template-columns: 20px minmax(0, 1fr);
   align-items: center;
   gap: 10px;
+  width: 100%;
   min-height: 42px;
   padding: 10px;
   border: 1px solid #dfe8e8;
@@ -616,7 +620,8 @@ button {
 }
 
 .option-editor-list {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 8px;
 }
 
@@ -625,6 +630,7 @@ button {
   grid-template-columns: 28px minmax(0, 1fr) 40px;
   align-items: center;
   gap: 8px;
+  width: 100%;
 }
 
 .option-editor-row .option-control {
@@ -696,6 +702,13 @@ select:focus,
 textarea:focus {
   border-color: #256f6d;
   box-shadow: 0 0 0 3px rgba(37, 111, 109, 0.14);
+}
+
+input:disabled,
+textarea:disabled {
+  color: #66787b;
+  background: #f1f5f5;
+  cursor: default;
 }
 
 .task-list,
@@ -839,12 +852,15 @@ textarea:focus {
   font-weight: 800;
 }
 
-.student-name {
+.answer-stack {
+  margin-bottom: 14px;
+}
+
+.attempt-panel {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  min-height: 52px;
   margin-bottom: 14px;
   padding: 12px;
   border: 1px solid #e0e7e7;
@@ -852,18 +868,34 @@ textarea:focus {
   background: #f7faf9;
 }
 
-.student-name span {
+.attempt-panel div {
+  display: grid;
+  gap: 3px;
+}
+
+.attempt-panel span,
+.result-meta span {
   color: #66787b;
   font-size: 13px;
   font-weight: 700;
 }
 
-.student-name strong {
+.attempt-panel strong {
   color: #172026;
+  font-size: 18px;
 }
 
-.answer-stack {
-  margin-bottom: 14px;
+.attempt-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.result-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
 }
 
 .review-summary {
@@ -919,13 +951,15 @@ textarea:focus {
 .status.available,
 .status.admin,
 .status.teacher,
-.status.student {
+.status.student,
+.status.submitted {
   color: #116149;
   background: #dff5e9;
 }
 
 .status.draft,
-.status.standby {
+.status.standby,
+.status.in-progress {
   color: #6c5410;
   background: #f8edc7;
 }
@@ -936,7 +970,8 @@ textarea:focus {
 }
 
 .status.queued,
-.status.manual-review {
+.status.manual-review,
+.status.expired {
   color: #8a351e;
   background: #fae2d5;
 }
@@ -1155,6 +1190,7 @@ textarea:focus {
   .topbar,
   .panel-header,
   .task-card-header,
+  .attempt-panel,
   .review-row,
   .reference-row {
     align-items: flex-start;
@@ -1181,12 +1217,14 @@ textarea:focus {
   }
 
   .task-panel-actions,
+  .attempt-actions,
   .confirm-dialog-actions {
     width: 100%;
     flex-wrap: wrap;
   }
 
   .task-panel-actions button,
+  .attempt-actions .button,
   .confirm-dialog-actions .button {
     flex: 1 1 140px;
   }

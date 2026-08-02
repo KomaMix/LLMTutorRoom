@@ -49,7 +49,7 @@ const navigation = {
   ],
   student: [
     { id: "student-tests", label: "Задания", icon: FileText },
-    { id: "student-review", label: "Результат", icon: CheckCircle2 }
+    { id: "student-review", label: "Результаты", icon: CheckCircle2 }
   ]
 };
 
@@ -67,7 +67,10 @@ const statusText = {
   "single-choice": "Один ответ",
   "multiple-choice": "Несколько ответов",
   "free-text": "Письменный ответ",
-  hidden: "Скрыто"
+  hidden: "Скрыто",
+  "in-progress": "Выполняется",
+  submitted: "Отправлено",
+  expired: "Время вышло"
 };
 
 const authTokenStorageKey = "llmtutorroom.accessToken";
@@ -105,8 +108,12 @@ function App() {
   const [section, setSection] = useState("dashboard");
   const [selectedTestId, setSelectedTestId] = useState("");
   const [answers, setAnswers] = useState({});
-  const [review, setReview] = useState(null);
-  const [isChecking, setIsChecking] = useState(false);
+  const [isStartingAttempt, setIsStartingAttempt] = useState(false);
+  const [isSavingAttempt, setIsSavingAttempt] = useState(false);
+  const [isSubmittingAttempt, setIsSubmittingAttempt] = useState(false);
+  const [hasUnsavedAnswers, setHasUnsavedAnswers] = useState(false);
+  const [studentMessage, setStudentMessage] = useState("");
+  const [now, setNow] = useState(Date.now());
   const [isSigningIn, setIsSigningIn] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [loginError, setLoginError] = useState("");
@@ -174,6 +181,37 @@ function App() {
 
   const role = normalizeRole(currentUser?.role);
 
+  const selectedAttempt = useMemo(() => {
+    if (!overview || !selectedTest) {
+      return null;
+    }
+
+    return overview.attempts.find(attempt => attempt.testId === selectedTest.id) ?? null;
+  }, [overview, selectedTest]);
+
+  const remainingSeconds = selectedAttempt?.status === "in-progress"
+    ? Math.max(0, Math.ceil((new Date(selectedAttempt.endsAt).getTime() - now) / 1000))
+    : 0;
+
+  useEffect(() => {
+    if (role !== "student" || !selectedAttempt || selectedAttempt.status !== "in-progress") {
+      return;
+    }
+
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [role, selectedAttempt?.id, selectedAttempt?.status]);
+
+  useEffect(() => {
+    if (role !== "student") {
+      return;
+    }
+
+    setAnswers(selectedAttempt?.answers ?? {});
+    setHasUnsavedAnswers(false);
+    setStudentMessage("");
+  }, [role, selectedTest?.id, selectedAttempt?.id, selectedAttempt?.status]);
+
   function applyUserSession(user) {
     const userRole = normalizeRole(user.role);
     setCurrentUser(user);
@@ -181,7 +219,8 @@ function App() {
     setOverview(null);
     setSelectedTestId("");
     setAnswers({});
-    setReview(null);
+    setHasUnsavedAnswers(false);
+    setStudentMessage("");
   }
 
   function clearUserSession() {
@@ -189,7 +228,8 @@ function App() {
     setOverview(null);
     setSelectedTestId("");
     setAnswers({});
-    setReview(null);
+    setHasUnsavedAnswers(false);
+    setStudentMessage("");
     setSection("dashboard");
   }
 
@@ -262,41 +302,175 @@ function App() {
     }
   }
 
-  async function submitForReview() {
+  async function startAttempt() {
     if (!selectedTest) {
       return;
     }
 
-    setIsChecking(true);
-    setReview(null);
+    setIsStartingAttempt(true);
+    setStudentMessage("");
 
     try {
-      const response = await authorizedFetch("/api/classroom/reviews", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          testId: selectedTest.id,
-          answers
-        })
+      const response = await authorizedFetch(`/api/classroom/tests/${selectedTest.id}/attempts/start`, {
+        method: "POST"
       });
 
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
       }
 
-      const createdReview = await response.json();
-      setReview(createdReview);
-      setOverview(current => ({
-        ...current,
-        reviews: [createdReview, ...(current?.reviews ?? [])]
-      }));
-      setSection("student-review");
+      const attempt = await response.json();
+      updateAttempt(attempt);
+      setAnswers(attempt.answers);
+      setHasUnsavedAnswers(false);
+    } catch (error) {
+      setStudentMessage("Не удалось начать тест.");
     } finally {
-      setIsChecking(false);
+      setIsStartingAttempt(false);
     }
   }
+
+  async function saveAttemptAnswers(options = {}) {
+    if (!selectedAttempt) {
+      return;
+    }
+
+    if (!options.silent) {
+      setIsSavingAttempt(true);
+      setStudentMessage("");
+    }
+
+    try {
+      const response = await authorizedFetch(`/api/classroom/attempts/${selectedAttempt.id}/answers`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          answers
+        })
+      });
+
+      if (response.status === 409) {
+        const attempt = await response.json();
+        updateAttempt(attempt);
+        setAnswers(attempt.answers);
+        setHasUnsavedAnswers(false);
+        setStudentMessage("Время выполнения истекло. Ответы больше нельзя изменить.");
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const attempt = await response.json();
+      updateAttempt(attempt);
+      setHasUnsavedAnswers(false);
+
+      if (!options.silent) {
+        setStudentMessage("Ответы сохранены.");
+      }
+    } catch (error) {
+      if (!options.silent) {
+        setStudentMessage("Не удалось сохранить ответы.");
+      }
+    } finally {
+      if (!options.silent) {
+        setIsSavingAttempt(false);
+      }
+    }
+  }
+
+  async function submitAttempt() {
+    if (!selectedAttempt) {
+      return;
+    }
+
+    setIsSubmittingAttempt(true);
+    setStudentMessage("");
+
+    try {
+      const saveResponse = await authorizedFetch(`/api/classroom/attempts/${selectedAttempt.id}/answers`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          answers
+        })
+      });
+
+      if (saveResponse.status === 409) {
+        const attempt = await saveResponse.json();
+        updateAttempt(attempt);
+        setAnswers(attempt.answers);
+        setHasUnsavedAnswers(false);
+        setStudentMessage("Время выполнения истекло. Завершить тест уже нельзя.");
+        return;
+      }
+
+      if (!saveResponse.ok) {
+        throw new Error(`HTTP ${saveResponse.status}`);
+      }
+
+      const submitResponse = await authorizedFetch(`/api/classroom/attempts/${selectedAttempt.id}/submit`, {
+        method: "POST"
+      });
+
+      if (submitResponse.status === 409) {
+        const attempt = await submitResponse.json();
+        updateAttempt(attempt);
+        setAnswers(attempt.answers);
+        setHasUnsavedAnswers(false);
+        setStudentMessage("Время выполнения истекло. Ответы больше нельзя изменить.");
+        return;
+      }
+
+      if (!submitResponse.ok) {
+        throw new Error(`HTTP ${submitResponse.status}`);
+      }
+
+      const attempt = await submitResponse.json();
+      updateAttempt(attempt);
+      setAnswers(attempt.answers);
+      setHasUnsavedAnswers(false);
+      setStudentMessage("Ответы отправлены. Результаты станут доступны позже.");
+      setSection("student-review");
+    } catch (error) {
+      setStudentMessage("Не удалось завершить тест.");
+    } finally {
+      setIsSubmittingAttempt(false);
+    }
+  }
+
+  function updateAttempt(attempt) {
+    setOverview(current => {
+      if (!current) {
+        return current;
+      }
+
+      const attempts = current.attempts.filter(item => item.id !== attempt.id);
+      return {
+        ...current,
+        attempts: [attempt, ...attempts]
+      };
+    });
+  }
+
+  useEffect(() => {
+    if (!hasUnsavedAnswers
+        || !selectedAttempt
+        || selectedAttempt.status !== "in-progress") {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      saveAttemptAnswers({ silent: true });
+    }, 900);
+
+    return () => window.clearTimeout(timer);
+  }, [answers, hasUnsavedAnswers, selectedAttempt?.id, selectedAttempt?.status]);
 
   if (!isAuthChecked) {
     return <LoadingState />;
@@ -334,7 +508,7 @@ function App() {
           </div>
           <div>
             <strong>LLMTutorRoom</strong>
-            <span>adaptive assessment</span>
+            <span>умная проверка знаний</span>
           </div>
         </div>
 
@@ -428,13 +602,21 @@ function App() {
               tests={overview.tests}
               selectedTest={selectedTest}
               selectedTestId={selectedTestId}
-              studentDisplayName={currentUser.displayName}
+              selectedAttempt={selectedAttempt}
+              remainingSeconds={remainingSeconds}
               answers={answers}
-              isChecking={isChecking}
+              message={studentMessage}
+              isStartingAttempt={isStartingAttempt}
+              isSavingAttempt={isSavingAttempt}
+              isSubmittingAttempt={isSubmittingAttempt}
               onSelectTest={setSelectedTestId}
-              onAnswerChange={(taskId, value) =>
-                setAnswers(current => ({ ...current, [taskId]: value }))}
-              onSubmit={submitForReview}
+              onAnswerChange={(taskId, value) => {
+                setAnswers(current => ({ ...current, [taskId]: value }));
+                setHasUnsavedAnswers(true);
+              }}
+              onStartAttempt={startAttempt}
+              onSaveAnswers={saveAttemptAnswers}
+              onSubmitAttempt={submitAttempt}
             />
           ) : (
             <section className="panel empty-state">
@@ -445,7 +627,11 @@ function App() {
         )}
 
         {role === "student" && section === "student-review" && (
-          <StudentReview review={review} reviews={overview.reviews} />
+          <StudentResults
+            attempts={overview.attempts}
+            reviews={overview.reviews}
+            tests={overview.tests}
+          />
         )}
       </main>
     </div>
@@ -465,7 +651,7 @@ function LoginScreen({ error, isSigningIn, onLogin }) {
           </div>
           <div>
             <strong>LLMTutorRoom</strong>
-            <span>adaptive assessment</span>
+            <span>умная проверка знаний</span>
           </div>
         </div>
 
@@ -1861,13 +2047,22 @@ function StudentWorkspace({
   tests,
   selectedTest,
   selectedTestId,
-  studentDisplayName,
+  selectedAttempt,
+  remainingSeconds,
   answers,
-  isChecking,
+  message,
+  isStartingAttempt,
+  isSavingAttempt,
+  isSubmittingAttempt,
   onSelectTest,
   onAnswerChange,
-  onSubmit
+  onStartAttempt,
+  onSaveAnswers,
+  onSubmitAttempt
 }) {
+  const effectiveAttemptStatus = getEffectiveAttemptStatus(selectedAttempt, remainingSeconds);
+  const canEditAnswers = effectiveAttemptStatus === "in-progress" && remainingSeconds > 0;
+
   function toggleMultipleChoiceOption(taskId, optionId, isChecked) {
     const selectedOptionIds = (answers[taskId] ?? "")
       .split("|")
@@ -1899,7 +2094,7 @@ function StudentWorkspace({
               onClick={() => onSelectTest(test.id)}
             >
               <span>{test.title}</span>
-              <small>{test.totalPoints} баллов</small>
+              <small>{test.totalPoints} баллов · {test.timeLimitMinutes} мин</small>
             </button>
           ))}
         </div>
@@ -1911,70 +2106,124 @@ function StudentWorkspace({
             <span className="eyebrow">{selectedTest.subject}</span>
             <h2>{selectedTest.title}</h2>
           </div>
-          <StatusBadge status={selectedTest.status} />
+          <StatusBadge status={effectiveAttemptStatus ?? selectedTest.status} />
         </div>
 
         <p className="muted">{selectedTest.summary}</p>
 
-        <div className="student-name">
-          <span>Ученик</span>
-          <strong>{studentDisplayName}</strong>
+        <div className="attempt-panel">
+          <div>
+            <span>{selectedAttempt ? "Состояние" : "Тест не начат"}</span>
+            <strong>{selectedAttempt ? getAttemptStatusText(effectiveAttemptStatus) : `${selectedTest.timeLimitMinutes} мин`}</strong>
+          </div>
+          {selectedAttempt && (
+            <div>
+              <span>Осталось</span>
+              <strong>{formatDuration(remainingSeconds)}</strong>
+            </div>
+          )}
+          {!selectedAttempt && (
+            <button type="button" className="button primary" onClick={onStartAttempt} disabled={isStartingAttempt}>
+              {isStartingAttempt ? <Loader2 className="spin" size={16} aria-hidden="true" /> : <Play size={16} aria-hidden="true" />}
+              {isStartingAttempt ? "Запуск..." : "Начать тест"}
+            </button>
+          )}
         </div>
 
-        <div className="answer-stack">
-          {selectedTest.tasks.map(task => (
-            <article className="answer-card" key={task.id}>
-              <div>
-                <strong>{task.title}</strong>
-                <span>{task.maxPoints} баллов</span>
-              </div>
-              <p>{task.prompt}</p>
-              {task.type === "free-text" ? (
-                <textarea
-                  value={answers[task.id] ?? ""}
-                  onChange={event => onAnswerChange(task.id, event.target.value)}
-                  placeholder="Введите решение..."
-                  rows={7}
-                />
-              ) : (
-                <div className="student-option-list">
-                  {task.options.map(option => (
-                    <label className="student-option" key={option.id}>
-                      <input
-                        checked={(answers[task.id] ?? "").split("|").includes(option.id)}
-                        name={`student-answer-${task.id}`}
-                        type={task.type === "single-choice" ? "radio" : "checkbox"}
-                        onChange={event => {
-                          if (task.type === "single-choice") {
-                            onAnswerChange(task.id, option.id);
-                            return;
-                          }
+        {message && <p className="form-note">{message}</p>}
 
-                          toggleMultipleChoiceOption(task.id, option.id, event.target.checked);
-                        }}
-                      />
-                      <span>{option.text}</span>
-                    </label>
-                  ))}
-                </div>
-              )}
-            </article>
-          ))}
-        </div>
+        {!selectedAttempt && (
+          <section className="empty-state compact-empty-state">
+            <Clock3 size={24} aria-hidden="true" />
+            <h2>Начни тест, чтобы открыть ответы</h2>
+          </section>
+        )}
 
-        <button type="button" className="button primary" onClick={onSubmit} disabled={isChecking}>
-          {isChecking ? <Loader2 className="spin" size={16} aria-hidden="true" /> : <Send size={16} aria-hidden="true" />}
-          {isChecking ? "Проверка..." : "Отправить на проверку"}
-        </button>
+        {selectedAttempt && (
+          <>
+            <div className="answer-stack">
+              {selectedTest.tasks.map(task => (
+                <article className="answer-card" key={task.id}>
+                  <div>
+                    <strong>{task.title}</strong>
+                    <span>{task.maxPoints} баллов</span>
+                  </div>
+                  <p>{task.prompt}</p>
+                  {task.type === "free-text" ? (
+                    <textarea
+                      value={answers[task.id] ?? ""}
+                      disabled={!canEditAnswers}
+                      onChange={event => onAnswerChange(task.id, event.target.value)}
+                      placeholder="Введите решение..."
+                      rows={7}
+                    />
+                  ) : (
+                    <div className="student-option-list">
+                      {task.options.map(option => (
+                        <label className="student-option" key={option.id}>
+                          <input
+                            checked={(answers[task.id] ?? "").split("|").includes(option.id)}
+                            disabled={!canEditAnswers}
+                            name={`student-answer-${task.id}`}
+                            type={task.type === "single-choice" ? "radio" : "checkbox"}
+                            onChange={event => {
+                              if (task.type === "single-choice") {
+                                onAnswerChange(task.id, option.id);
+                                return;
+                              }
+
+                              toggleMultipleChoiceOption(task.id, option.id, event.target.checked);
+                            }}
+                          />
+                          <span>{option.text}</span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </article>
+              ))}
+            </div>
+
+            <div className="attempt-actions">
+              <button
+                type="button"
+                className="button secondary"
+                onClick={onSaveAnswers}
+                disabled={!canEditAnswers || isSavingAttempt || isSubmittingAttempt}
+              >
+                {isSavingAttempt ? <Loader2 className="spin" size={16} aria-hidden="true" /> : <Save size={16} aria-hidden="true" />}
+                {isSavingAttempt ? "Сохранение..." : "Сохранить ответы"}
+              </button>
+              <button
+                type="button"
+                className="button primary"
+                onClick={onSubmitAttempt}
+                disabled={!canEditAnswers || isSavingAttempt || isSubmittingAttempt}
+              >
+                {isSubmittingAttempt ? <Loader2 className="spin" size={16} aria-hidden="true" /> : <Send size={16} aria-hidden="true" />}
+                {isSubmittingAttempt ? "Завершение..." : "Завершить тест"}
+              </button>
+            </div>
+
+            {effectiveAttemptStatus === "expired" && (
+              <p className="form-note">Время выполнения истекло. Ответы заблокированы.</p>
+            )}
+            {effectiveAttemptStatus === "submitted" && (
+              <p className="form-note">Ответы отправлены. Результаты станут доступны позже.</p>
+            )}
+          </>
+        )}
       </div>
     </section>
   );
 }
 
-function StudentReview({ review, reviews }) {
-  const currentReview = review ?? reviews.find(item => item.status === "checked");
+function StudentResults({ attempts, reviews, tests }) {
+  const currentTime = Date.now();
+  const completedAttempts = attempts.filter(attempt =>
+    attempt.status !== "in-progress" || new Date(attempt.endsAt).getTime() <= currentTime);
 
-  if (!currentReview) {
+  if (completedAttempts.length === 0 && reviews.length === 0) {
     return (
       <section className="panel empty-state">
         <CheckCircle2 size={28} aria-hidden="true" />
@@ -1987,30 +2236,59 @@ function StudentReview({ review, reviews }) {
     <section className="panel">
       <div className="panel-header">
         <div>
-          <span className="eyebrow">{currentReview.testTitle}</span>
-          <h2>{currentReview.score}/{currentReview.maxScore} баллов</h2>
+          <span className="eyebrow">История</span>
+          <h2>Результаты</h2>
         </div>
-        <StatusBadge status={currentReview.status} />
+        <CheckCircle2 size={18} aria-hidden="true" />
       </div>
 
-      <p className="review-summary">{currentReview.summary}</p>
+      {completedAttempts.length > 0 && (
+        <div className="result-list">
+          {completedAttempts.map(attempt => {
+            const test = tests.find(item => item.id === attempt.testId);
+            const attemptStatus = getEffectiveAttemptStatus(
+              attempt,
+              Math.ceil((new Date(attempt.endsAt).getTime() - currentTime) / 1000));
+            return (
+              <article className="result-card" key={attempt.id}>
+                <div>
+                  <strong>{test?.title ?? "Тест"}</strong>
+                  <StatusBadge status={attemptStatus} />
+                </div>
+                <p>{attemptStatus === "submitted"
+                  ? "Ответы отправлены. Результаты станут доступны позже."
+                  : "Время выполнения истекло. Ответы больше нельзя изменить."}</p>
+                <div className="result-meta">
+                  <span>Начало: {formatDate(attempt.startedAt)}</span>
+                  <span>Окончание: {formatDate(attempt.submittedAt ?? attempt.endsAt)}</span>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      )}
 
-      <div className="result-list">
-        {currentReview.taskResults.map(result => (
-          <article className="result-card" key={result.taskId}>
-            <div>
-              <strong>{result.taskTitle}</strong>
-              <span>{result.score}/{result.maxScore}</span>
-            </div>
-            <p>{result.feedback}</p>
-            <ul>
-              {result.findings.map(finding => (
-                <li key={finding}>{finding}</li>
-              ))}
-            </ul>
-          </article>
-        ))}
-      </div>
+      {reviews.length > 0 && (
+        <>
+          <h3>Проверки</h3>
+          <div className="result-list">
+            {reviews.map(review => (
+              <article className="result-card" key={review.id}>
+                <div>
+                  <strong>{review.testTitle}</strong>
+                  <span>{review.score}/{review.maxScore}</span>
+                </div>
+                <p>{review.summary}</p>
+                <ul>
+                  {review.taskResults.flatMap(result => result.findings).map(finding => (
+                    <li key={finding}>{finding}</li>
+                  ))}
+                </ul>
+              </article>
+            ))}
+          </div>
+        </>
+      )}
     </section>
   );
 }
@@ -2053,6 +2331,7 @@ function parseOverview(data) {
   requireArray(data.tests, "tests");
   requireArray(data.models, "models");
   requireArray(data.reviews, "reviews");
+  requireArray(data.attempts, "attempts");
 
   if (!data.metrics || typeof data.metrics !== "object") {
     throw new Error("Overview response must contain metrics.");
@@ -2087,6 +2366,32 @@ function parseOverview(data) {
     });
   });
 
+  data.attempts.forEach((attempt, attemptIndex) => {
+    if (typeof attempt.id !== "number") {
+      throw new Error(`attempts[${attemptIndex}].id must be a number.`);
+    }
+
+    if (typeof attempt.testId !== "string") {
+      throw new Error(`attempts[${attemptIndex}].testId must be a string.`);
+    }
+
+    if (typeof attempt.status !== "string") {
+      throw new Error(`attempts[${attemptIndex}].status must be a string.`);
+    }
+
+    if (typeof attempt.startedAt !== "string") {
+      throw new Error(`attempts[${attemptIndex}].startedAt must be a string.`);
+    }
+
+    if (typeof attempt.endsAt !== "string") {
+      throw new Error(`attempts[${attemptIndex}].endsAt must be a string.`);
+    }
+
+    if (!attempt.answers || typeof attempt.answers !== "object" || Array.isArray(attempt.answers)) {
+      throw new Error(`attempts[${attemptIndex}].answers must be an object.`);
+    }
+  });
+
   return data;
 }
 
@@ -2094,6 +2399,30 @@ function requireArray(value, fieldName) {
   if (!Array.isArray(value)) {
     throw new Error(`${fieldName} must be an array.`);
   }
+}
+
+function getEffectiveAttemptStatus(attempt, remainingSeconds) {
+  if (!attempt) {
+    return null;
+  }
+
+  if (attempt.status === "in-progress" && remainingSeconds <= 0) {
+    return "expired";
+  }
+
+  return attempt.status;
+}
+
+function getAttemptStatusText(status) {
+  return statusText[status] ?? status;
+}
+
+function formatDuration(totalSeconds) {
+  const safeSeconds = Math.max(0, totalSeconds);
+  const minutes = Math.floor(safeSeconds / 60);
+  const seconds = safeSeconds % 60;
+
+  return `${minutes}:${seconds.toString().padStart(2, "0")}`;
 }
 
 function formatDate(value) {
