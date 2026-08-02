@@ -1,4 +1,5 @@
 using LLMTutorRoom.DTOs;
+using LLMTutorRoom.Models;
 using LLMTutorRoom.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -18,21 +19,18 @@ namespace LLMTutorRoom.Controllers
 
         [Authorize(Roles = "Admin")]
         [HttpGet("teachers")]
-        public ActionResult<IReadOnlyCollection<AuthUserResponse>> GetTeachers()
+        public async Task<ActionResult<IReadOnlyCollection<AuthUserResponse>>> GetTeachers(
+            CancellationToken cancellationToken)
         {
-            lock (_authService.UsersSyncRoot)
-            {
-                return Ok(_authService.Users
-                    .Where(user => user.Role == "Teacher")
-                    .OrderBy(user => user.DisplayName)
-                    .Select(ToResponse)
-                    .ToList());
-            }
+            var teachers = await _authService.GetTeachersAsync(cancellationToken);
+            return Ok(teachers.Select(ToResponse).ToList());
         }
 
         [Authorize(Roles = "Admin")]
         [HttpPost("teachers")]
-        public ActionResult<AuthUserResponse> CreateTeacher([FromBody] CreateTeacherRequest request)
+        public async Task<ActionResult<AuthUserResponse>> CreateTeacher(
+            [FromBody] CreateTeacherRequest request,
+            CancellationToken cancellationToken)
         {
             if (string.IsNullOrWhiteSpace(request.UserName)
                 || string.IsNullOrWhiteSpace(request.Password)
@@ -43,27 +41,15 @@ namespace LLMTutorRoom.Controllers
 
             var userName = AuthService.NormalizeUserName(request.UserName);
 
-            lock (_authService.UsersSyncRoot)
-            {
-                var userExists = _authService.Users.Any(user => string.Equals(
-                    user.UserName,
-                    userName,
-                    StringComparison.OrdinalIgnoreCase));
+            var teacher = await _authService.CreateTeacherAsync(
+                userName,
+                request.Password,
+                request.DisplayName,
+                cancellationToken);
 
-                if (userExists)
-                    return Conflict();
-
-                var teacher = new UserAccount
-                {
-                    UserName = userName,
-                    Password = request.Password,
-                    Role = "Teacher",
-                    DisplayName = request.DisplayName.Trim()
-                };
-
-                _authService.Users.Add(teacher);
-                return Ok(ToResponse(teacher));
-            }
+            return teacher is null
+                ? Conflict()
+                : Ok(ToResponse(teacher));
         }
 
         private static AuthUserResponse ToResponse(UserAccount user)
@@ -72,7 +58,7 @@ namespace LLMTutorRoom.Controllers
             {
                 UserName = user.UserName,
                 DisplayName = user.DisplayName,
-                Role = user.Role
+                Role = user.Role.ToString()
             };
         }
     }

@@ -1,57 +1,216 @@
+using LLMTutorRoom.Data;
 using LLMTutorRoom.DTOs;
 using LLMTutorRoom.Models;
+using Microsoft.EntityFrameworkCore;
 
 namespace LLMTutorRoom.Services
 {
     public sealed class ClassroomService
     {
-        private readonly object _syncRoot = new();
-        private readonly List<CourseTest> _tests;
-        private readonly List<SubmissionReview> _reviews;
-        private int _nextReviewId = 4;
+        private readonly TutorRoomDbContext _dbContext;
 
-        public ClassroomService()
+        public ClassroomService(TutorRoomDbContext dbContext)
         {
-            _tests = SeedTests();
-            _reviews = SeedReviews();
+            _dbContext = dbContext;
         }
 
-        public ClassroomOverview GetTeacherOverview()
+        public async Task<ClassroomOverview> GetTeacherOverviewAsync(CancellationToken cancellationToken)
         {
-            lock (_syncRoot)
+            var tests = await LoadTests()
+                .OrderByDescending(test => test.Deadline)
+                .ToListAsync(cancellationToken);
+            var reviews = await LoadReviews()
+                .OrderByDescending(review => review.SubmittedAt)
+                .ToListAsync(cancellationToken);
+
+            return new ClassroomOverview
             {
-                return new ClassroomOverview
-                {
-                    Tests = _tests,
-                    Models = SeedModels(),
-                    Reviews = _reviews
-                        .OrderByDescending(r => r.SubmittedAt)
-                        .ToList(),
-                    Metrics = CreateMetrics()
-                };
-            }
+                Tests = tests,
+                Models = Array.Empty<LanguageModel>(),
+                Reviews = reviews,
+                Metrics = CreateMetrics(tests, reviews)
+            };
         }
 
-        public ClassroomOverview GetStudentOverview(string studentName)
+        public async Task<ClassroomOverview> GetStudentOverviewAsync(
+            string studentName,
+            CancellationToken cancellationToken)
         {
-            lock (_syncRoot)
-            {
-                var tests = _tests
-                    .Where(t => t.Status == "published")
-                    .ToList();
-                var reviews = _reviews
-                    .Where(r => string.Equals(r.StudentName, studentName, StringComparison.OrdinalIgnoreCase))
-                    .OrderByDescending(r => r.SubmittedAt)
-                    .ToList();
+            var tests = await LoadVisibleTests()
+                .Where(test => test.Status == CourseTestStatus.Published)
+                .OrderBy(test => test.Deadline)
+                .ToListAsync(cancellationToken);
+            var reviews = await LoadReviews()
+                .Where(review => review.StudentName.ToLower() == studentName.ToLower())
+                .OrderByDescending(review => review.SubmittedAt)
+                .ToListAsync(cancellationToken);
 
-                return new ClassroomOverview
-                {
-                    Tests = tests,
-                    Models = Array.Empty<LanguageModel>(),
-                    Reviews = reviews,
-                    Metrics = CreateStudentMetrics(tests, reviews)
-                };
+            return new ClassroomOverview
+            {
+                Tests = tests,
+                Models = Array.Empty<LanguageModel>(),
+                Reviews = reviews,
+                Metrics = CreateMetrics(tests, reviews)
+            };
+        }
+
+        public async Task<IReadOnlyCollection<CourseTest>> GetTestsAsync(CancellationToken cancellationToken)
+        {
+            return await LoadTests()
+                .OrderByDescending(test => test.Deadline)
+                .ToListAsync(cancellationToken);
+        }
+
+        public async Task<CourseTest> CreateTestAsync(
+            CreateTestRequest request,
+            CancellationToken cancellationToken)
+        {
+            var test = new CourseTest
+            {
+                Id = CreateId("test"),
+                Title = request.Title.Trim(),
+                Subject = request.Subject.Trim(),
+                Status = request.Status,
+                Deadline = request.Deadline ?? DateTimeOffset.UtcNow.AddDays(7),
+                TimeLimitMinutes = request.TimeLimitMinutes,
+                Summary = request.Summary?.Trim() ?? string.Empty
+            };
+
+            _dbContext.Tests.Add(test);
+            await _dbContext.SaveChangesAsync(cancellationToken);
+
+            return test;
+        }
+
+        public async Task<CourseTest?> UpdateTestAsync(
+            string testId,
+            CreateTestRequest request,
+            CancellationToken cancellationToken)
+        {
+            var test = await _dbContext.Tests
+                .SingleOrDefaultAsync(item => item.Id == testId, cancellationToken);
+
+            if (test is null)
+                return null;
+
+            test.Title = request.Title.Trim();
+            test.Subject = request.Subject.Trim();
+            test.Status = request.Status;
+            test.Deadline = request.Deadline ?? test.Deadline;
+            test.TimeLimitMinutes = request.TimeLimitMinutes;
+            test.Summary = request.Summary?.Trim() ?? string.Empty;
+
+            await _dbContext.SaveChangesAsync(cancellationToken);
+            return await LoadTests()
+                .SingleAsync(item => item.Id == testId, cancellationToken);
+        }
+
+        public async Task<TestTask?> AddTaskAsync(
+            string testId,
+            CreateTaskRequest request,
+            CancellationToken cancellationToken)
+        {
+            var testExists = await _dbContext.Tests
+                .AnyAsync(test => test.Id == testId, cancellationToken);
+
+            if (!testExists)
+                return null;
+
+            var taskId = CreateId("task");
+            var task = new TestTask
+            {
+                Id = taskId,
+                CourseTestId = testId,
+                Type = request.Type,
+                Title = request.Title.Trim(),
+                Prompt = request.Prompt.Trim(),
+                MaxPoints = request.MaxPoints,
+                CreatedAt = DateTimeOffset.UtcNow,
+                WrongAnswerPenalty = request.Type == TestTaskType.MultipleChoice
+                    ? request.WrongAnswerPenalty
+                    : 0,
+                Options = request.Type == TestTaskType.FreeText
+                    ? new List<AnswerOption>()
+                    : CreateOptions(request, taskId)
+            };
+
+            _dbContext.TestTasks.Add(task);
+            await _dbContext.SaveChangesAsync(cancellationToken);
+
+            return task;
+        }
+
+        public async Task<TestTask?> UpdateTaskAsync(
+            string testId,
+            string taskId,
+            CreateTaskRequest request,
+            CancellationToken cancellationToken)
+        {
+            var task = await _dbContext.TestTasks
+                .Include(item => item.Options)
+                .SingleOrDefaultAsync(
+                    item => item.CourseTestId == testId && item.Id == taskId,
+                    cancellationToken);
+
+            if (task is null)
+                return null;
+
+            task.Type = request.Type;
+            task.Title = request.Title.Trim();
+            task.Prompt = request.Prompt.Trim();
+            task.MaxPoints = request.MaxPoints;
+            task.WrongAnswerPenalty = request.Type == TestTaskType.MultipleChoice
+                ? request.WrongAnswerPenalty
+                : 0;
+
+            _dbContext.AnswerOptions.RemoveRange(task.Options);
+            task.Options.Clear();
+
+            if (request.Type != TestTaskType.FreeText)
+            {
+                foreach (var option in CreateOptions(request, task.Id))
+                    task.Options.Add(option);
             }
+
+            await _dbContext.SaveChangesAsync(cancellationToken);
+            return task;
+        }
+
+        public async Task<TestTask?> SetTaskVisibilityAsync(
+            string testId,
+            string taskId,
+            bool isHidden,
+            CancellationToken cancellationToken)
+        {
+            var task = await _dbContext.TestTasks
+                .SingleOrDefaultAsync(
+                    item => item.CourseTestId == testId && item.Id == taskId,
+                    cancellationToken);
+
+            if (task is null)
+                return null;
+
+            task.IsHidden = isHidden;
+            await _dbContext.SaveChangesAsync(cancellationToken);
+            return task;
+        }
+
+        public async Task<bool> DeleteTaskAsync(
+            string testId,
+            string taskId,
+            CancellationToken cancellationToken)
+        {
+            var task = await _dbContext.TestTasks
+                .SingleOrDefaultAsync(
+                    item => item.CourseTestId == testId && item.Id == taskId,
+                    cancellationToken);
+
+            if (task is null)
+                return false;
+
+            _dbContext.TestTasks.Remove(task);
+            await _dbContext.SaveChangesAsync(cancellationToken);
+            return true;
         }
 
         public async Task<SubmissionReview?> CreateReviewAsync(
@@ -59,74 +218,173 @@ namespace LLMTutorRoom.Services
             string studentName,
             CancellationToken cancellationToken)
         {
-            await Task.Delay(750, cancellationToken);
+            var test = await LoadVisibleTests()
+                .SingleOrDefaultAsync(item => item.Id == request.TestId, cancellationToken);
 
-            lock (_syncRoot)
+            if (test is null)
+                return null;
+
+            var taskResults = test.Tasks.Select(task =>
             {
-                var test = _tests.SingleOrDefault(t => t.Id == request.TestId);
-                if (test is null)
-                    return null;
+                request.Answers.TryGetValue(task.Id, out var answer);
+                return CreateTaskReview(task, answer ?? string.Empty);
+            }).ToList();
 
-                var taskResults = test.Tasks.Select(task =>
-                {
-                    request.Answers.TryGetValue(task.Id, out var answer);
-                    return CreateTaskReview(task, answer ?? string.Empty);
-                }).ToList();
-
-                var totalScore = taskResults.Sum(r => r.Score);
-                var review = new SubmissionReview
-                {
-                    Id = _nextReviewId++,
-                    TestId = test.Id,
-                    TestTitle = test.Title,
-                    StudentName = string.IsNullOrWhiteSpace(studentName)
-                        ? "Студент"
-                        : studentName.Trim(),
-                    Status = "checked",
-                    ModelKey = test.LlmModelKey,
-                    SubmittedAt = DateTimeOffset.UtcNow,
-                    Score = totalScore,
-                    MaxScore = test.TotalPoints,
-                    Summary = CreateSummary(totalScore, test.TotalPoints),
-                    TaskResults = taskResults
-                };
-
-                _reviews.Add(review);
-                return review;
-            }
-        }
-
-        private DashboardMetrics CreateMetrics()
-        {
-            return new DashboardMetrics
+            var totalScore = taskResults.Sum(result => result.Score);
+            var review = new SubmissionReview
             {
-                ActiveTests = _tests.Count(t => t.Status == "published"),
-                Tasks = _tests.Sum(t => t.Tasks.Count),
-                PendingReviews = _reviews.Count(r => r.Status == "queued"),
-                AverageScore = _reviews.Count == 0
-                    ? 0
-                    : Math.Round(_reviews.Average(r => r.Score / r.MaxScore * 100), 1)
+                TestId = test.Id,
+                TestTitle = test.Title,
+                StudentName = string.IsNullOrWhiteSpace(studentName)
+                    ? "Студент"
+                    : studentName.Trim(),
+                Status = SubmissionReviewStatus.Checked,
+                ModelKey = string.Empty,
+                SubmittedAt = DateTimeOffset.UtcNow,
+                Score = totalScore,
+                MaxScore = test.TotalPoints,
+                Summary = CreateSummary(totalScore, test.TotalPoints),
+                TaskResults = taskResults
             };
+
+            _dbContext.SubmissionReviews.Add(review);
+            await _dbContext.SaveChangesAsync(cancellationToken);
+
+            return review;
         }
 
-        private static DashboardMetrics CreateStudentMetrics(
+        private IQueryable<CourseTest> LoadTests()
+        {
+            return _dbContext.Tests
+                .AsNoTracking()
+                .Include(test => test.Tasks
+                    .OrderBy(task => task.CreatedAt)
+                    .ThenBy(task => task.Id))
+                .ThenInclude(task => task.Options);
+        }
+
+        private IQueryable<CourseTest> LoadVisibleTests()
+        {
+            return _dbContext.Tests
+                .AsNoTracking()
+                .Include(test => test.Tasks
+                    .Where(task => !task.IsHidden)
+                    .OrderBy(task => task.CreatedAt)
+                    .ThenBy(task => task.Id))
+                .ThenInclude(task => task.Options);
+        }
+
+        private IQueryable<SubmissionReview> LoadReviews()
+        {
+            return _dbContext.SubmissionReviews
+                .AsNoTracking()
+                .Include(review => review.TaskResults);
+        }
+
+        private static List<AnswerOption> CreateOptions(
+            CreateTaskRequest request,
+            string taskId)
+        {
+            var correctOptionIndexes = request.CorrectOptionIndexes
+                .Distinct()
+                .ToHashSet();
+
+            return request.Options.Select((option, index) => new AnswerOption
+            {
+                Id = CreateId("option"),
+                TestTaskId = taskId,
+                Text = option.Trim(),
+                IsCorrect = correctOptionIndexes.Contains(index)
+            }).ToList();
+        }
+
+        private static DashboardMetrics CreateMetrics(
             IReadOnlyCollection<CourseTest> tests,
             IReadOnlyCollection<SubmissionReview> reviews)
         {
-            var checkedReviews = reviews.Where(r => r.Status == "checked").ToList();
+            var checkedReviews = reviews
+                .Where(review => review.Status == SubmissionReviewStatus.Checked && review.MaxScore > 0)
+                .ToList();
 
             return new DashboardMetrics
             {
-                ActiveTests = tests.Count,
-                Tasks = tests.Sum(t => t.Tasks.Count),
-                PendingReviews = reviews.Count(r => r.Status == "queued"),
+                ActiveTests = tests.Count(test => test.Status == CourseTestStatus.Published),
+                Tasks = tests.Sum(test => test.Tasks.Count(task => !task.IsHidden)),
+                PendingReviews = reviews.Count(review => review.Status == SubmissionReviewStatus.Queued),
                 AverageScore = checkedReviews.Count == 0
                     ? 0
-                    : Math.Round(checkedReviews.Average(r => r.Score / r.MaxScore * 100), 1)
+                    : Math.Round(checkedReviews.Average(review => review.Score / review.MaxScore * 100), 1)
             };
         }
 
         private static TaskReviewResult CreateTaskReview(TestTask task, string answer)
+        {
+            if (task.Type == TestTaskType.SingleChoice)
+                return CreateSingleChoiceTaskReview(task, answer);
+
+            if (task.Type == TestTaskType.MultipleChoice)
+                return CreateMultipleChoiceTaskReview(task, answer);
+
+            return CreateFreeTextTaskReview(task, answer);
+        }
+
+        private static TaskReviewResult CreateSingleChoiceTaskReview(TestTask task, string answer)
+        {
+            var selectedOptionIds = answer
+                .Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .ToHashSet();
+            var correctOptionIds = task.CorrectOptionIds.ToHashSet();
+            var isCorrect = selectedOptionIds.SetEquals(correctOptionIds);
+
+            return new TaskReviewResult
+            {
+                TaskId = task.Id,
+                TaskTitle = task.Title,
+                Score = isCorrect ? task.MaxPoints : 0,
+                MaxScore = task.MaxPoints,
+                Feedback = isCorrect
+                    ? "Ответ выбран верно."
+                    : "Ответ не совпадает с правильным вариантом.",
+                Findings = isCorrect
+                    ? new List<string> { "Выбран корректный вариант." }
+                    : new List<string> { "Нужно повторить материал по этому вопросу." }
+            };
+        }
+
+        private static TaskReviewResult CreateMultipleChoiceTaskReview(TestTask task, string answer)
+        {
+            var selectedOptionIds = answer
+                .Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .ToHashSet();
+            var correctOptionIds = task.CorrectOptionIds.ToHashSet();
+            var selectedCorrectCount = selectedOptionIds.Count(correctOptionIds.Contains);
+            var selectedWrongCount = selectedOptionIds.Count(optionId => !correctOptionIds.Contains(optionId));
+            var pointsPerCorrectOption = correctOptionIds.Count == 0
+                ? 0
+                : task.MaxPoints / correctOptionIds.Count;
+            var score = selectedCorrectCount * pointsPerCorrectOption
+                - selectedWrongCount * task.WrongAnswerPenalty;
+
+            score = Math.Clamp(Math.Round(score, 1), 0, task.MaxPoints);
+
+            return new TaskReviewResult
+            {
+                TaskId = task.Id,
+                TaskTitle = task.Title,
+                Score = score,
+                MaxScore = task.MaxPoints,
+                Feedback = selectedWrongCount == 0 && selectedCorrectCount == correctOptionIds.Count
+                    ? "Все правильные варианты выбраны."
+                    : "Баллы начислены за правильные варианты с учетом штрафа за неверные.",
+                Findings = new List<string>
+                {
+                    $"Правильных вариантов выбрано: {selectedCorrectCount}.",
+                    $"Неверных вариантов выбрано: {selectedWrongCount}."
+                }
+            };
+        }
+
+        private static TaskReviewResult CreateFreeTextTaskReview(TestTask task, string answer)
         {
             var normalizedAnswer = answer.Trim();
             var score = 0m;
@@ -134,34 +392,17 @@ namespace LLMTutorRoom.Services
 
             if (normalizedAnswer.Length > 120)
             {
-                score += task.MaxPoints * 0.45m;
-                findings.Add("Есть развернутое объяснение хода решения.");
+                score += task.MaxPoints * 0.6m;
+                findings.Add("Ответ содержит развернутое объяснение.");
             }
             else if (normalizedAnswer.Length > 40)
             {
-                score += task.MaxPoints * 0.25m;
-                findings.Add("Ответ содержит базовую аргументацию, но ее нужно раскрыть.");
+                score += task.MaxPoints * 0.35m;
+                findings.Add("Ответ содержит базовую аргументацию.");
             }
             else
             {
                 findings.Add("Ответ слишком короткий для уверенной проверки.");
-            }
-
-            var matchedKeywords = task.Keywords.Count(keyword =>
-                normalizedAnswer.Contains(keyword, StringComparison.OrdinalIgnoreCase));
-
-            if (matchedKeywords > 0)
-            {
-                score += task.MaxPoints * Math.Min(0.45m, matchedKeywords * 0.15m);
-                findings.Add($"Найдены ключевые понятия: {matchedKeywords}.");
-            }
-
-            if (normalizedAnswer.Contains("ошиб", StringComparison.OrdinalIgnoreCase)
-                || normalizedAnswer.Contains("провер", StringComparison.OrdinalIgnoreCase)
-                || normalizedAnswer.Contains("критери", StringComparison.OrdinalIgnoreCase))
-            {
-                score += task.MaxPoints * 0.1m;
-                findings.Add("Отмечена необходимость проверки и критериев оценивания.");
             }
 
             score = Math.Min(task.MaxPoints, Math.Round(score, 1));
@@ -173,8 +414,8 @@ namespace LLMTutorRoom.Services
                 Score = score,
                 MaxScore = task.MaxPoints,
                 Feedback = score >= task.MaxPoints * 0.75m
-                    ? "Решение хорошо покрывает критерии. Осталось уточнить формулировки и привести больше конкретных деталей."
-                    : "Решение требует доработки: добавь явные шаги рассуждения, критерии проверки и обоснование вывода.",
+                    ? "Ответ выглядит достаточно полным."
+                    : "Ответ требует доработки: добавь ход рассуждения и обоснование вывода.",
                 Findings = findings
             };
         }
@@ -183,250 +424,17 @@ namespace LLMTutorRoom.Services
         {
             var percent = maxScore == 0 ? 0 : score / maxScore;
             if (percent >= 0.8m)
-                return "Работа в целом соответствует критериям. Можно использовать как сильный пример после небольшой редакции.";
+                return "Работа в целом соответствует требованиям.";
 
             if (percent >= 0.55m)
-                return "Работа частично соответствует критериям. Нужна доработка аргументации и структуры ответа.";
+                return "Работа частично соответствует требованиям.";
 
-            return "Работа пока не закрывает ключевые критерии. Рекомендуется повторная попытка после разбора замечаний.";
+            return "Работа пока не закрывает ключевые требования.";
         }
 
-        private static List<LanguageModel> SeedModels()
+        private static string CreateId(string prefix)
         {
-            return new List<LanguageModel>
-            {
-                new()
-                {
-                    Key = "qwen2.5:32b-instruct",
-                    Provider = "Ollama",
-                    Status = "available",
-                    Priority = 0,
-                    MaxConcurrentRequests = 1
-                },
-                new()
-                {
-                    Key = "gemma3:12b",
-                    Provider = "Ollama",
-                    Status = "available",
-                    Priority = 1,
-                    MaxConcurrentRequests = 1
-                },
-                new()
-                {
-                    Key = "mixtral:8x7b-instruct",
-                    Provider = "Ollama",
-                    Status = "standby",
-                    Priority = 2,
-                    MaxConcurrentRequests = 1
-                }
-            };
-        }
-
-        private static List<CourseTest> SeedTests()
-        {
-            return new List<CourseTest>
-            {
-                new()
-                {
-                    Id = "adaptive-assessment",
-                    Title = "Адаптивное оценивание с LLM",
-                    Subject = "НИР / проектирование системы",
-                    Status = "published",
-                    LlmModelKey = "qwen2.5:32b-instruct",
-                    Deadline = DateTimeOffset.UtcNow.AddDays(6),
-                    Summary = "Проверка понимания архитектуры системы: роли, критерии, эталоны и риски LLM-as-a-Judge.",
-                    Criteria = new List<RubricCriterion>
-                    {
-                        new()
-                        {
-                            Id = "c1",
-                            Title = "Критерии оценивания",
-                            Description = "Ответ явно описывает, по каким признакам решение считается корректным.",
-                            MaxPoints = 4
-                        },
-                        new()
-                        {
-                            Id = "c2",
-                            Title = "Обратная связь",
-                            Description = "Есть не только балл, но и объяснение ошибок, причин и рекомендаций.",
-                            MaxPoints = 3
-                        },
-                        new()
-                        {
-                            Id = "c3",
-                            Title = "Надежность LLM",
-                            Description = "Учитываются недетерминированность, эталоны и ручная экспертная проверка.",
-                            MaxPoints = 3
-                        }
-                    },
-                    Tasks = new List<TestTask>
-                    {
-                        new()
-                        {
-                            Id = "task-pipeline",
-                            Title = "Пайплайн проверки",
-                            Prompt = "Опиши последовательность действий системы после отправки решения учеником.",
-                            MaxPoints = 5,
-                            Keywords = new List<string>
-                            {
-                                "решение",
-                                "критерии",
-                                "llm",
-                                "обратная связь",
-                                "сохранение"
-                            }
-                        },
-                        new()
-                        {
-                            Id = "task-risk",
-                            Title = "Риски автоматической оценки",
-                            Prompt = "Почему недостаточно просто отправить ответ ученика в LLM и принять оценку как истину?",
-                            MaxPoints = 5,
-                            Keywords = new List<string>
-                            {
-                                "недетерминированность",
-                                "ошибки",
-                                "эталон",
-                                "критерии",
-                                "эксперт"
-                            }
-                        }
-                    },
-                    ReferenceAnswers = new List<ReferenceAnswer>
-                    {
-                        new()
-                        {
-                            Id = "ref-1",
-                            TaskId = "task-pipeline",
-                            StudentAlias = "Эталон A",
-                            Score = 4.7m,
-                            Comment = "Хорошо описан путь: задача, ответ ученика, критерии, запрос к LLM, сохранение результата."
-                        },
-                        new()
-                        {
-                            Id = "ref-2",
-                            TaskId = "task-risk",
-                            StudentAlias = "Эталон B",
-                            Score = 4.5m,
-                            Comment = "Верно отмечены нестабильность модели, необходимость критериев и роль преподавателя."
-                        }
-                    }
-                },
-                new()
-                {
-                    Id = "technical-feedback",
-                    Title = "Техническая обратная связь",
-                    Subject = "Программирование",
-                    Status = "draft",
-                    LlmModelKey = "gemma3:12b",
-                    Deadline = DateTimeOffset.UtcNow.AddDays(14),
-                    Summary = "Черновик теста по проверке решений задач с разбором хода рассуждений, а не только итогового ответа.",
-                    Criteria = new List<RubricCriterion>
-                    {
-                        new()
-                        {
-                            Id = "c4",
-                            Title = "Корректность",
-                            Description = "Решение дает правильный результат для основных и крайних случаев.",
-                            MaxPoints = 5
-                        },
-                        new()
-                        {
-                            Id = "c5",
-                            Title = "Разбор",
-                            Description = "Студент объясняет ход решения и ограничения выбранного подхода.",
-                            MaxPoints = 5
-                        }
-                    },
-                    Tasks = new List<TestTask>
-                    {
-                        new()
-                        {
-                            Id = "task-code-review",
-                            Title = "Разбор алгоритма",
-                            Prompt = "Проанализируй предложенное решение и укажи, где оно может ошибаться.",
-                            MaxPoints = 10,
-                            Keywords = new List<string>
-                            {
-                                "сложность",
-                                "крайний случай",
-                                "проверка",
-                                "ошибка"
-                            }
-                        }
-                    },
-                    ReferenceAnswers = new List<ReferenceAnswer>()
-                }
-            };
-        }
-
-        private static List<SubmissionReview> SeedReviews()
-        {
-            return new List<SubmissionReview>
-            {
-                new()
-                {
-                    Id = 1,
-                    TestId = "adaptive-assessment",
-                    TestTitle = "Адаптивное оценивание с LLM",
-                    StudentName = "Анна Соколова",
-                    Status = "checked",
-                    ModelKey = "qwen2.5:32b-instruct",
-                    SubmittedAt = DateTimeOffset.UtcNow.AddHours(-5),
-                    Score = 8.6m,
-                    MaxScore = 10,
-                    Summary = "Ответ уверенно описывает пайплайн и ограничения LLM, но критерии можно сформулировать точнее.",
-                    TaskResults = new List<TaskReviewResult>
-                    {
-                        new()
-                        {
-                            TaskId = "task-pipeline",
-                            TaskTitle = "Пайплайн проверки",
-                            Score = 4.4m,
-                            MaxScore = 5,
-                            Feedback = "Последовательность проверки описана полно.",
-                            Findings = new List<string> { "Есть сохранение результата.", "Есть связь с критериями." }
-                        },
-                        new()
-                        {
-                            TaskId = "task-risk",
-                            TaskTitle = "Риски автоматической оценки",
-                            Score = 4.2m,
-                            MaxScore = 5,
-                            Feedback = "Риски названы корректно, но мало примеров смещений модели.",
-                            Findings = new List<string> { "Упомянуты эталоны.", "Упомянута экспертная проверка." }
-                        }
-                    }
-                },
-                new()
-                {
-                    Id = 2,
-                    TestId = "adaptive-assessment",
-                    TestTitle = "Адаптивное оценивание с LLM",
-                    StudentName = "Марк Волков",
-                    Status = "queued",
-                    ModelKey = "qwen2.5:32b-instruct",
-                    SubmittedAt = DateTimeOffset.UtcNow.AddMinutes(-18),
-                    Score = 0,
-                    MaxScore = 10,
-                    Summary = "Ожидает автоматической проверки.",
-                    TaskResults = new List<TaskReviewResult>()
-                },
-                new()
-                {
-                    Id = 3,
-                    TestId = "technical-feedback",
-                    TestTitle = "Техническая обратная связь",
-                    StudentName = "Ирина Лебедева",
-                    Status = "manual-review",
-                    ModelKey = "gemma3:12b",
-                    SubmittedAt = DateTimeOffset.UtcNow.AddDays(-1),
-                    Score = 6.5m,
-                    MaxScore = 10,
-                    Summary = "LLM нашла неоднозначность в решении. Требуется ручная проверка преподавателя.",
-                    TaskResults = new List<TaskReviewResult>()
-                }
-            };
+            return $"{prefix}-{Guid.NewGuid().ToString("N")[..8]}";
         }
     }
 }

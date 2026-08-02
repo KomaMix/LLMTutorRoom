@@ -1,4 +1,5 @@
 using LLMTutorRoom.DTOs;
+using LLMTutorRoom.Models;
 using LLMTutorRoom.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -18,9 +19,15 @@ namespace LLMTutorRoom.Controllers
         }
 
         [HttpPost("login")]
-        public ActionResult<LoginResponse> Login([FromBody] LoginRequest request)
+        public async Task<ActionResult<LoginResponse>> Login(
+            [FromBody] LoginRequest request,
+            CancellationToken cancellationToken)
         {
-            var user = _authService.ValidateCredentials(request.UserName, request.Password);
+            var user = await _authService.ValidateCredentialsAsync(
+                request.UserName,
+                request.Password,
+                cancellationToken);
+
             if (user is null)
                 return Unauthorized();
 
@@ -55,7 +62,7 @@ namespace LLMTutorRoom.Controllers
             {
                 UserName = user.UserName,
                 DisplayName = user.DisplayName,
-                Role = user.Role
+                Role = user.Role.ToString()
             };
         }
     }
