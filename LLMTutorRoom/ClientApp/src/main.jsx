@@ -11,6 +11,8 @@ import {
   GraduationCap,
   Layers3,
   ListChecks,
+  LockKeyhole,
+  LogOut,
   Loader2,
   PanelLeft,
   Play,
@@ -19,12 +21,16 @@ import {
   Server,
   ShieldCheck,
   Sparkles,
+  UserPlus,
   UserRoundCheck,
   UsersRound
 } from "lucide-react";
 import "./styles.css";
 
 const navigation = {
+  admin: [
+    { id: "teachers", label: "Преподаватели", icon: UsersRound }
+  ],
   teacher: [
     { id: "dashboard", label: "Панель", icon: BarChart3 },
     { id: "tests", label: "Тесты", icon: BookOpen },
@@ -44,26 +50,88 @@ const statusText = {
   queued: "В очереди",
   "manual-review": "Ручная проверка",
   available: "Доступна",
-  standby: "Резерв"
+  standby: "Резерв",
+  admin: "Администратор",
+  teacher: "Преподаватель",
+  student: "Ученик"
 };
 
+const authTokenStorageKey = "llmtutorroom.accessToken";
+
 function App() {
+  const [currentUser, setCurrentUser] = useState(null);
+  const [isAuthChecked, setIsAuthChecked] = useState(false);
   const [overview, setOverview] = useState(null);
-  const [role, setRole] = useState("teacher");
   const [section, setSection] = useState("dashboard");
   const [selectedTestId, setSelectedTestId] = useState("");
-  const [studentName, setStudentName] = useState("Демо студент");
   const [answers, setAnswers] = useState({});
   const [review, setReview] = useState(null);
   const [isChecking, setIsChecking] = useState(false);
+  const [isSigningIn, setIsSigningIn] = useState(false);
   const [loadError, setLoadError] = useState("");
+  const [loginError, setLoginError] = useState("");
 
   useEffect(() => {
     let ignore = false;
 
+    async function loadCurrentUser() {
+      try {
+        const accessToken = getAccessToken();
+        if (!accessToken) {
+          if (!ignore) {
+            setCurrentUser(null);
+          }
+          return;
+        }
+
+        const response = await authorizedFetch("/api/auth/me");
+        if (!response.ok) {
+          if (!ignore) {
+            setCurrentUser(null);
+          }
+          return;
+        }
+
+        const user = await response.json();
+        if (!ignore) {
+          applyUserSession(user);
+        }
+      } finally {
+        if (!ignore) {
+          setIsAuthChecked(true);
+        }
+      }
+    }
+
+    loadCurrentUser();
+
+    return () => {
+      ignore = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!currentUser) {
+      return;
+    }
+
+    if (normalizeRole(currentUser.role) === "admin") {
+      return;
+    }
+
+    let ignore = false;
+
     async function loadOverview() {
       try {
-        const response = await fetch("/api/classroom/overview");
+        setLoadError("");
+        const response = await authorizedFetch("/api/classroom/overview");
+        if (response.status === 401) {
+          if (!ignore) {
+            clearUserSession();
+          }
+          return;
+        }
+
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}`);
         }
@@ -75,7 +143,7 @@ function App() {
         }
       } catch (error) {
         if (!ignore) {
-          setLoadError("Не удалось загрузить демо-данные.");
+          setLoadError("Не удалось загрузить данные.");
         }
       }
     }
@@ -85,21 +153,68 @@ function App() {
     return () => {
       ignore = true;
     };
-  }, []);
+  }, [currentUser]);
 
   const selectedTest = useMemo(() => {
     return overview?.tests.find(test => test.id === selectedTestId) ?? overview?.tests[0];
   }, [overview, selectedTestId]);
 
-  function changeRole(nextRole) {
-    setRole(nextRole);
-    setSection(nextRole === "teacher" ? "dashboard" : "student-tests");
+  const role = normalizeRole(currentUser?.role);
 
-    if (nextRole === "student") {
-      const firstPublishedTest = overview?.tests.find(test => test.status === "published");
-      if (firstPublishedTest) {
-        setSelectedTestId(firstPublishedTest.id);
+  function applyUserSession(user) {
+    const userRole = normalizeRole(user.role);
+    setCurrentUser(user);
+    setSection(getDefaultSection(userRole));
+    setOverview(null);
+    setSelectedTestId("");
+    setAnswers({});
+    setReview(null);
+  }
+
+  function clearUserSession() {
+    setCurrentUser(null);
+    setOverview(null);
+    setSelectedTestId("");
+    setAnswers({});
+    setReview(null);
+    setSection("dashboard");
+  }
+
+  async function login(credentials) {
+    setIsSigningIn(true);
+    setLoginError("");
+
+    try {
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(credentials)
+      });
+
+      if (!response.ok) {
+        setLoginError("Неверный логин или пароль.");
+        return;
       }
+
+      const user = await response.json();
+      localStorage.setItem(authTokenStorageKey, user.accessToken);
+      applyUserSession(user.user);
+    } finally {
+      setIsSigningIn(false);
+      setIsAuthChecked(true);
+    }
+  }
+
+  async function logout() {
+    try {
+      await authorizedFetch("/api/auth/logout", {
+        method: "POST"
+      });
+    } finally {
+      localStorage.removeItem(authTokenStorageKey);
+      clearUserSession();
     }
   }
 
@@ -112,14 +227,13 @@ function App() {
     setReview(null);
 
     try {
-      const response = await fetch("/api/classroom/reviews", {
+      const response = await authorizedFetch("/api/classroom/reviews", {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
           testId: selectedTest.id,
-          studentName,
           answers
         })
       });
@@ -140,16 +254,30 @@ function App() {
     }
   }
 
+  if (!isAuthChecked) {
+    return <LoadingState />;
+  }
+
+  if (!currentUser) {
+    return (
+      <LoginScreen
+        error={loginError}
+        isSigningIn={isSigningIn}
+        onLogin={login}
+      />
+    );
+  }
+
   if (loadError) {
     return <ErrorState message={loadError} />;
   }
 
-  if (!overview || !selectedTest) {
+  if (role !== "admin" && (!overview || !selectedTest)) {
     return <LoadingState />;
   }
 
-  const activeNavigation = navigation[role];
-  const activeReviews = overview.reviews.filter(item => item.status !== "checked");
+  const activeNavigation = navigation[role] ?? [];
+  const activeReviews = overview?.reviews.filter(item => item.status !== "checked") ?? [];
 
   return (
     <div className="app-shell">
@@ -164,23 +292,16 @@ function App() {
           </div>
         </div>
 
-        <div className="role-switch" aria-label="Роль">
-          <button
-            className={role === "teacher" ? "active" : ""}
-            type="button"
-            onClick={() => changeRole("teacher")}
-          >
-            <UserRoundCheck size={16} aria-hidden="true" />
-            Преподаватель
-          </button>
-          <button
-            className={role === "student" ? "active" : ""}
-            type="button"
-            onClick={() => changeRole("student")}
-          >
-            <GraduationCap size={16} aria-hidden="true" />
-            Ученик
-          </button>
+        <div className="user-card">
+          <div className="user-avatar">
+            {role === "admin" && <ShieldCheck size={18} aria-hidden="true" />}
+            {role === "teacher" && <UserRoundCheck size={18} aria-hidden="true" />}
+            {role === "student" && <GraduationCap size={18} aria-hidden="true" />}
+          </div>
+          <div>
+            <strong>{currentUser.displayName}</strong>
+            <span>{getRoleLabel(role)}</span>
+          </div>
         </div>
 
         <nav className="nav-list" aria-label="Разделы">
@@ -201,10 +322,12 @@ function App() {
         </nav>
 
         <div className="sidebar-footer">
-          <Bot size={18} aria-hidden="true" />
+          {selectedTest
+            ? <Bot size={18} aria-hidden="true" />
+            : <UsersRound size={18} aria-hidden="true" />}
           <div>
-            <strong>{selectedTest.llmModelKey}</strong>
-            <span>модель проверки</span>
+            <strong>{selectedTest?.llmModelKey ?? "Пользователи"}</strong>
+            <span>{selectedTest ? "модель проверки" : "управление доступом"}</span>
           </div>
         </div>
       </aside>
@@ -213,15 +336,23 @@ function App() {
         <header className="topbar">
           <div>
             <span className="eyebrow">НИР prototype</span>
-            <h1>{role === "teacher" ? "Рабочее место преподавателя" : "Кабинет ученика"}</h1>
+            <h1>{getPageTitle(role)}</h1>
           </div>
           <div className="topbar-actions">
-            <StatusBadge status="available" />
+            <StatusBadge status={role} />
+            <button type="button" className="button secondary" onClick={logout}>
+              <LogOut size={16} aria-hidden="true" />
+              Выйти
+            </button>
             <button type="button" className="icon-button" title="Свернуть меню">
               <PanelLeft size={18} aria-hidden="true" />
             </button>
           </div>
         </header>
+
+        {role === "admin" && section === "teachers" && (
+          <AdminTeachers />
+        )}
 
         {role === "teacher" && section === "dashboard" && (
           <TeacherDashboard
@@ -254,11 +385,10 @@ function App() {
             tests={overview.tests}
             selectedTest={selectedTest}
             selectedTestId={selectedTestId}
-            studentName={studentName}
+            studentDisplayName={currentUser.displayName}
             answers={answers}
             isChecking={isChecking}
             onSelectTest={setSelectedTestId}
-            onStudentNameChange={setStudentName}
             onAnswerChange={(taskId, value) =>
               setAnswers(current => ({ ...current, [taskId]: value }))}
             onSubmit={submitForReview}
@@ -270,6 +400,259 @@ function App() {
         )}
       </main>
     </div>
+  );
+}
+
+function LoginScreen({ error, isSigningIn, onLogin }) {
+  const [userName, setUserName] = useState("admin");
+  const [password, setPassword] = useState("admin123");
+
+  function selectPresetUser(nextUserName, nextPassword) {
+    setUserName(nextUserName);
+    setPassword(nextPassword);
+  }
+
+  return (
+    <main className="login-screen">
+      <section className="login-panel">
+        <div className="brand login-brand">
+          <div className="brand-mark">
+            <School size={22} aria-hidden="true" />
+          </div>
+          <div>
+            <strong>LLMTutorRoom</strong>
+            <span>adaptive assessment</span>
+          </div>
+        </div>
+
+        <div>
+          <span className="eyebrow">Вход</span>
+          <h1>Учебный кабинет</h1>
+        </div>
+
+        <div className="preset-users">
+          <button
+            type="button"
+            className={userName === "admin" ? "active" : ""}
+            onClick={() => selectPresetUser("admin", "admin123")}
+          >
+            <ShieldCheck size={17} aria-hidden="true" />
+            Админ
+          </button>
+          <button
+            type="button"
+            className={userName === "teacher" ? "active" : ""}
+            onClick={() => selectPresetUser("teacher", "teacher123")}
+          >
+            <UserRoundCheck size={17} aria-hidden="true" />
+            Преподаватель
+          </button>
+          <button
+            type="button"
+            className={userName === "student" ? "active" : ""}
+            onClick={() => selectPresetUser("student", "student123")}
+          >
+            <GraduationCap size={17} aria-hidden="true" />
+            Ученик
+          </button>
+        </div>
+
+        <form
+          className="login-form"
+          onSubmit={event => {
+            event.preventDefault();
+            onLogin({ userName, password });
+          }}
+        >
+          <div className="field">
+            <label htmlFor="login-user-name">Логин</label>
+            <input
+              id="login-user-name"
+              value={userName}
+              onChange={event => setUserName(event.target.value)}
+            />
+          </div>
+          <div className="field">
+            <label htmlFor="login-password">Пароль</label>
+            <input
+              id="login-password"
+              type="password"
+              value={password}
+              onChange={event => setPassword(event.target.value)}
+            />
+          </div>
+
+          {error && <p className="form-error">{error}</p>}
+
+          <button type="submit" className="button primary" disabled={isSigningIn}>
+            {isSigningIn ? <Loader2 className="spin" size={16} aria-hidden="true" /> : <LockKeyhole size={16} aria-hidden="true" />}
+            {isSigningIn ? "Вход..." : "Войти"}
+          </button>
+        </form>
+      </section>
+    </main>
+  );
+}
+
+function AdminTeachers() {
+  const [teachers, setTeachers] = useState([]);
+  const [form, setForm] = useState({
+    userName: "teacher2",
+    password: "teacher123",
+    displayName: "Новый преподаватель"
+  });
+  const [isLoading, setIsLoading] = useState(true);
+  const [isCreating, setIsCreating] = useState(false);
+  const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    let ignore = false;
+
+    async function loadTeachers() {
+      try {
+        const response = await authorizedFetch("/api/users/teachers");
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+
+        const data = await response.json();
+        if (!ignore) {
+          setTeachers(data);
+        }
+      } catch (error) {
+        if (!ignore) {
+          setMessage("Не удалось загрузить преподавателей.");
+        }
+      } finally {
+        if (!ignore) {
+          setIsLoading(false);
+        }
+      }
+    }
+
+    loadTeachers();
+
+    return () => {
+      ignore = true;
+    };
+  }, []);
+
+  async function createTeacher(event) {
+    event.preventDefault();
+    setIsCreating(true);
+    setMessage("");
+
+    try {
+      const response = await authorizedFetch("/api/users/teachers", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(form)
+      });
+
+      if (response.status === 409) {
+        setMessage("Пользователь с таким логином уже существует.");
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const teacher = await response.json();
+      setTeachers(current => [...current, teacher].sort((left, right) =>
+        left.displayName.localeCompare(right.displayName, "ru")));
+      setForm({
+        userName: "",
+        password: "",
+        displayName: ""
+      });
+      setMessage("Преподаватель добавлен.");
+    } catch (error) {
+      setMessage("Не удалось добавить преподавателя.");
+    } finally {
+      setIsCreating(false);
+    }
+  }
+
+  function updateForm(field, value) {
+    setForm(current => ({ ...current, [field]: value }));
+  }
+
+  return (
+    <section className="admin-layout">
+      <div className="panel">
+        <div className="panel-header">
+          <div>
+            <span className="eyebrow">Доступ</span>
+            <h2>Новый преподаватель</h2>
+          </div>
+          <UserPlus size={18} aria-hidden="true" />
+        </div>
+
+        <form className="login-form" onSubmit={createTeacher}>
+          <div className="field">
+            <label htmlFor="teacher-user-name">Логин</label>
+            <input
+              id="teacher-user-name"
+              value={form.userName}
+              onChange={event => updateForm("userName", event.target.value)}
+            />
+          </div>
+          <div className="field">
+            <label htmlFor="teacher-display-name">Отображаемое имя</label>
+            <input
+              id="teacher-display-name"
+              value={form.displayName}
+              onChange={event => updateForm("displayName", event.target.value)}
+            />
+          </div>
+          <div className="field">
+            <label htmlFor="teacher-password">Пароль</label>
+            <input
+              id="teacher-password"
+              type="password"
+              value={form.password}
+              onChange={event => updateForm("password", event.target.value)}
+            />
+          </div>
+
+          {message && <p className="form-note">{message}</p>}
+
+          <button type="submit" className="button primary" disabled={isCreating}>
+            {isCreating ? <Loader2 className="spin" size={16} aria-hidden="true" /> : <UserPlus size={16} aria-hidden="true" />}
+            {isCreating ? "Добавление..." : "Добавить"}
+          </button>
+        </form>
+      </div>
+
+      <div className="panel">
+        <div className="panel-header">
+          <div>
+            <span className="eyebrow">Роли</span>
+            <h2>Преподаватели</h2>
+          </div>
+          <UsersRound size={18} aria-hidden="true" />
+        </div>
+
+        {isLoading ? (
+          <p className="muted">Загрузка преподавателей.</p>
+        ) : (
+          <div className="review-table">
+            {teachers.map(teacher => (
+              <article className="review-row" key={teacher.userName}>
+                <div>
+                  <strong>{teacher.displayName}</strong>
+                  <span>{teacher.userName}</span>
+                </div>
+                <StatusBadge status="teacher" />
+              </article>
+            ))}
+          </div>
+        )}
+      </div>
+    </section>
   );
 }
 
@@ -394,18 +777,18 @@ function TeacherTests({ tests, selectedTest, selectedTestId, onSelectTest }) {
         <p className="muted">{selectedTest.summary}</p>
 
         <div className="form-row">
-          <label>
-            Модель проверки
-            <select defaultValue={selectedTest.llmModelKey}>
+          <div className="field">
+            <label htmlFor="teacher-test-model">Модель проверки</label>
+            <select id="teacher-test-model" defaultValue={selectedTest.llmModelKey}>
               <option>{selectedTest.llmModelKey}</option>
               <option>gemma3:12b</option>
               <option>mixtral:8x7b-instruct</option>
             </select>
-          </label>
-          <label>
-            Дедлайн
-            <input type="date" defaultValue={toInputDate(selectedTest.deadline)} />
-          </label>
+          </div>
+          <div className="field">
+            <label htmlFor="teacher-test-deadline">Дедлайн</label>
+            <input id="teacher-test-deadline" type="date" defaultValue={toInputDate(selectedTest.deadline)} />
+          </div>
         </div>
 
         <h3>Задания</h3>
@@ -538,11 +921,10 @@ function StudentWorkspace({
   tests,
   selectedTest,
   selectedTestId,
-  studentName,
+  studentDisplayName,
   answers,
   isChecking,
   onSelectTest,
-  onStudentNameChange,
   onAnswerChange,
   onSubmit
 }) {
@@ -583,10 +965,10 @@ function StudentWorkspace({
 
         <p className="muted">{selectedTest.summary}</p>
 
-        <label className="student-name">
-          Имя ученика
-          <input value={studentName} onChange={event => onStudentNameChange(event.target.value)} />
-        </label>
+        <div className="student-name">
+          <span>Ученик</span>
+          <strong>{studentDisplayName}</strong>
+        </div>
 
         <div className="answer-stack">
           {selectedTest.tasks.map(task => (
@@ -700,6 +1082,52 @@ function formatDate(value) {
 
 function toInputDate(value) {
   return new Date(value).toISOString().slice(0, 10);
+}
+
+function normalizeRole(role) {
+  if (role === "Admin")
+    return "admin";
+
+  if (role === "Student")
+    return "student";
+
+  return "teacher";
+}
+
+function getDefaultSection(role) {
+  if (role === "admin")
+    return "teachers";
+
+  return role === "student" ? "student-tests" : "dashboard";
+}
+
+function getRoleLabel(role) {
+  return statusText[role] ?? role;
+}
+
+function getPageTitle(role) {
+  if (role === "admin")
+    return "Администрирование";
+
+  return role === "teacher" ? "Рабочее место преподавателя" : "Кабинет ученика";
+}
+
+function getAccessToken() {
+  return localStorage.getItem(authTokenStorageKey);
+}
+
+function authorizedFetch(url, options = {}) {
+  const accessToken = getAccessToken();
+  const headers = new Headers(options.headers ?? {});
+
+  if (accessToken) {
+    headers.set("Authorization", `Bearer ${accessToken}`);
+  }
+
+  return fetch(url, {
+    ...options,
+    headers
+  });
 }
 
 createRoot(document.getElementById("root")).render(

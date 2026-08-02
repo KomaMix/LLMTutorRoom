@@ -16,7 +16,7 @@ namespace LLMTutorRoom.Services
             _reviews = SeedReviews();
         }
 
-        public ClassroomOverview GetOverview()
+        public ClassroomOverview GetTeacherOverview()
         {
             lock (_syncRoot)
             {
@@ -32,8 +32,31 @@ namespace LLMTutorRoom.Services
             }
         }
 
+        public ClassroomOverview GetStudentOverview(string studentName)
+        {
+            lock (_syncRoot)
+            {
+                var tests = _tests
+                    .Where(t => t.Status == "published")
+                    .ToList();
+                var reviews = _reviews
+                    .Where(r => string.Equals(r.StudentName, studentName, StringComparison.OrdinalIgnoreCase))
+                    .OrderByDescending(r => r.SubmittedAt)
+                    .ToList();
+
+                return new ClassroomOverview
+                {
+                    Tests = tests,
+                    Models = Array.Empty<LanguageModel>(),
+                    Reviews = reviews,
+                    Metrics = CreateStudentMetrics(tests, reviews)
+                };
+            }
+        }
+
         public async Task<SubmissionReview?> CreateReviewAsync(
             ReviewRequest request,
+            string studentName,
             CancellationToken cancellationToken)
         {
             await Task.Delay(750, cancellationToken);
@@ -56,9 +79,9 @@ namespace LLMTutorRoom.Services
                     Id = _nextReviewId++,
                     TestId = test.Id,
                     TestTitle = test.Title,
-                    StudentName = string.IsNullOrWhiteSpace(request.StudentName)
+                    StudentName = string.IsNullOrWhiteSpace(studentName)
                         ? "Студент"
-                        : request.StudentName.Trim(),
+                        : studentName.Trim(),
                     Status = "checked",
                     ModelKey = test.LlmModelKey,
                     SubmittedAt = DateTimeOffset.UtcNow,
@@ -83,6 +106,23 @@ namespace LLMTutorRoom.Services
                 AverageScore = _reviews.Count == 0
                     ? 0
                     : Math.Round(_reviews.Average(r => r.Score / r.MaxScore * 100), 1)
+            };
+        }
+
+        private static DashboardMetrics CreateStudentMetrics(
+            IReadOnlyCollection<CourseTest> tests,
+            IReadOnlyCollection<SubmissionReview> reviews)
+        {
+            var checkedReviews = reviews.Where(r => r.Status == "checked").ToList();
+
+            return new DashboardMetrics
+            {
+                ActiveTests = tests.Count,
+                Tasks = tests.Sum(t => t.Tasks.Count),
+                PendingReviews = reviews.Count(r => r.Status == "queued"),
+                AverageScore = checkedReviews.Count == 0
+                    ? 0
+                    : Math.Round(checkedReviews.Average(r => r.Score / r.MaxScore * 100), 1)
             };
         }
 

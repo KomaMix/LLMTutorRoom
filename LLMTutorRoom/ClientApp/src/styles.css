@@ -81,16 +81,39 @@ button {
   font-size: 12px;
 }
 
-.role-switch {
-  display: grid;
-  gap: 8px;
-  padding: 6px;
+.user-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 64px;
+  padding: 12px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.04);
 }
 
-.role-switch button,
+.user-avatar {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 8px;
+  color: #16211f;
+  background: #ffffff;
+}
+
+.user-card strong {
+  display: block;
+  font-size: 14px;
+}
+
+.user-card span {
+  display: block;
+  margin-top: 2px;
+  color: #a8bbb5;
+  font-size: 12px;
+}
+
 .nav-list button {
   display: flex;
   align-items: center;
@@ -104,11 +127,6 @@ button {
   text-align: left;
 }
 
-.role-switch button {
-  justify-content: center;
-  padding: 9px 10px;
-}
-
 .nav-list {
   display: grid;
   gap: 6px;
@@ -118,9 +136,7 @@ button {
   padding: 10px 12px;
 }
 
-.role-switch button:hover,
 .nav-list button:hover,
-.role-switch button.active,
 .nav-list button.active {
   color: #ffffff;
   background: rgba(158, 230, 194, 0.16);
@@ -233,7 +249,8 @@ button {
 
 .two-column,
 .split-view,
-.student-layout {
+.student-layout,
+.admin-layout {
   display: grid;
   grid-template-columns: minmax(0, 1.1fr) minmax(360px, 0.9fr);
   gap: 18px;
@@ -242,6 +259,11 @@ button {
 .split-view,
 .student-layout {
   grid-template-columns: 320px minmax(0, 1fr);
+  align-items: start;
+}
+
+.admin-layout {
+  grid-template-columns: minmax(320px, 0.7fr) minmax(0, 1fr);
   align-items: start;
 }
 
@@ -404,9 +426,13 @@ button {
   gap: 12px;
 }
 
-label {
+.field {
   display: grid;
   gap: 7px;
+}
+
+label {
+  display: block;
   color: #3f5154;
   font-size: 13px;
   font-weight: 700;
@@ -415,6 +441,7 @@ label {
 input,
 select,
 textarea {
+  display: block;
   width: 100%;
   border: 1px solid #cfdbdc;
   border-radius: 8px;
@@ -425,15 +452,17 @@ textarea {
 
 input,
 select {
-  min-height: 42px;
+  height: 42px;
   padding: 0 12px;
+  line-height: 40px;
 }
 
 textarea {
-  min-height: 156px;
+  height: 132px;
   padding: 12px;
   line-height: 1.5;
   resize: vertical;
+  vertical-align: top;
 }
 
 input:focus,
@@ -585,7 +614,26 @@ textarea:focus {
 }
 
 .student-name {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 52px;
   margin-bottom: 14px;
+  padding: 12px;
+  border: 1px solid #e0e7e7;
+  border-radius: 8px;
+  background: #f7faf9;
+}
+
+.student-name span {
+  color: #66787b;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.student-name strong {
+  color: #172026;
 }
 
 .answer-stack {
@@ -634,7 +682,10 @@ textarea:focus {
 
 .status.published,
 .status.checked,
-.status.available {
+.status.available,
+.status.admin,
+.status.teacher,
+.status.student {
   color: #116149;
   background: #dff5e9;
 }
@@ -649,6 +700,114 @@ textarea:focus {
 .status.manual-review {
   color: #8a351e;
   background: #fae2d5;
+}
+
+.login-screen {
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+  padding: 32px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(238, 242, 244, 0.96)),
+    #eef2f4;
+}
+
+.login-panel {
+  display: grid;
+  gap: 22px;
+  width: min(100%, 560px);
+  padding: 30px;
+  border: 1px solid #dbe3e4;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 18px 44px rgba(31, 44, 46, 0.08);
+}
+
+.login-brand {
+  color: #172026;
+}
+
+.login-brand span {
+  color: #66787b;
+}
+
+.login-panel h1 {
+  margin: 0;
+  font-size: 34px;
+  line-height: 1.15;
+}
+
+.preset-users {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(140px, 1fr));
+  gap: 10px;
+  padding: 8px;
+  border: 1px solid #dfe8e8;
+  border-radius: 8px;
+  background: #f7faf9;
+}
+
+.preset-users button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 48px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 8px;
+  color: #3f5154;
+  background: transparent;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.preset-users button svg {
+  flex: 0 0 auto;
+}
+
+.preset-users button.active,
+.preset-users button:hover {
+  color: #ffffff;
+  background: #256f6d;
+}
+
+.login-form {
+  display: grid;
+  gap: 14px;
+}
+
+.login-form input,
+.login-form .button {
+  height: 48px;
+  font-size: 15px;
+}
+
+.login-form input {
+  line-height: 46px;
+}
+
+.form-error {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  color: #8a351e;
+  background: #fae2d5;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.form-note {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  color: #2d5658;
+  background: #edf6f2;
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .screen-state {
@@ -680,8 +839,7 @@ textarea:focus {
     min-height: auto;
   }
 
-  .nav-list,
-  .role-switch {
+  .nav-list {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -694,7 +852,8 @@ textarea:focus {
 
   .two-column,
   .split-view,
-  .student-layout {
+  .student-layout,
+  .admin-layout {
     grid-template-columns: 1fr;
   }
 }
@@ -722,11 +881,11 @@ textarea:focus {
   .model-grid,
   .criteria-grid,
   .form-row,
-  .pipeline {
+  .pipeline,
+  .preset-users {
     grid-template-columns: 1fr;
   }
 
-  .role-switch,
   .nav-list {
     grid-template-columns: 1fr;
   }

@@ -4,10 +4,35 @@
         <TargetFramework>net9.0</TargetFramework>
         <Nullable>enable</Nullable>
         <ImplicitUsings>enable</ImplicitUsings>
+        <ClientAppDirectory>ClientApp</ClientAppDirectory>
+        <ClientBuildStamp>$(BaseIntermediateOutputPath)client-build.stamp</ClientBuildStamp>
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="9.0.17"/>
+        <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="9.0.17" />
+        <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="9.0.17" />
     </ItemGroup>
+
+    <ItemGroup>
+        <ClientBuildInput Include="$(ClientAppDirectory)/index.html" />
+        <ClientBuildInput Include="$(ClientAppDirectory)/package.json" />
+        <ClientBuildInput Include="$(ClientAppDirectory)/package-lock.json" />
+        <ClientBuildInput Include="$(ClientAppDirectory)/vite.config.js" />
+        <ClientBuildInput Include="$(ClientAppDirectory)/src/**/*" />
+    </ItemGroup>
+
+    <Target Name="InstallClientDependencies" BeforeTargets="Build" Condition="!Exists('$(ClientAppDirectory)/node_modules')">
+        <Exec WorkingDirectory="$(ClientAppDirectory)" Command="npm ci" />
+    </Target>
+
+    <Target
+        Name="BuildClientApp"
+        BeforeTargets="Build"
+        DependsOnTargets="InstallClientDependencies"
+        Inputs="@(ClientBuildInput)"
+        Outputs="$(ClientBuildStamp);wwwroot/index.html">
+        <Exec WorkingDirectory="$(ClientAppDirectory)" Command="npm run build" />
+        <Touch Files="$(ClientBuildStamp)" AlwaysCreate="true" />
+    </Target>
 
 </Project>
