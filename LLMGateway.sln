@@ -9,6 +9,17 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LLMGateway.Tests", "LLMGate
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LLMTutorRoom", "LLMTutorRoom\LLMTutorRoom.csproj", "{2228B7CB-9A7A-4596-834C-3F09ECAAE347}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{463A75AB-1534-4D13-9130-EF1CF9064D95}"
+	ProjectSection(SolutionItems) = preProject
+		README.md = README.md
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "docs", "docs", "{955A505C-D79A-4E4A-BD40-722C561EF34D}"
+	ProjectSection(SolutionItems) = preProject
+		docs\images\llmtutorroom-student-attempt.png = docs\images\llmtutorroom-student-attempt.png
+		docs\images\llmtutorroom-teacher-tests.png = docs\images\llmtutorroom-teacher-tests.png
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU

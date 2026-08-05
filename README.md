@@ -1,126 +1,153 @@
 # LLMGateway
 
-Сервис для работы с LLM-моделями через единый HTTP API.
+Репозиторий состоит из двух связанных проектов:
 
-Вызывающий проект отправляет ключ модели и сообщения, не учитывая ее фактическое
-размещение и способ подключения. Одна модель может быть доступна одновременно
-локально и через удаленный API.
+- **LLMGateway** - единый HTTP API для обращения к LLM-моделям через локальные
+  или удаленные deployment-ы.
+- **LLMTutorRoom** - учебное веб-приложение на ASP.NET Core и React, где
+  преподаватели создают тесты, а ученики проходят их с серверным учетом времени.
 
-## Основные понятия
+## LLMGateway
 
-- **Модель** - логическая модель с постоянным ключом, например `mistral:7b`.
-  По этому ключу к ней обращаются вызывающие проекты.
-- **Реализация модели** (`deployment`) - конкретный способ выполнить запрос к
-  модели: локальный Ollama-сервер или удаленный OpenAI-совместимый API.
-- **Приоритет** - порядок выбора реализации. Чем меньше значение `priority`,
-  тем раньше она будет выбрана.
+`LLMGateway` скрывает детали подключения к конкретной модели. Внешний проект
+обращается к логическому ключу модели, например `gemma3:12b`, а gateway сам
+выбирает подходящий deployment.
 
-При обработке запроса сервис выбирает первую доступную реализацию модели по
-приоритету. Поэтому ключ `mistral:7b` может сначала выполняться локально, а при
-недоступности локального сервера - через удаленный API. Для вызывающей стороны
-характеристики модели и ключ остаются одинаковыми.
+Сейчас поддерживается:
 
-## API
+- логическая модель с постоянным `key`;
+- несколько deployment-ов для одной модели;
+- выбор deployment-а по `priority`;
+- Ollama и OpenAI-совместимые API;
+- проверка доступности provider-а перед выполнением chat-запроса;
+- ограничение одновременных запросов;
+- rate limit через скользящее окно;
+- корректные HTTP-статусы для недоступной модели, provider-а, лимитов и ошибок.
 
-Получить ключи доступных моделей:
-
-```http
-GET /api/models
-```
-
-```json
-[
-  "gpt-5.4-mini",
-  "mistral-large-latest",
-  "mistral:7b"
-]
-```
-
-Создать логическую модель:
+Пример добавления модели:
 
 ```http
 POST /api/models
 Content-Type: application/json
 
 {
-  "key": "mistral:7b",
-  "displayName": "Mistral 7B",
-  "description": "Mistral 7B с локальным и удаленным deployment-ами"
+  "key": "gemma3:12b",
+  "displayName": "Gemma 3 12B",
+  "description": "Gemma 3 12B через Ollama или совместимый API"
 }
 ```
 
-Добавить локальную реализацию модели через Ollama:
+Пример добавления deployment-а:
 
 ```http
-POST /api/models/mistral:7b/deployments
+POST /api/models/gemma3:12b/deployments
 Content-Type: application/json
 
 {
   "providerType": "Ollama",
-  "endpoint": "http://localhost:11434",
-  "providerModelId": "mistral:7b",
-  "priority": 0,
-  "maxConcurrentRequests": 1
-}
-```
-
-Добавить ограничение количества запросов для реализации модели:
-
-```http
-POST /api/models/deployments/1/rate-limits
-Content-Type: application/json
-
-{
-  "windowSeconds": 60,
-  "maxRequests": 20
-}
-```
-
-Изменить реализацию модели:
-
-```http
-PUT /api/models/deployments/1
-Content-Type: application/json
-
-{
-  "providerType": "Ollama",
-  "endpoint": "http://localhost:11434",
-  "providerModelId": "mistral:7b",
+  "endpoint": "http://192.168.1.14:11434",
+  "providerModelId": "gemma3:12b",
   "isEnabled": true,
   "priority": 0,
   "maxConcurrentRequests": 1
 }
 ```
 
-Удалить правило ограничения:
+Пример chat-запроса:
 
 ```http
-DELETE /api/models/rate-limits/1
-```
-
-Удалить реализацию модели:
-
-```http
-DELETE /api/models/deployments/1
-```
-
-Удалить логическую модель:
-
-```http
-DELETE /api/models/mistral:7b
-```
-
-Отправить чат-запрос:
-
-```http
-POST /api/chat/mistral:7b
+POST /api/chat/gemma3:12b
 Content-Type: application/json
 
 {
   "temperature": 0.7,
   "messages": [
-    { "role": "system", "content": "Отвечай кратко." },
-    { "role": "user", "content": "Кто ты?" }
+    { "role": "user", "content": "Ответь одним предложением." }
   ]
 }
 ```
+
+Полезные endpoint-ы:
+
+- `GET /api/models` - список ключей моделей;
+- `POST /api/models` - создать модель;
+- `DELETE /api/models/{modelKey}` - удалить модель;
+- `POST /api/models/{modelKey}/deployments` - добавить deployment;
+- `PUT /api/models/deployments/{deploymentId}` - изменить deployment;
+- `DELETE /api/models/deployments/{deploymentId}` - удалить deployment;
+- `POST /api/models/deployments/{deploymentId}/rate-limits` - добавить правило
+  скользящего окна;
+- `DELETE /api/models/rate-limits/{ruleId}` - удалить правило.
+
+## LLMTutorRoom
+
+`LLMTutorRoom` - прототип учебного сервиса для преподавателей и учеников. Проект
+построен на контроллерах ASP.NET Core, React-клиенте и PostgreSQL.
+
+Основной функционал:
+
+- JWT-авторизация;
+- роли `Admin`, `Teacher`, `Student`;
+- пользователи из `appsettings.json` синхронизируются с базой при запуске;
+- администратор может добавлять преподавателей;
+- преподаватель может создавать и редактировать тесты;
+- у теста есть статус, дедлайн, время выполнения и описание;
+- задания бывают трех типов: один ответ, несколько ответов, свободный ответ;
+- для заданий можно задать баллы, варианты ответов и штраф за неправильный
+  вариант при множественном выборе;
+- задания можно редактировать, скрывать и удалять;
+- ученик может начать тест, сохранить ответы и отправить попытку;
+- таймер попытки хранится на backend-е, поэтому после перезагрузки страницы
+  выполнение можно продолжить;
+- после истечения времени ответы нельзя изменить;
+- автоматическая проверка ответов через LLM пока вынесена в отдельный будущий
+  этап.
+
+Функционал тестов отделен от будущей LLM-проверки: создание тестов, прохождение
+и хранение попыток не завязаны на выбор модели.
+
+## Скриншоты
+
+Рабочее место преподавателя:
+
+![Рабочее место преподавателя](docs/images/llmtutorroom-teacher-tests.png)
+
+Кабинет ученика:
+
+![Кабинет ученика](docs/images/llmtutorroom-student-attempt.png)
+
+## Запуск
+
+Требования:
+
+- .NET 9 SDK;
+- PostgreSQL;
+- Node.js и npm для сборки React-клиента;
+- Ollama или другой OpenAI-совместимый provider, если нужен реальный LLM-вызов.
+
+Сборка решения:
+
+```bash
+dotnet restore LLMGateway.sln
+dotnet build LLMGateway.sln
+```
+
+Запуск gateway:
+
+```bash
+dotnet run --project LLMGateway/LLMGateway.csproj
+```
+
+Запуск учебного приложения:
+
+```bash
+dotnet run --project LLMTutorRoom/LLMTutorRoom.csproj
+```
+
+React-клиент `LLMTutorRoom` собирается автоматически при сборке проекта и
+попадает в `LLMTutorRoom/wwwroot`. Миграции базы данных применяются при запуске
+приложения.
+
+Для локальной разработки используются настройки из `appsettings.json` и
+`appsettings.Development.json`: строка подключения к PostgreSQL, JWT-настройки и
+начальные пользователи.
