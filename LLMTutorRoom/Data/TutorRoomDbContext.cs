@@ -36,6 +36,7 @@ namespace LLMTutorRoom.Data
             {
                 entity.HasKey(task => task.Id);
                 entity.Property(task => task.Type).HasConversion<string>();
+                entity.Property(task => task.CheckMode).HasConversion<string>();
                 entity.Property(task => task.CreatedAt).HasDefaultValueSql("now()");
                 entity.HasMany(task => task.Options)
                     .WithOne()
@@ -51,6 +52,12 @@ namespace LLMTutorRoom.Data
             modelBuilder.Entity<SubmissionReview>(entity =>
             {
                 entity.Property(review => review.Status).HasConversion<string>();
+                entity.HasIndex(review => review.AttemptId)
+                    .IsUnique();
+                entity.HasOne(review => review.Attempt)
+                    .WithMany()
+                    .HasForeignKey(review => review.AttemptId)
+                    .OnDelete(DeleteBehavior.Cascade);
                 entity.HasMany(review => review.TaskResults)
                     .WithOne()
                     .HasForeignKey(result => result.SubmissionReviewId)
@@ -59,9 +66,13 @@ namespace LLMTutorRoom.Data
 
             modelBuilder.Entity<TaskReviewResult>(entity =>
             {
+                entity.Property(result => result.CheckMode).HasConversion<string>();
+                entity.Property(result => result.Status).HasConversion<string>();
                 entity.Property(result => result.FindingsJson)
                     .HasColumnName("Findings")
                     .HasColumnType("jsonb");
+                entity.HasIndex(result => new { result.SubmissionReviewId, result.TaskId })
+                    .IsUnique();
             });
 
             modelBuilder.Entity<TestAttempt>(entity =>

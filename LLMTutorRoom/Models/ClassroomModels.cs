@@ -21,7 +21,27 @@ namespace LLMTutorRoom.Models
     {
         Checked,
         Queued,
-        ManualReview
+        Processing,
+        RetryScheduled,
+        ManualReview,
+        Failed
+    }
+
+    public enum TestTaskCheckMode
+    {
+        Auto,
+        Llm,
+        Manual
+    }
+
+    public enum TaskReviewResultStatus
+    {
+        Pending,
+        Processing,
+        Succeeded,
+        RetryScheduled,
+        ManualReview,
+        Failed
     }
 
     public enum UserRole
@@ -83,6 +103,7 @@ namespace LLMTutorRoom.Models
         public string Id { get; set; } = string.Empty;
         public string CourseTestId { get; set; } = string.Empty;
         public TestTaskType Type { get; set; } = TestTaskType.FreeText;
+        public TestTaskCheckMode CheckMode { get; set; } = TestTaskCheckMode.Auto;
         public string Title { get; set; } = string.Empty;
         public string Prompt { get; set; } = string.Empty;
         public decimal MaxPoints { get; set; }
@@ -124,12 +145,23 @@ namespace LLMTutorRoom.Models
     public sealed class SubmissionReview
     {
         public int Id { get; set; }
+        public int? AttemptId { get; set; }
+        public TestAttempt? Attempt { get; set; }
         public string TestId { get; set; } = string.Empty;
         public string TestTitle { get; set; } = string.Empty;
-        public string StudentName { get; set; } = string.Empty;
+        public string StudentUserName { get; set; } = string.Empty;
+        public string? StudentName { get; set; }
         public SubmissionReviewStatus Status { get; set; } = SubmissionReviewStatus.Checked;
         public string ModelKey { get; set; } = string.Empty;
         public DateTimeOffset SubmittedAt { get; set; }
+        public DateTimeOffset? QueuedAt { get; set; }
+        public DateTimeOffset? StartedAt { get; set; }
+        public DateTimeOffset? CompletedAt { get; set; }
+        public DateTimeOffset? NextRetryAt { get; set; }
+        public DateTimeOffset? ProcessingLeaseExpiresAt { get; set; }
+        public DateTimeOffset? LastEnqueuedAt { get; set; }
+        public int ProcessingAttempts { get; set; }
+        public string LastError { get; set; } = string.Empty;
         public decimal Score { get; set; }
         public decimal MaxScore { get; set; }
         public string Summary { get; set; } = string.Empty;
@@ -169,6 +201,12 @@ namespace LLMTutorRoom.Models
         public int SubmissionReviewId { get; set; }
         public string TaskId { get; set; } = string.Empty;
         public string TaskTitle { get; set; } = string.Empty;
+        public TestTaskCheckMode CheckMode { get; set; } = TestTaskCheckMode.Auto;
+        public TaskReviewResultStatus Status { get; set; } = TaskReviewResultStatus.Pending;
+        public int Attempts { get; set; }
+        public DateTimeOffset? NextRetryAt { get; set; }
+        public DateTimeOffset? CompletedAt { get; set; }
+        public string LastError { get; set; } = string.Empty;
         public decimal Score { get; set; }
         public decimal MaxScore { get; set; }
         public string Feedback { get; set; } = string.Empty;

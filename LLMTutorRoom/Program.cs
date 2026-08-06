@@ -1,5 +1,6 @@
 using LLMTutorRoom.Data;
 using LLMTutorRoom.Services;
+using LLMTutorRoom.Services.ReviewProcessing;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.StaticFiles;
@@ -25,8 +26,28 @@ builder.Services.AddControllers()
 builder.Services.AddOpenApi();
 builder.Services.AddDbContext<TutorRoomDbContext>(options =>
     options.UseNpgsql(connectionString));
+builder.Services.Configure<RabbitMqOptions>(
+    builder.Configuration.GetSection("RabbitMq"));
+builder.Services.Configure<ReviewProcessingOptions>(
+    builder.Configuration.GetSection("ReviewProcessing"));
 builder.Services.AddScoped<ClassroomService>();
 builder.Services.AddScoped<AuthService>();
+builder.Services.AddSingleton<ReviewScoringService>();
+builder.Services.AddSingleton<RabbitMqConnectionProvider>();
+builder.Services.AddSingleton<RabbitMqReviewTopology>();
+builder.Services.AddSingleton<IReviewQueuePublisher, RabbitMqReviewQueuePublisher>();
+builder.Services.AddScoped<ReviewJobProcessor>();
+builder.Services.AddHttpClient<LlmGatewayReviewClient>((serviceProvider, client) =>
+{
+    var options = serviceProvider
+        .GetRequiredService<Microsoft.Extensions.Options.IOptions<ReviewProcessingOptions>>()
+        .Value;
+
+    client.BaseAddress = new Uri(options.LlmGatewayBaseUrl);
+    client.Timeout = TimeSpan.FromSeconds(options.LlmRequestTimeoutSeconds);
+});
+builder.Services.AddHostedService<ReviewProcessingWorker>();
+builder.Services.AddHostedService<ReviewQueueMaintenanceService>();
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>

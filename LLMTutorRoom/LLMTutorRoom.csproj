@@ -21,6 +21,7 @@
         </PackageReference>
         <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="9.0.17" />
         <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="9.0.4" />
+        <PackageReference Include="RabbitMQ.Client" Version="7.2.1" />
     </ItemGroup>
 
     <ItemGroup>
@@ -35,12 +36,7 @@
         <Exec WorkingDirectory="$(ClientAppDirectory)" Command="npm ci" />
     </Target>
 
-    <Target
-        Name="BuildClientApp"
-        BeforeTargets="Build"
-        DependsOnTargets="InstallClientDependencies"
-        Inputs="@(ClientBuildInput)"
-        Outputs="$(ClientBuildStamp);wwwroot/index.html">
+    <Target Name="BuildClientApp" BeforeTargets="Build" DependsOnTargets="InstallClientDependencies" Inputs="@(ClientBuildInput)" Outputs="$(ClientBuildStamp);wwwroot/index.html">
         <Exec WorkingDirectory="$(ClientAppDirectory)" Command="npm run build" />
         <Touch Files="$(ClientBuildStamp)" AlwaysCreate="true" />
     </Target>

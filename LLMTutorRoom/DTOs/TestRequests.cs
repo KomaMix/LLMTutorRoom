@@ -15,6 +15,7 @@ namespace LLMTutorRoom.DTOs
     public sealed class CreateTaskRequest
     {
         public TestTaskType Type { get; set; } = TestTaskType.FreeText;
+        public TestTaskCheckMode? CheckMode { get; set; }
         public string Title { get; set; } = string.Empty;
         public string Prompt { get; set; } = string.Empty;
         public decimal MaxPoints { get; set; } = 1;

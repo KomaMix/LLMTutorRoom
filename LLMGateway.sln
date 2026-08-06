@@ -20,6 +20,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "docs", "docs", "{955A505C-D
 		docs\images\llmtutorroom-teacher-tests.png = docs\images\llmtutorroom-teacher-tests.png
 	EndProjectSection
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LLMTutorRoom.Tests", "LLMTutorRoom.Tests\LLMTutorRoom.Tests.csproj", "{E54A4B3E-3B11-45E2-AD27-38003E4446D3}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -38,6 +40,10 @@ Global
 		{2228B7CB-9A7A-4596-834C-3F09ECAAE347}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{2228B7CB-9A7A-4596-834C-3F09ECAAE347}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{2228B7CB-9A7A-4596-834C-3F09ECAAE347}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E54A4B3E-3B11-45E2-AD27-38003E4446D3}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E54A4B3E-3B11-45E2-AD27-38003E4446D3}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E54A4B3E-3B11-45E2-AD27-38003E4446D3}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E54A4B3E-3B11-45E2-AD27-38003E4446D3}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

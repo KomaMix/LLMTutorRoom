@@ -1,7 +1,9 @@
 using LLMTutorRoom.Data;
 using LLMTutorRoom.DTOs;
 using LLMTutorRoom.Models;
+using LLMTutorRoom.Services.ReviewProcessing;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using System.Text.Json;
 
 namespace LLMTutorRoom.Services
@@ -11,10 +13,23 @@ namespace LLMTutorRoom.Services
         private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
         private readonly TutorRoomDbContext _dbContext;
+        private readonly ReviewScoringService _reviewScoringService;
+        private readonly IReviewQueuePublisher _reviewQueuePublisher;
+        private readonly ReviewProcessingOptions _reviewProcessingOptions;
+        private readonly ILogger<ClassroomService> _logger;
 
-        public ClassroomService(TutorRoomDbContext dbContext)
+        public ClassroomService(
+            TutorRoomDbContext dbContext,
+            ReviewScoringService reviewScoringService,
+            IReviewQueuePublisher reviewQueuePublisher,
+            IOptions<ReviewProcessingOptions> reviewProcessingOptions,
+            ILogger<ClassroomService> logger)
         {
             _dbContext = dbContext;
+            _reviewScoringService = reviewScoringService;
+            _reviewQueuePublisher = reviewQueuePublisher;
+            _reviewProcessingOptions = reviewProcessingOptions.Value;
+            _logger = logger;
         }
 
         public async Task<ClassroomOverview> GetTeacherOverviewAsync(CancellationToken cancellationToken)
@@ -38,7 +53,6 @@ namespace LLMTutorRoom.Services
 
         public async Task<ClassroomOverview> GetStudentOverviewAsync(
             string studentUserName,
-            string studentDisplayName,
             CancellationToken cancellationToken)
         {
             await ExpireStudentAttemptsAsync(studentUserName, cancellationToken);
@@ -48,7 +62,7 @@ namespace LLMTutorRoom.Services
                 .OrderBy(test => test.Deadline)
                 .ToListAsync(cancellationToken);
             var reviews = await LoadReviews()
-                .Where(review => review.StudentName.ToLower() == studentDisplayName.ToLower())
+                .Where(review => review.StudentUserName.ToLower() == studentUserName.ToLower())
                 .OrderByDescending(review => review.SubmittedAt)
                 .ToListAsync(cancellationToken);
             var attempts = await _dbContext.TestAttempts
@@ -135,6 +149,7 @@ namespace LLMTutorRoom.Services
                 Id = taskId,
                 CourseTestId = testId,
                 Type = request.Type,
+                CheckMode = NormalizeTaskCheckMode(request),
                 Title = request.Title.Trim(),
                 Prompt = request.Prompt.Trim(),
                 MaxPoints = request.MaxPoints,
@@ -169,6 +184,7 @@ namespace LLMTutorRoom.Services
                 return null;
 
             task.Type = request.Type;
+            task.CheckMode = NormalizeTaskCheckMode(request);
             task.Title = request.Title.Trim();
             task.Prompt = request.Prompt.Trim();
             task.MaxPoints = request.MaxPoints;
@@ -303,6 +319,7 @@ namespace LLMTutorRoom.Services
         public async Task<TestAttemptResponse?> SubmitAttemptAsync(
             int attemptId,
             string studentUserName,
+            string studentDisplayName,
             CancellationToken cancellationToken)
         {
             var attempt = await _dbContext.TestAttempts
@@ -326,11 +343,20 @@ namespace LLMTutorRoom.Services
             if (statusChanged)
                 await _dbContext.SaveChangesAsync(cancellationToken);
 
+            if (attempt.Status == TestAttemptStatus.Submitted)
+            {
+                await EnsureReviewForAttemptAsync(
+                    attempt,
+                    studentDisplayName,
+                    cancellationToken);
+            }
+
             return ToAttemptResponse(attempt);
         }
 
         public async Task<SubmissionReview?> CreateReviewAsync(
             ReviewRequest request,
+            string studentUserName,
             string studentName,
             CancellationToken cancellationToken)
         {
@@ -340,32 +366,65 @@ namespace LLMTutorRoom.Services
             if (test is null)
                 return null;
 
-            var taskResults = test.Tasks.Select(task =>
-            {
-                request.Answers.TryGetValue(task.Id, out var answer);
-                return CreateTaskReview(task, answer ?? string.Empty);
-            }).ToList();
-
-            var totalScore = taskResults.Sum(result => result.Score);
-            var review = new SubmissionReview
-            {
-                TestId = test.Id,
-                TestTitle = test.Title,
-                StudentName = string.IsNullOrWhiteSpace(studentName)
-                    ? "Студент"
-                    : studentName.Trim(),
-                Status = SubmissionReviewStatus.Checked,
-                ModelKey = string.Empty,
-                SubmittedAt = DateTimeOffset.UtcNow,
-                Score = totalScore,
-                MaxScore = test.TotalPoints,
-                Summary = CreateSummary(totalScore, test.TotalPoints),
-                TaskResults = taskResults
-            };
+            var review = CreateReviewEntity(
+                test,
+                attemptId: null,
+                studentUserName,
+                studentName,
+                request.Answers);
+            MoveDetachedLlmTasksToManualReview(review);
 
             _dbContext.SubmissionReviews.Add(review);
             await _dbContext.SaveChangesAsync(cancellationToken);
 
+            return review;
+        }
+
+        public async Task<SubmissionReview?> UpdateManualTaskReviewAsync(
+            int reviewId,
+            string taskId,
+            ManualTaskReviewRequest request,
+            CancellationToken cancellationToken)
+        {
+            var review = await _dbContext.SubmissionReviews
+                .Include(item => item.TaskResults)
+                .SingleOrDefaultAsync(item => item.Id == reviewId, cancellationToken);
+
+            if (review is null)
+                return null;
+
+            var taskResult = review.TaskResults
+                .SingleOrDefault(result => result.TaskId == taskId);
+
+            if (taskResult is null || taskResult.Status != TaskReviewResultStatus.ManualReview)
+                return null;
+
+            taskResult.Score = Math.Clamp(
+                Math.Round(request.Score, 1),
+                0,
+                taskResult.MaxScore);
+            taskResult.Feedback = string.IsNullOrWhiteSpace(request.Feedback)
+                ? "Проверено преподавателем."
+                : request.Feedback.Trim();
+            taskResult.Findings = request.Findings
+                .Where(finding => !string.IsNullOrWhiteSpace(finding))
+                .Select(finding => finding.Trim())
+                .Take(5)
+                .DefaultIfEmpty("Проверено преподавателем.")
+                .ToList();
+            taskResult.Status = TaskReviewResultStatus.Succeeded;
+            taskResult.CompletedAt = DateTimeOffset.UtcNow;
+            taskResult.NextRetryAt = null;
+            taskResult.LastError = string.Empty;
+
+            _reviewScoringService.RecalculateReview(review);
+            review.Status = _reviewScoringService.GetReviewStatusAfterTaskProcessing(review);
+            review.CompletedAt = review.Status == SubmissionReviewStatus.Checked
+                ? DateTimeOffset.UtcNow
+                : null;
+            review.LastError = string.Empty;
+
+            await _dbContext.SaveChangesAsync(cancellationToken);
             return review;
         }
 
@@ -463,126 +522,172 @@ namespace LLMTutorRoom.Services
             {
                 ActiveTests = tests.Count(test => test.Status == CourseTestStatus.Published),
                 Tasks = tests.Sum(test => test.Tasks.Count(task => !task.IsHidden)),
-                PendingReviews = reviews.Count(review => review.Status == SubmissionReviewStatus.Queued),
+                PendingReviews = reviews.Count(review =>
+                    review.Status is SubmissionReviewStatus.Queued
+                        or SubmissionReviewStatus.Processing
+                        or SubmissionReviewStatus.RetryScheduled
+                        or SubmissionReviewStatus.ManualReview),
                 AverageScore = checkedReviews.Count == 0
                     ? 0
                     : Math.Round(checkedReviews.Average(review => review.Score / review.MaxScore * 100), 1)
             };
         }
 
-        private static TaskReviewResult CreateTaskReview(TestTask task, string answer)
+        private async Task EnsureReviewForAttemptAsync(
+            TestAttempt attempt,
+            string studentDisplayName,
+            CancellationToken cancellationToken)
         {
-            if (task.Type == TestTaskType.SingleChoice)
-                return CreateSingleChoiceTaskReview(task, answer);
+            var existingReview = await _dbContext.SubmissionReviews
+                .SingleOrDefaultAsync(
+                    review => review.AttemptId == attempt.Id,
+                    cancellationToken);
 
-            if (task.Type == TestTaskType.MultipleChoice)
-                return CreateMultipleChoiceTaskReview(task, answer);
-
-            return CreateFreeTextTaskReview(task, answer);
-        }
-
-        private static TaskReviewResult CreateSingleChoiceTaskReview(TestTask task, string answer)
-        {
-            var selectedOptionIds = answer
-                .Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                .ToHashSet();
-            var correctOptionIds = task.CorrectOptionIds.ToHashSet();
-            var isCorrect = selectedOptionIds.SetEquals(correctOptionIds);
-
-            return new TaskReviewResult
+            if (existingReview is not null)
             {
-                TaskId = task.Id,
-                TaskTitle = task.Title,
-                Score = isCorrect ? task.MaxPoints : 0,
-                MaxScore = task.MaxPoints,
-                Feedback = isCorrect
-                    ? "Ответ выбран верно."
-                    : "Ответ не совпадает с правильным вариантом.",
-                Findings = isCorrect
-                    ? new List<string> { "Выбран корректный вариант." }
-                    : new List<string> { "Нужно повторить материал по этому вопросу." }
-            };
-        }
-
-        private static TaskReviewResult CreateMultipleChoiceTaskReview(TestTask task, string answer)
-        {
-            var selectedOptionIds = answer
-                .Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                .ToHashSet();
-            var correctOptionIds = task.CorrectOptionIds.ToHashSet();
-            var selectedCorrectCount = selectedOptionIds.Count(correctOptionIds.Contains);
-            var selectedWrongCount = selectedOptionIds.Count(optionId => !correctOptionIds.Contains(optionId));
-            var pointsPerCorrectOption = correctOptionIds.Count == 0
-                ? 0
-                : task.MaxPoints / correctOptionIds.Count;
-            var score = selectedCorrectCount * pointsPerCorrectOption
-                - selectedWrongCount * task.WrongAnswerPenalty;
-
-            score = Math.Clamp(Math.Round(score, 1), 0, task.MaxPoints);
-
-            return new TaskReviewResult
-            {
-                TaskId = task.Id,
-                TaskTitle = task.Title,
-                Score = score,
-                MaxScore = task.MaxPoints,
-                Feedback = selectedWrongCount == 0 && selectedCorrectCount == correctOptionIds.Count
-                    ? "Все правильные варианты выбраны."
-                    : "Баллы начислены за правильные варианты с учетом штрафа за неверные.",
-                Findings = new List<string>
+                if (existingReview.Status == SubmissionReviewStatus.Queued
+                    && !existingReview.LastEnqueuedAt.HasValue)
                 {
-                    $"Правильных вариантов выбрано: {selectedCorrectCount}.",
-                    $"Неверных вариантов выбрано: {selectedWrongCount}."
+                    await TryPublishReviewAsync(existingReview, cancellationToken);
                 }
+
+                return;
+            }
+
+            var test = await LoadVisibleTests()
+                .SingleOrDefaultAsync(item => item.Id == attempt.TestId, cancellationToken);
+
+            if (test is null)
+                return;
+
+            var review = CreateReviewEntity(
+                test,
+                attempt.Id,
+                attempt.StudentUserName,
+                studentDisplayName,
+                DeserializeAnswers(attempt.AnswersJson));
+
+            _dbContext.SubmissionReviews.Add(review);
+            await _dbContext.SaveChangesAsync(cancellationToken);
+
+            if (review.Status == SubmissionReviewStatus.Queued)
+                await TryPublishReviewAsync(review, cancellationToken);
+        }
+
+        private SubmissionReview CreateReviewEntity(
+            CourseTest test,
+            int? attemptId,
+            string studentUserName,
+            string studentName,
+            Dictionary<string, string> answers)
+        {
+            var taskResults = test.Tasks.Select(task =>
+            {
+                answers.TryGetValue(task.Id, out var answer);
+                return _reviewScoringService.CreateInitialResult(task, answer ?? string.Empty);
+            }).ToList();
+
+            var totalScore = taskResults
+                .Where(result => result.Status == TaskReviewResultStatus.Succeeded)
+                .Sum(result => result.Score);
+            var status = GetInitialReviewStatus(taskResults);
+            var now = DateTimeOffset.UtcNow;
+
+            return new SubmissionReview
+            {
+                AttemptId = attemptId,
+                TestId = test.Id,
+                TestTitle = test.Title,
+                StudentUserName = studentUserName.Trim(),
+                StudentName = string.IsNullOrWhiteSpace(studentName)
+                    ? null
+                    : studentName.Trim(),
+                Status = status,
+                ModelKey = _reviewProcessingOptions.LlmModelKey,
+                SubmittedAt = now,
+                QueuedAt = status == SubmissionReviewStatus.Queued ? now : null,
+                CompletedAt = status == SubmissionReviewStatus.Checked ? now : null,
+                Score = totalScore,
+                MaxScore = test.TotalPoints,
+                Summary = _reviewScoringService.CreateSummary(totalScore, test.TotalPoints),
+                TaskResults = taskResults
             };
         }
 
-        private static TaskReviewResult CreateFreeTextTaskReview(TestTask task, string answer)
+        private async Task TryPublishReviewAsync(
+            SubmissionReview review,
+            CancellationToken cancellationToken)
         {
-            var normalizedAnswer = answer.Trim();
-            var score = 0m;
-            var findings = new List<string>();
+            if (!review.AttemptId.HasValue)
+                return;
 
-            if (normalizedAnswer.Length > 120)
+            var now = DateTimeOffset.UtcNow;
+            try
             {
-                score += task.MaxPoints * 0.6m;
-                findings.Add("Ответ содержит развернутое объяснение.");
-            }
-            else if (normalizedAnswer.Length > 40)
-            {
-                score += task.MaxPoints * 0.35m;
-                findings.Add("Ответ содержит базовую аргументацию.");
-            }
-            else
-            {
-                findings.Add("Ответ слишком короткий для уверенной проверки.");
-            }
+                await _reviewQueuePublisher.PublishAsync(
+                    new ReviewQueueMessage
+                    {
+                        ReviewId = review.Id,
+                        AttemptId = review.AttemptId.Value,
+                        ModelKey = review.ModelKey,
+                        RequestedAt = now
+                    },
+                    retryDelaySeconds: null,
+                    cancellationToken);
 
-            score = Math.Min(task.MaxPoints, Math.Round(score, 1));
-
-            return new TaskReviewResult
+                review.LastEnqueuedAt = now;
+                await _dbContext.SaveChangesAsync(cancellationToken);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                TaskId = task.Id,
-                TaskTitle = task.Title,
-                Score = score,
-                MaxScore = task.MaxPoints,
-                Feedback = score >= task.MaxPoints * 0.75m
-                    ? "Ответ выглядит достаточно полным."
-                    : "Ответ требует доработки: добавь ход рассуждения и обоснование вывода.",
-                Findings = findings
-            };
+                _logger.LogWarning(
+                    ex,
+                    "Could not publish review {ReviewId} to RabbitMQ. Maintenance worker will retry.",
+                    review.Id);
+            }
         }
 
-        private static string CreateSummary(decimal score, decimal maxScore)
+        private static SubmissionReviewStatus GetInitialReviewStatus(
+            IReadOnlyCollection<TaskReviewResult> taskResults)
         {
-            var percent = maxScore == 0 ? 0 : score / maxScore;
-            if (percent >= 0.8m)
-                return "Работа в целом соответствует требованиям.";
+            if (taskResults.Any(result => result.Status == TaskReviewResultStatus.Pending))
+                return SubmissionReviewStatus.Queued;
 
-            if (percent >= 0.55m)
-                return "Работа частично соответствует требованиям.";
+            if (taskResults.Any(result => result.Status == TaskReviewResultStatus.ManualReview))
+                return SubmissionReviewStatus.ManualReview;
 
-            return "Работа пока не закрывает ключевые требования.";
+            if (taskResults.Any(result => result.Status == TaskReviewResultStatus.Failed))
+                return SubmissionReviewStatus.Failed;
+
+            return SubmissionReviewStatus.Checked;
+        }
+
+        private static void MoveDetachedLlmTasksToManualReview(SubmissionReview review)
+        {
+            if (review.AttemptId.HasValue)
+                return;
+
+            foreach (var result in review.TaskResults
+                         .Where(result => result.Status == TaskReviewResultStatus.Pending))
+            {
+                result.Status = TaskReviewResultStatus.ManualReview;
+                result.Feedback = "Ожидает ручной проверки.";
+                result.Findings = new List<string>
+                {
+                    "Задание ожидает ручной проверки преподавателем."
+                };
+            }
+
+            review.Status = GetInitialReviewStatus(review.TaskResults);
+            review.QueuedAt = null;
+        }
+
+        private static TestTaskCheckMode NormalizeTaskCheckMode(CreateTaskRequest request)
+        {
+            if (request.Type != TestTaskType.FreeText)
+                return TestTaskCheckMode.Auto;
+
+            return request.CheckMode ?? TestTaskCheckMode.Llm;
         }
 
         private static bool ExpireAttemptIfNeeded(

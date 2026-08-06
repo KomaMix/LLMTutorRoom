@@ -58,7 +58,10 @@ const statusText = {
   draft: "Черновик",
   checked: "Проверено",
   queued: "В очереди",
+  processing: "Проверяется",
+  "retry-scheduled": "Повторная проверка",
   "manual-review": "Ручная проверка",
+  failed: "Ошибка",
   available: "Доступна",
   standby: "Резерв",
   admin: "Администратор",
@@ -80,6 +83,11 @@ const taskTypes = [
   { value: "free-text", label: "Письменный ответ", icon: AlignLeft }
 ];
 
+const taskCheckModes = [
+  { value: "llm", label: "LLM", icon: Bot },
+  { value: "manual", label: "Вручную", icon: UserRoundCheck }
+];
+
 const initialTestForm = {
   title: "",
   subject: "",
@@ -94,6 +102,7 @@ function createInitialTaskForm() {
     type: "single-choice",
     title: "",
     prompt: "",
+    checkMode: "auto",
     maxPoints: 1,
     wrongAnswerPenalty: 0,
     options: ["", "", "", ""],
@@ -589,7 +598,10 @@ function App() {
         )}
 
         {role === "teacher" && section === "reviews" && (
-          <ReviewQueue reviews={overview.reviews} />
+          <ReviewQueue
+            reviews={overview.reviews}
+            onReviewsChanged={() => loadOverviewData({ selectedTestId })}
+          />
         )}
 
         {role === "teacher" && section === "models" && (
@@ -1617,6 +1629,7 @@ function TaskEditorForm({
     onChange({
       ...form,
       type,
+      checkMode: type === "free-text" ? "llm" : "auto",
       options,
       correctOptionIndexes: type === "free-text"
         ? []
@@ -1741,6 +1754,28 @@ function TaskEditorForm({
         />
       </div>
 
+      {form.type === "free-text" && (
+        <div className="field">
+          <label>Проверка</label>
+          <div className="task-type-grid check-mode-grid" aria-label="Режим проверки">
+            {taskCheckModes.map(mode => {
+              const Icon = mode.icon;
+              return (
+                <button
+                  key={mode.value}
+                  type="button"
+                  className={form.checkMode === mode.value ? "active" : ""}
+                  onClick={() => updateForm("checkMode", mode.value)}
+                >
+                  <Icon size={17} aria-hidden="true" />
+                  {mode.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {isChoiceTask && (
         <div className="option-editor">
           <div className="panel-header">
@@ -1848,6 +1883,7 @@ function createTaskFormFromTask(task) {
     type: task.type,
     title: task.title,
     prompt: task.prompt,
+    checkMode: task.checkMode ?? (task.type === "free-text" ? "llm" : "auto"),
     maxPoints: task.maxPoints,
     wrongAnswerPenalty: task.wrongAnswerPenalty ?? 0,
     options: task.options.length === 0 ? ["", ""] : task.options.map(option => option.text),
@@ -1863,6 +1899,7 @@ function createTaskPayload(form) {
 
   return {
     type: form.type,
+    checkMode: isChoiceTask ? "auto" : form.checkMode,
     title: form.title,
     prompt: form.prompt,
     maxPoints: Number(form.maxPoints),
@@ -1963,7 +2000,12 @@ function createTaskCountSummary(test) {
   return `${visibleTaskCount} + ${hiddenTaskCount} скрыто`;
 }
 
-function ReviewQueue({ reviews }) {
+function ReviewQueue({ reviews, onReviewsChanged }) {
+  const [selectedReviewId, setSelectedReviewId] = useState("");
+  const selectedReview = reviews.find(review => review.id === selectedReviewId)
+    ?? reviews.find(review => review.status === "manual-review")
+    ?? null;
+
   return (
     <section className="panel">
       <div className="panel-header">
@@ -1973,12 +2015,15 @@ function ReviewQueue({ reviews }) {
         </div>
         <ClipboardCheck size={18} aria-hidden="true" />
       </div>
-      <ReviewRows reviews={reviews} />
+      <ReviewRows reviews={reviews} onSelectReview={setSelectedReviewId} />
+      {selectedReview?.status === "manual-review" && (
+        <ManualReviewPanel review={selectedReview} onSaved={onReviewsChanged} />
+      )}
     </section>
   );
 }
 
-function ReviewRows({ reviews, compact = false }) {
+function ReviewRows({ reviews, compact = false, onSelectReview = null }) {
   if (reviews.length === 0) {
     return <p className="muted">Нет проверок в этом списке.</p>;
   }
@@ -1988,15 +2033,142 @@ function ReviewRows({ reviews, compact = false }) {
       {reviews.map(reviewItem => (
         <article className="review-row" key={reviewItem.id}>
           <div>
-            <strong>{reviewItem.studentName}</strong>
+            <strong>{reviewItem.studentName || reviewItem.studentUserName || "Студент"}</strong>
             <span>{reviewItem.testTitle}</span>
           </div>
           {!compact && <span>{formatDate(reviewItem.submittedAt)}</span>}
           <StatusBadge status={reviewItem.status} />
-          <strong>{reviewItem.score}/{reviewItem.maxScore}</strong>
+          <strong>{reviewItem.status === "checked" ? `${reviewItem.score}/${reviewItem.maxScore}` : `-/${reviewItem.maxScore}`}</strong>
+          {!compact && reviewItem.status === "manual-review" && (
+            <button
+              type="button"
+              className="icon-button"
+              title="Открыть проверку"
+              onClick={() => onSelectReview?.(reviewItem.id)}
+            >
+              <Eye size={16} aria-hidden="true" />
+            </button>
+          )}
         </article>
       ))}
     </div>
+  );
+}
+
+function ManualReviewPanel({ review, onSaved }) {
+  const manualResults = review.taskResults.filter(result => result.status === "manual-review");
+
+  if (manualResults.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="manual-review-panel">
+      <div className="panel-header">
+        <div>
+          <span className="eyebrow">Ручная проверка</span>
+          <h3>{review.testTitle}</h3>
+        </div>
+        <UserRoundCheck size={18} aria-hidden="true" />
+      </div>
+      <div className="result-list">
+        {manualResults.map(result => (
+          <ManualTaskReviewForm
+            key={result.taskId}
+            reviewId={review.id}
+            result={result}
+            onSaved={onSaved}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ManualTaskReviewForm({ reviewId, result, onSaved }) {
+  const [score, setScore] = useState(result.score ?? 0);
+  const [feedback, setFeedback] = useState(result.feedback ?? "");
+  const [findings, setFindings] = useState((result.findings ?? []).join("\n"));
+  const [message, setMessage] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+
+  async function saveManualReview(event) {
+    event.preventDefault();
+    setIsSaving(true);
+    setMessage("");
+
+    try {
+      const response = await authorizedFetch(`/api/classroom/reviews/${reviewId}/tasks/${result.taskId}/manual`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          score: Number(score),
+          feedback,
+          findings: findings
+            .split("\n")
+            .map(item => item.trim())
+            .filter(Boolean)
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      setMessage("Оценка сохранена.");
+      await onSaved?.();
+    } catch (error) {
+      setMessage("Не удалось сохранить оценку.");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  return (
+    <form className="result-card manual-review-form" onSubmit={saveManualReview}>
+      <div>
+        <strong>{result.taskTitle}</strong>
+        <span>{result.maxScore} баллов</span>
+      </div>
+      <div className="form-row">
+        <div className="field">
+          <label htmlFor={`manual-score-${reviewId}-${result.taskId}`}>Балл</label>
+          <input
+            id={`manual-score-${reviewId}-${result.taskId}`}
+            min="0"
+            max={result.maxScore}
+            step="0.1"
+            type="number"
+            value={score}
+            onChange={event => setScore(event.target.value)}
+          />
+        </div>
+        <div className="field">
+          <label htmlFor={`manual-feedback-${reviewId}-${result.taskId}`}>Комментарий</label>
+          <input
+            id={`manual-feedback-${reviewId}-${result.taskId}`}
+            value={feedback}
+            onChange={event => setFeedback(event.target.value)}
+          />
+        </div>
+      </div>
+      <div className="field">
+        <label htmlFor={`manual-findings-${reviewId}-${result.taskId}`}>Выводы</label>
+        <textarea
+          id={`manual-findings-${reviewId}-${result.taskId}`}
+          className="compact-textarea"
+          value={findings}
+          onChange={event => setFindings(event.target.value)}
+        />
+      </div>
+      <button type="submit" className="button primary" disabled={isSaving}>
+        {isSaving ? <Loader2 className="spin" size={16} aria-hidden="true" /> : <Save size={16} aria-hidden="true" />}
+        {isSaving ? "Сохранение..." : "Сохранить оценку"}
+      </button>
+      {message && <p className="form-note">{message}</p>}
+    </form>
   );
 }
 
@@ -2276,14 +2448,21 @@ function StudentResults({ attempts, reviews, tests }) {
               <article className="result-card" key={review.id}>
                 <div>
                   <strong>{review.testTitle}</strong>
-                  <span>{review.score}/{review.maxScore}</span>
+                  <StatusBadge status={review.status} />
                 </div>
-                <p>{review.summary}</p>
-                <ul>
-                  {review.taskResults.flatMap(result => result.findings).map(finding => (
-                    <li key={finding}>{finding}</li>
-                  ))}
-                </ul>
+                <p>{review.status === "checked" ? review.summary : getReviewStatusMessage(review.status)}</p>
+                {review.status === "checked" && (
+                  <>
+                    <div className="result-meta">
+                      <span>{review.score}/{review.maxScore}</span>
+                    </div>
+                    <ul>
+                      {review.taskResults.flatMap(result => result.findings).map(finding => (
+                        <li key={finding}>{finding}</li>
+                      ))}
+                    </ul>
+                  </>
+                )}
               </article>
             ))}
           </div>
@@ -2353,6 +2532,10 @@ function parseOverview(data) {
         throw new Error(`tests[${testIndex}].tasks[${taskIndex}].createdAt must be a string.`);
       }
 
+      if (typeof task.checkMode !== "string") {
+        throw new Error(`tests[${testIndex}].tasks[${taskIndex}].checkMode must be a string.`);
+      }
+
       requireArray(task.options, `tests[${testIndex}].tasks[${taskIndex}].options`);
       requireArray(task.correctOptionIds, `tests[${testIndex}].tasks[${taskIndex}].correctOptionIds`);
     });
@@ -2415,6 +2598,18 @@ function getEffectiveAttemptStatus(attempt, remainingSeconds) {
 
 function getAttemptStatusText(status) {
   return statusText[status] ?? status;
+}
+
+function getReviewStatusMessage(status) {
+  if (status === "manual-review") {
+    return "Проверка ожидает преподавателя.";
+  }
+
+  if (status === "failed") {
+    return "Проверка остановлена и требует внимания преподавателя.";
+  }
+
+  return "Проверка выполняется. Результат появится после завершения.";
 }
 
 function formatDuration(totalSeconds) {

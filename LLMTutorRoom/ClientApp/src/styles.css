@@ -589,6 +589,10 @@ button {
   gap: 8px;
 }
 
+.check-mode-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .task-type-grid button {
   display: flex;
   align-items: center;
@@ -908,6 +912,21 @@ textarea:disabled {
   line-height: 1.55;
 }
 
+.manual-review-panel {
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid #e0e7e7;
+}
+
+.manual-review-form {
+  display: grid;
+  gap: 12px;
+}
+
+.manual-review-form .button {
+  justify-self: start;
+}
+
 .result-card ul {
   margin: 12px 0 0;
   padding-left: 18px;
@@ -959,7 +978,10 @@ textarea:disabled {
 
 .status.draft,
 .status.standby,
-.status.in-progress {
+.status.in-progress,
+.status.queued,
+.status.processing,
+.status.retry-scheduled {
   color: #6c5410;
   background: #f8edc7;
 }
@@ -969,11 +991,15 @@ textarea:disabled {
   background: #e8eeee;
 }
 
-.status.queued,
 .status.manual-review,
 .status.expired {
   color: #8a351e;
   background: #fae2d5;
+}
+
+.status.failed {
+  color: #8a1e1e;
+  background: #f9d7d7;
 }
 
 .status.single-choice,

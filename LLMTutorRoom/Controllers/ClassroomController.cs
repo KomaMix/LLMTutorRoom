@@ -28,7 +28,6 @@ namespace LLMTutorRoom.Controllers
             if (User.IsInRole("Student"))
                 return Ok(await _classroomService.GetStudentOverviewAsync(
                     GetUserName(),
-                    GetDisplayName(),
                     cancellationToken));
 
             return Forbid();
@@ -198,6 +197,7 @@ namespace LLMTutorRoom.Controllers
             var attempt = await _classroomService.SubmitAttemptAsync(
                 attemptId,
                 GetUserName(),
+                GetDisplayName(),
                 cancellationToken);
 
             if (attempt is null)
@@ -216,7 +216,30 @@ namespace LLMTutorRoom.Controllers
         {
             var review = await _classroomService.CreateReviewAsync(
                 request,
+                GetUserName(),
                 GetDisplayName(),
+                cancellationToken);
+
+            return review is null
+                ? NotFound()
+                : Ok(review);
+        }
+
+        [Authorize(Roles = "Teacher")]
+        [HttpPut("reviews/{reviewId:int}/tasks/{taskId}/manual")]
+        public async Task<ActionResult<SubmissionReview>> UpdateManualTaskReview(
+            int reviewId,
+            string taskId,
+            [FromBody] ManualTaskReviewRequest request,
+            CancellationToken cancellationToken)
+        {
+            if (request.Score < 0)
+                return BadRequest("Score must not be negative.");
+
+            var review = await _classroomService.UpdateManualTaskReviewAsync(
+                reviewId,
+                taskId,
+                request,
                 cancellationToken);
 
             return review is null
