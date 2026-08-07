@@ -39,7 +39,6 @@ namespace LLMGateway.Tests
                 $"/api/models/deployments/{deploymentId}",
                 new
                 {
-                    providerType = "OpenAiCompatible",
                     endpoint = "https://example.test/v1",
                     apiKey = "test-key",
                     providerModelId = "remote-model",
@@ -50,7 +49,6 @@ namespace LLMGateway.Tests
 
             response.EnsureSuccessStatusCode();
             using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-            Assert.Equal("OpenAiCompatible", document.RootElement.GetProperty("providerType").GetString());
             Assert.Equal("remote-model", document.RootElement.GetProperty("providerModelId").GetString());
             Assert.Equal(10, document.RootElement.GetProperty("priority").GetInt32());
             Assert.Equal(3, document.RootElement.GetProperty("maxConcurrentRequests").GetInt32());
@@ -131,8 +129,7 @@ namespace LLMGateway.Tests
                 $"/api/models/{modelKey}/deployments",
                 new
                 {
-                    providerType = "Ollama",
-                    endpoint = "http://localhost:11434",
+                    endpoint = "http://localhost:11434/v1",
                     providerModelId = modelKey,
                     isEnabled,
                     priority = 0

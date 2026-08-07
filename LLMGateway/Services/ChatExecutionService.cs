@@ -257,13 +257,6 @@ namespace LLMGateway.Services
         private static Uri GetModelsEndpoint(ModelDeployment deployment)
         {
             var endpoint = deployment.Endpoint.TrimEnd('/');
-
-            if (deployment.ProviderType == ModelProviderType.Ollama
-                && !endpoint.EndsWith("/v1", StringComparison.OrdinalIgnoreCase))
-            {
-                endpoint += "/v1";
-            }
-
             return new Uri($"{endpoint}/models");
         }
     }

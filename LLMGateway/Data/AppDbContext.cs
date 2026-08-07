@@ -1,4 +1,5 @@
 ﻿using LLMGateway.Data.Models;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
 
@@ -7,6 +8,10 @@ namespace LLMGateway.Data
     public class AppDbContext : DbContext
     {
         private static readonly JsonSerializerOptions RateLimitJsonOptions = new(JsonSerializerDefaults.Web);
+        private static readonly ValueComparer<List<ModelRateLimitRule>> RateLimitRulesComparer = new(
+            (left, right) => SerializeRateLimitRules(left) == SerializeRateLimitRules(right),
+            rules => SerializeRateLimitRules(rules).GetHashCode(),
+            rules => DeserializeRateLimitRules(SerializeRateLimitRules(rules)));
 
         public DbSet<Model> Models { get; set; } = null!;
         public DbSet<ModelDeployment> ModelDeployments { get; set; } = null!;
@@ -22,15 +27,14 @@ namespace LLMGateway.Data
 
             modelBuilder.Entity<ModelDeployment>(entity =>
             {
-                entity.Property(d => d.ProviderType).HasConversion<string>();
-
-                entity.Property(d => d.RateLimitRules)
+                var rateLimitRules = entity.Property(d => d.RateLimitRules)
                     .HasConversion(
                         rules => SerializeRateLimitRules(rules),
                         json => DeserializeRateLimitRules(json))
                     .HasColumnName("RateLimitRules")
                     .HasColumnType("jsonb")
                     .HasDefaultValueSql("'[]'::jsonb");
+                rateLimitRules.Metadata.SetValueComparer(RateLimitRulesComparer);
 
                 entity.HasOne(d => d.Model)
                     .WithMany(m => m.Deployments)

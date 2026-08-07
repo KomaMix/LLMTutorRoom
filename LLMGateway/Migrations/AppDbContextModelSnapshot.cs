@@ -89,10 +89,6 @@ namespace LLMGateway.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<string>("ProviderType")
-                        .IsRequired()
-                        .HasColumnType("text");
-
                     b.Property<string>("RateLimitRules")
                         .IsRequired()
                         .ValueGeneratedOnAdd()

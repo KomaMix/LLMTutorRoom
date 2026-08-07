@@ -1,7 +1,6 @@
 using LLMGateway.Data;
 using LLMGateway.Data.Models;
 using LLMGateway.DTOs.Chat;
-using LLMGateway.Interfaces;
 using LLMGateway.Enums;
 using LLMGateway.Services;
 using Microsoft.EntityFrameworkCore;
@@ -18,9 +17,9 @@ namespace LLMGateway.Tests
         public async Task ExecuteAsync_WhenPrimaryDeploymentFails_UsesNextDeployment()
         {
             await using var dbContext = CreateDbContext();
-            var creator = new FakeChatClientCreator();
-            creator.Register("primary", new FakeChatClient(_ => throw new InvalidOperationException("provider failed")));
-            creator.Register("secondary", new FakeChatClient(_ => Task.FromResult(new ChatResponse(
+            var chatClientFactory = new FakeChatClientFactory();
+            chatClientFactory.Register("primary", new FakeChatClient(_ => throw new InvalidOperationException("provider failed")));
+            chatClientFactory.Register("secondary", new FakeChatClient(_ => Task.FromResult(new ChatResponse(
                 new ChatMessage(ChatRole.Assistant, "secondary response")))));
 
             await AddModelAsync(dbContext, new[]
@@ -29,7 +28,7 @@ namespace LLMGateway.Tests
                 CreateDeployment("secondary", priority: 1)
             });
 
-            var service = CreateService(dbContext, creator);
+            var service = CreateService(dbContext, chatClientFactory);
 
             var result = await service.ExecuteAsync("test-model", CreateChatRequest(), CancellationToken.None);
 
@@ -41,10 +40,10 @@ namespace LLMGateway.Tests
         public async Task ExecuteAsync_WhenPrimaryDeploymentIsRateLimited_UsesNextDeployment()
         {
             await using var dbContext = CreateDbContext();
-            var creator = new FakeChatClientCreator();
-            creator.Register("primary", new FakeChatClient(_ => Task.FromResult(new ChatResponse(
+            var chatClientFactory = new FakeChatClientFactory();
+            chatClientFactory.Register("primary", new FakeChatClient(_ => Task.FromResult(new ChatResponse(
                 new ChatMessage(ChatRole.Assistant, "primary response")))));
-            creator.Register("secondary", new FakeChatClient(_ => Task.FromResult(new ChatResponse(
+            chatClientFactory.Register("secondary", new FakeChatClient(_ => Task.FromResult(new ChatResponse(
                 new ChatMessage(ChatRole.Assistant, "secondary response")))));
 
             await AddModelAsync(dbContext, new[]
@@ -56,7 +55,7 @@ namespace LLMGateway.Tests
                 CreateDeployment("secondary", priority: 1)
             });
 
-            var service = CreateService(dbContext, creator);
+            var service = CreateService(dbContext, chatClientFactory);
 
             var firstResult = await service.ExecuteAsync("test-model", CreateChatRequest(), CancellationToken.None);
             var secondResult = await service.ExecuteAsync("test-model", CreateChatRequest(), CancellationToken.None);
@@ -71,19 +70,19 @@ namespace LLMGateway.Tests
         public async Task ExecuteAsync_WhenPrimaryDeploymentIsConcurrencyLimited_UsesNextDeployment()
         {
             await using var dbContext = CreateDbContext();
-            var creator = new FakeChatClientCreator();
+            var chatClientFactory = new FakeChatClientFactory();
             var primaryStarted = new TaskCompletionSource<object?>(
                 TaskCreationOptions.RunContinuationsAsynchronously);
             var releasePrimary = new TaskCompletionSource<object?>(
                 TaskCreationOptions.RunContinuationsAsynchronously);
 
-            creator.Register("primary", new FakeChatClient(async _ =>
+            chatClientFactory.Register("primary", new FakeChatClient(async _ =>
             {
                 primaryStarted.SetResult(null);
                 await releasePrimary.Task;
                 return new ChatResponse(new ChatMessage(ChatRole.Assistant, "primary response"));
             }));
-            creator.Register("secondary", new FakeChatClient(_ => Task.FromResult(new ChatResponse(
+            chatClientFactory.Register("secondary", new FakeChatClient(_ => Task.FromResult(new ChatResponse(
                 new ChatMessage(ChatRole.Assistant, "secondary response")))));
 
             await AddModelAsync(dbContext, new[]
@@ -92,7 +91,7 @@ namespace LLMGateway.Tests
                 CreateDeployment("secondary", priority: 1)
             });
 
-            var service = CreateService(dbContext, creator);
+            var service = CreateService(dbContext, chatClientFactory);
 
             var firstTask = service.ExecuteAsync("test-model", CreateChatRequest(), CancellationToken.None);
             await primaryStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
@@ -112,9 +111,9 @@ namespace LLMGateway.Tests
         public async Task ExecuteAsync_WhenPrimaryDeploymentIsUnavailable_UsesNextDeployment()
         {
             await using var dbContext = CreateDbContext();
-            var creator = new FakeChatClientCreator();
-            creator.Register("primary", new FakeChatClient(_ => throw new InvalidOperationException("should not be called")));
-            creator.Register("secondary", new FakeChatClient(_ => Task.FromResult(new ChatResponse(
+            var chatClientFactory = new FakeChatClientFactory();
+            chatClientFactory.Register("primary", new FakeChatClient(_ => throw new InvalidOperationException("should not be called")));
+            chatClientFactory.Register("secondary", new FakeChatClient(_ => Task.FromResult(new ChatResponse(
                 new ChatMessage(ChatRole.Assistant, "secondary response")))));
 
             await AddModelAsync(dbContext, new[]
@@ -125,7 +124,7 @@ namespace LLMGateway.Tests
 
             var service = CreateService(
                 dbContext,
-                creator,
+                chatClientFactory,
                 request => request.RequestUri?.Host == "primary.test"
                     ? new HttpResponseMessage(HttpStatusCode.ServiceUnavailable)
                     : new HttpResponseMessage(HttpStatusCode.OK));
@@ -138,12 +137,12 @@ namespace LLMGateway.Tests
 
         private static ChatExecutionService CreateService(
             AppDbContext dbContext,
-            FakeChatClientCreator creator,
+            ChatClientFactory chatClientFactory,
             Func<HttpRequestMessage, HttpResponseMessage>? healthCheckHandler = null)
         {
             return new ChatExecutionService(
                 dbContext,
-                new ChatClientFactory(new[] { creator }),
+                chatClientFactory,
                 new RateLimitService(),
                 new FakeHttpClientFactory(new FakeHttpMessageHandler(healthCheckHandler)),
                 NullLogger<ChatExecutionService>.Instance);
@@ -177,11 +176,10 @@ namespace LLMGateway.Tests
             int priority,
             IEnumerable<ModelRateLimitRule>? rateLimitRules = null,
             int? maxConcurrentRequests = null,
-            string endpoint = "http://localhost:11434")
+            string endpoint = "http://localhost:11434/v1")
         {
             var deployment = new ModelDeployment
             {
-                ProviderType = ModelProviderType.Ollama,
                 Endpoint = endpoint,
                 ProviderModelId = providerModelId,
                 Priority = priority,
@@ -208,13 +206,11 @@ namespace LLMGateway.Tests
             };
         }
 
-        private sealed class FakeChatClientCreator : IChatClientCreator
+        private sealed class FakeChatClientFactory : ChatClientFactory
         {
             private readonly Dictionary<string, IChatClient> _clients = new();
 
-            public ModelProviderType ProviderType => ModelProviderType.Ollama;
-
-            public IChatClient CreateClient(ModelDeployment deployment)
+            public override IChatClient CreateClient(ModelDeployment deployment)
             {
                 return _clients[deployment.ProviderModelId];
             }

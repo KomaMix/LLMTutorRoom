@@ -1,13 +1,9 @@
 using System.ComponentModel.DataAnnotations;
-using LLMGateway.Enums;
 
 namespace LLMGateway.DTOs.Models
 {
     public class CreateModelDeploymentRequest
     {
-        [Required, EnumDataType(typeof(ModelProviderType))]
-        public ModelProviderType? ProviderType { get; set; }
-
         [Required, Url, MaxLength(2000)]
         public string Endpoint { get; set; } = string.Empty;
 

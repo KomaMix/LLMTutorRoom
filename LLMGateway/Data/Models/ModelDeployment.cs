@@ -1,5 +1,3 @@
-using LLMGateway.Enums;
-
 namespace LLMGateway.Data.Models
 {
     public class ModelDeployment
@@ -7,7 +5,6 @@ namespace LLMGateway.Data.Models
         public int Id { get; set; }
         public int ModelId { get; set; }
         public Model Model { get; set; } = null!;
-        public ModelProviderType ProviderType { get; set; }
         public string Endpoint { get; set; } = string.Empty;
         public string? ApiKey { get; set; }
         public string ProviderModelId { get; set; } = string.Empty;

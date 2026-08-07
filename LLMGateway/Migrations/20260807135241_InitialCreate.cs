@@ -6,10 +6,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 namespace LLMGateway.Migrations
 {
-    /// <inheritdoc />
     public partial class InitialCreate : Migration
     {
-        /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.CreateTable(
@@ -36,7 +34,6 @@ namespace LLMGateway.Migrations
                     Id = table.Column<int>(type: "integer", nullable: false)
                         .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
                     ModelId = table.Column<int>(type: "integer", nullable: false),
-                    ProviderType = table.Column<string>(type: "text", nullable: false),
                     Endpoint = table.Column<string>(type: "text", nullable: false),
                     ApiKey = table.Column<string>(type: "text", nullable: true),
                     ProviderModelId = table.Column<string>(type: "text", nullable: false),
@@ -70,7 +67,6 @@ namespace LLMGateway.Migrations
                 unique: true);
         }
 
-        /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropTable(

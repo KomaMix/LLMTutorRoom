@@ -18,7 +18,7 @@
 - логическая модель с постоянным `key`;
 - несколько deployment-ов для одной модели;
 - выбор deployment-а по `priority`;
-- Ollama и OpenAI-совместимые API;
+- OpenAI-compatible API;
 - проверка доступности provider-а перед выполнением chat-запроса;
 - ограничение одновременных запросов;
 - rate limit через скользящее окно;
@@ -33,7 +33,7 @@ Content-Type: application/json
 {
   "key": "gemma3:12b",
   "displayName": "Gemma 3 12B",
-  "description": "Gemma 3 12B через Ollama или совместимый API"
+  "description": "Gemma 3 12B через OpenAI-compatible API"
 }
 ```
 
@@ -44,8 +44,7 @@ POST /api/models/gemma3:12b/deployments
 Content-Type: application/json
 
 {
-  "providerType": "Ollama",
-  "endpoint": "http://192.168.1.14:11434",
+  "endpoint": "http://192.168.1.14:11434/v1",
   "providerModelId": "gemma3:12b",
   "isEnabled": true,
   "priority": 0,
@@ -123,7 +122,7 @@ Content-Type: application/json
 - .NET 9 SDK;
 - PostgreSQL;
 - Node.js и npm для сборки React-клиента;
-- Ollama или другой OpenAI-совместимый provider, если нужен реальный LLM-вызов.
+- Ollama или другой OpenAI-compatible provider, если нужен реальный LLM-вызов.
 
 Сборка решения:
 

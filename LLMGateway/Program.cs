@@ -1,7 +1,5 @@
 using LLMGateway.Data;
-using LLMGateway.Interfaces;
 using LLMGateway.Services;
-using LLMGateway.Services.LLMCreators;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json.Serialization;
 
@@ -10,9 +8,6 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
-
-builder.Services.AddSingleton<IChatClientCreator, OllamaChatClientCreator>();
-builder.Services.AddSingleton<IChatClientCreator, OpenAiCompatibleChatClientCreator>();
 
 builder.Services.AddSingleton<ChatClientFactory>();
 builder.Services.AddSingleton<RateLimitService>();

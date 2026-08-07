@@ -12,14 +12,10 @@ namespace LLMGateway.Controllers
     public class ModelsController : ControllerBase
     {
         private readonly AppDbContext _dbContext;
-        private readonly ChatClientFactory _chatClientFactory;
 
-        public ModelsController(
-            AppDbContext dbContext,
-            ChatClientFactory chatClientFactory)
+        public ModelsController(AppDbContext dbContext)
         {
             _dbContext = dbContext;
-            _chatClientFactory = chatClientFactory;
         }
 
         [HttpGet]
@@ -90,14 +86,9 @@ namespace LLMGateway.Controllers
             if (model is null)
                 return NotFound();
 
-            var providerType = request.ProviderType!.Value;
-            if (!_chatClientFactory.SupportsProvider(providerType))
-                return BadRequest($"Unsupported provider type '{providerType}'.");
-
             var deployment = new ModelDeployment
             {
                 ModelId = model.Id,
-                ProviderType = providerType,
                 Endpoint = request.Endpoint,
                 ApiKey = request.ApiKey,
                 ProviderModelId = request.ProviderModelId,
@@ -122,11 +113,6 @@ namespace LLMGateway.Controllers
             if (deployment is null)
                 return NotFound();
 
-            var providerType = request.ProviderType!.Value;
-            if (!_chatClientFactory.SupportsProvider(providerType))
-                return BadRequest($"Unsupported provider type '{providerType}'.");
-
-            deployment.ProviderType = providerType;
             deployment.Endpoint = request.Endpoint;
             deployment.ApiKey = request.ApiKey;
             deployment.ProviderModelId = request.ProviderModelId;
@@ -231,7 +217,6 @@ namespace LLMGateway.Controllers
             return new ModelDeploymentResponse
             {
                 Id = deployment.Id,
-                ProviderType = deployment.ProviderType,
                 Endpoint = deployment.Endpoint,
                 ProviderModelId = deployment.ProviderModelId,
                 IsEnabled = deployment.IsEnabled,
