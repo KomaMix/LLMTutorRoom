@@ -63,7 +63,7 @@ namespace LLMTutorRoom.Tests
                 .SingleAsync();
 
             Assert.Equal(SubmissionReviewStatus.Queued, review.Status);
-            Assert.Equal("student", review.StudentUserName);
+            Assert.Equal("student", review.StudentUserId);
             Assert.NotNull(review.QueuedAt);
             Assert.NotNull(review.LastEnqueuedAt);
             Assert.Single(publisher.PublishedMessages);
@@ -87,7 +87,7 @@ namespace LLMTutorRoom.Tests
                 AttemptId = attempt.Id,
                 TestId = "test-1",
                 TestTitle = "Test",
-                StudentUserName = "student",
+                StudentUserId = "student",
                 StudentName = "Student",
                 Status = SubmissionReviewStatus.Queued,
                 ModelKey = "gemma3:12b",
@@ -148,7 +148,7 @@ namespace LLMTutorRoom.Tests
             {
                 TestId = "test-1",
                 TestTitle = "Test",
-                StudentUserName = "student",
+                StudentUserId = "student",
                 StudentName = "Student",
                 Status = SubmissionReviewStatus.ManualReview,
                 SubmittedAt = DateTimeOffset.UtcNow,
@@ -253,7 +253,7 @@ namespace LLMTutorRoom.Tests
             var attempt = new TestAttempt
             {
                 TestId = "test-1",
-                StudentUserName = "student",
+                StudentUserId = "student",
                 Status = status,
                 StartedAt = DateTimeOffset.UtcNow.AddMinutes(-5),
                 EndsAt = DateTimeOffset.UtcNow.AddMinutes(40),

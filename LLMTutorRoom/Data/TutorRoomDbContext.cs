@@ -10,18 +10,11 @@ namespace LLMTutorRoom.Data
         public DbSet<SubmissionReview> SubmissionReviews { get; set; } = null!;
         public DbSet<TaskReviewResult> TaskReviewResults { get; set; } = null!;
         public DbSet<TestAttempt> TestAttempts { get; set; } = null!;
-        public DbSet<UserAccount> Users { get; set; } = null!;
 
         public TutorRoomDbContext(DbContextOptions<TutorRoomDbContext> options) : base(options) { }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
-            modelBuilder.Entity<UserAccount>(entity =>
-            {
-                entity.HasKey(user => user.UserName);
-                entity.Property(user => user.Role).HasConversion<string>();
-            });
-
             modelBuilder.Entity<CourseTest>(entity =>
             {
                 entity.HasKey(test => test.Id);
@@ -81,7 +74,7 @@ namespace LLMTutorRoom.Data
                 entity.Property(attempt => attempt.AnswersJson)
                     .HasColumnName("Answers")
                     .HasColumnType("jsonb");
-                entity.HasIndex(attempt => new { attempt.TestId, attempt.StudentUserName })
+                entity.HasIndex(attempt => new { attempt.TestId, attempt.StudentUserId })
                     .IsUnique();
                 entity.HasOne<CourseTest>()
                     .WithMany()

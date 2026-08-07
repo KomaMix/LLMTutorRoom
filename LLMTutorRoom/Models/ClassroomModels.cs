@@ -44,13 +44,6 @@ namespace LLMTutorRoom.Models
         Failed
     }
 
-    public enum UserRole
-    {
-        Admin,
-        Teacher,
-        Student
-    }
-
     public enum TestAttemptStatus
     {
         InProgress,
@@ -149,7 +142,7 @@ namespace LLMTutorRoom.Models
         public TestAttempt? Attempt { get; set; }
         public string TestId { get; set; } = string.Empty;
         public string TestTitle { get; set; } = string.Empty;
-        public string StudentUserName { get; set; } = string.Empty;
+        public string StudentUserId { get; set; } = string.Empty;
         public string? StudentName { get; set; }
         public SubmissionReviewStatus Status { get; set; } = SubmissionReviewStatus.Checked;
         public string ModelKey { get; set; } = string.Empty;
@@ -172,7 +165,7 @@ namespace LLMTutorRoom.Models
     {
         public int Id { get; set; }
         public string TestId { get; set; } = string.Empty;
-        public string StudentUserName { get; set; } = string.Empty;
+        public string StudentUserId { get; set; } = string.Empty;
         public TestAttemptStatus Status { get; set; } = TestAttemptStatus.InProgress;
         public DateTimeOffset StartedAt { get; set; }
         public DateTimeOffset EndsAt { get; set; }
@@ -232,11 +225,4 @@ namespace LLMTutorRoom.Models
         }
     }
 
-    public sealed class UserAccount
-    {
-        public string UserName { get; set; } = string.Empty;
-        public string Password { get; set; } = string.Empty;
-        public UserRole Role { get; set; }
-        public string DisplayName { get; set; } = string.Empty;
-    }
 }

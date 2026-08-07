@@ -300,15 +300,9 @@ function App() {
     }
   }
 
-  async function logout() {
-    try {
-      await authorizedFetch("/api/auth/logout", {
-        method: "POST"
-      });
-    } finally {
-      localStorage.removeItem(authTokenStorageKey);
-      clearUserSession();
-    }
+  function logout() {
+    localStorage.removeItem(authTokenStorageKey);
+    clearUserSession();
   }
 
   async function startAttempt() {
@@ -2033,7 +2027,7 @@ function ReviewRows({ reviews, compact = false, onSelectReview = null }) {
       {reviews.map(reviewItem => (
         <article className="review-row" key={reviewItem.id}>
           <div>
-            <strong>{reviewItem.studentName || reviewItem.studentUserName || "Студент"}</strong>
+            <strong>{reviewItem.studentName || reviewItem.studentUserId || "Студент"}</strong>
             <span>{reviewItem.testTitle}</span>
           </div>
           {!compact && <span>{formatDate(reviewItem.submittedAt)}</span>}

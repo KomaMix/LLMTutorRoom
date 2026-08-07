@@ -52,22 +52,22 @@ namespace LLMTutorRoom.Services
         }
 
         public async Task<ClassroomOverview> GetStudentOverviewAsync(
-            string studentUserName,
+            string studentUserId,
             CancellationToken cancellationToken)
         {
-            await ExpireStudentAttemptsAsync(studentUserName, cancellationToken);
+            await ExpireStudentAttemptsAsync(studentUserId, cancellationToken);
 
             var tests = await LoadVisibleTests()
                 .Where(test => test.Status == CourseTestStatus.Published)
                 .OrderBy(test => test.Deadline)
                 .ToListAsync(cancellationToken);
             var reviews = await LoadReviews()
-                .Where(review => review.StudentUserName.ToLower() == studentUserName.ToLower())
+                .Where(review => review.StudentUserId.ToLower() == studentUserId.ToLower())
                 .OrderByDescending(review => review.SubmittedAt)
                 .ToListAsync(cancellationToken);
             var attempts = await _dbContext.TestAttempts
                 .AsNoTracking()
-                .Where(attempt => attempt.StudentUserName.ToLower() == studentUserName.ToLower())
+                .Where(attempt => attempt.StudentUserId.ToLower() == studentUserId.ToLower())
                 .OrderByDescending(attempt => attempt.StartedAt)
                 .ToListAsync(cancellationToken);
 
@@ -244,10 +244,10 @@ namespace LLMTutorRoom.Services
 
         public async Task<TestAttemptResponse?> StartAttemptAsync(
             string testId,
-            string studentUserName,
+            string studentUserId,
             CancellationToken cancellationToken)
         {
-            await ExpireStudentAttemptsAsync(studentUserName, cancellationToken);
+            await ExpireStudentAttemptsAsync(studentUserId, cancellationToken);
 
             var test = await LoadVisibleTests()
                 .SingleOrDefaultAsync(
@@ -260,7 +260,7 @@ namespace LLMTutorRoom.Services
             var existingAttempt = await _dbContext.TestAttempts
                 .SingleOrDefaultAsync(
                     attempt => attempt.TestId == testId
-                        && attempt.StudentUserName.ToLower() == studentUserName.ToLower(),
+                        && attempt.StudentUserId.ToLower() == studentUserId.ToLower(),
                     cancellationToken);
 
             if (existingAttempt is not null)
@@ -273,7 +273,7 @@ namespace LLMTutorRoom.Services
             var attempt = new TestAttempt
             {
                 TestId = test.Id,
-                StudentUserName = studentUserName,
+                StudentUserId = studentUserId,
                 Status = TestAttemptStatus.InProgress,
                 StartedAt = now,
                 EndsAt = Min(now.AddMinutes(test.TimeLimitMinutes), test.Deadline),
@@ -288,14 +288,14 @@ namespace LLMTutorRoom.Services
 
         public async Task<TestAttemptResponse?> SaveAttemptAnswersAsync(
             int attemptId,
-            string studentUserName,
+            string studentUserId,
             Dictionary<string, string> answers,
             CancellationToken cancellationToken)
         {
             var attempt = await _dbContext.TestAttempts
                 .SingleOrDefaultAsync(
                     item => item.Id == attemptId
-                        && item.StudentUserName.ToLower() == studentUserName.ToLower(),
+                        && item.StudentUserId.ToLower() == studentUserId.ToLower(),
                     cancellationToken);
 
             if (attempt is null)
@@ -318,14 +318,14 @@ namespace LLMTutorRoom.Services
 
         public async Task<TestAttemptResponse?> SubmitAttemptAsync(
             int attemptId,
-            string studentUserName,
+            string studentUserId,
             string studentDisplayName,
             CancellationToken cancellationToken)
         {
             var attempt = await _dbContext.TestAttempts
                 .SingleOrDefaultAsync(
                     item => item.Id == attemptId
-                        && item.StudentUserName.ToLower() == studentUserName.ToLower(),
+                        && item.StudentUserId.ToLower() == studentUserId.ToLower(),
                     cancellationToken);
 
             if (attempt is null)
@@ -356,7 +356,7 @@ namespace LLMTutorRoom.Services
 
         public async Task<SubmissionReview?> CreateReviewAsync(
             ReviewRequest request,
-            string studentUserName,
+            string studentUserId,
             string studentName,
             CancellationToken cancellationToken)
         {
@@ -369,7 +369,7 @@ namespace LLMTutorRoom.Services
             var review = CreateReviewEntity(
                 test,
                 attemptId: null,
-                studentUserName,
+                studentUserId,
                 studentName,
                 request.Answers);
             MoveDetachedLlmTasksToManualReview(review);
@@ -457,12 +457,12 @@ namespace LLMTutorRoom.Services
         }
 
         private async Task ExpireStudentAttemptsAsync(
-            string studentUserName,
+            string studentUserId,
             CancellationToken cancellationToken)
         {
             var now = DateTimeOffset.UtcNow;
             var attempts = await _dbContext.TestAttempts
-                .Where(attempt => attempt.StudentUserName.ToLower() == studentUserName.ToLower()
+                .Where(attempt => attempt.StudentUserId.ToLower() == studentUserId.ToLower()
                     && attempt.Status == TestAttemptStatus.InProgress
                     && attempt.EndsAt <= now)
                 .ToListAsync(cancellationToken);
@@ -563,7 +563,7 @@ namespace LLMTutorRoom.Services
             var review = CreateReviewEntity(
                 test,
                 attempt.Id,
-                attempt.StudentUserName,
+                attempt.StudentUserId,
                 studentDisplayName,
                 DeserializeAnswers(attempt.AnswersJson));
 
@@ -577,7 +577,7 @@ namespace LLMTutorRoom.Services
         private SubmissionReview CreateReviewEntity(
             CourseTest test,
             int? attemptId,
-            string studentUserName,
+            string studentUserId,
             string studentName,
             Dictionary<string, string> answers)
         {
@@ -598,7 +598,7 @@ namespace LLMTutorRoom.Services
                 AttemptId = attemptId,
                 TestId = test.Id,
                 TestTitle = test.Title,
-                StudentUserName = studentUserName.Trim(),
+                StudentUserId = studentUserId.Trim(),
                 StudentName = string.IsNullOrWhiteSpace(studentName)
                     ? null
                     : studentName.Trim(),

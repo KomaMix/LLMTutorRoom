@@ -27,7 +27,7 @@ namespace LLMTutorRoom.Controllers
 
             if (User.IsInRole("Student"))
                 return Ok(await _classroomService.GetStudentOverviewAsync(
-                    GetUserName(),
+                    GetUserId(),
                     cancellationToken));
 
             return Forbid();
@@ -159,7 +159,7 @@ namespace LLMTutorRoom.Controllers
         {
             var attempt = await _classroomService.StartAttemptAsync(
                 testId,
-                GetUserName(),
+                GetUserId(),
                 cancellationToken);
 
             return attempt is null
@@ -176,7 +176,7 @@ namespace LLMTutorRoom.Controllers
         {
             var attempt = await _classroomService.SaveAttemptAnswersAsync(
                 attemptId,
-                GetUserName(),
+                GetUserId(),
                 request.Answers,
                 cancellationToken);
 
@@ -196,7 +196,7 @@ namespace LLMTutorRoom.Controllers
         {
             var attempt = await _classroomService.SubmitAttemptAsync(
                 attemptId,
-                GetUserName(),
+                GetUserId(),
                 GetDisplayName(),
                 cancellationToken);
 
@@ -216,7 +216,7 @@ namespace LLMTutorRoom.Controllers
         {
             var review = await _classroomService.CreateReviewAsync(
                 request,
-                GetUserName(),
+                GetUserId(),
                 GetDisplayName(),
                 cancellationToken);
 
@@ -249,10 +249,10 @@ namespace LLMTutorRoom.Controllers
 
         private string GetDisplayName()
         {
-            return User.Identity?.Name ?? "Студент";
+            return User.FindFirstValue(ClaimTypes.Name) ?? "Студент";
         }
 
-        private string GetUserName()
+        private string GetUserId()
         {
             return User.FindFirstValue(ClaimTypes.NameIdentifier)
                 ?? string.Empty;
