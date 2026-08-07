@@ -1,4 +1,5 @@
 ﻿using LLMGateway.Data.Models;
+using LLMGateway.Enums;
 using LLMGateway.Interfaces;
 using Microsoft.Extensions.AI;
 

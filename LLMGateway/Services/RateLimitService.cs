@@ -1,4 +1,5 @@
 using LLMGateway.Data.Models;
+using LLMGateway.Enums;
 
 namespace LLMGateway.Services
 {
@@ -82,12 +83,5 @@ namespace LLMGateway.Services
         }
 
         private readonly record struct RateLimitKey(int DeploymentId, int RuleId);
-    }
-
-    public enum LimitCheckResult
-    {
-        Allowed,
-        RateLimitExceeded,
-        ConcurrencyLimitExceeded
     }
 }

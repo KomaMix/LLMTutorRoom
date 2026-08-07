@@ -1,3 +1,5 @@
+using LLMGateway.Enums;
+
 namespace LLMGateway.Data.Models
 {
     public class ModelDeployment

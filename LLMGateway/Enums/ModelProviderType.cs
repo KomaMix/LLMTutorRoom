@@ -1,4 +1,4 @@
-namespace LLMGateway.Data.Models
+namespace LLMGateway.Enums
 {
     public enum ModelProviderType
     {

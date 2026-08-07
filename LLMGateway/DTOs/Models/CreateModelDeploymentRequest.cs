@@ -1,5 +1,5 @@
 using System.ComponentModel.DataAnnotations;
-using LLMGateway.Data.Models;
+using LLMGateway.Enums;
 
 namespace LLMGateway.DTOs.Models
 {
