@@ -4,7 +4,7 @@ COPY ["LLMGateway/LLMGateway.csproj", "LLMGateway/"]
 RUN dotnet restore "LLMGateway/LLMGateway.csproj"
 COPY . .
 WORKDIR "/src/LLMGateway"
-RUN dotnet publish "LLMGateway.csproj" -c Release -o /app/publish
+RUN dotnet publish "LLMGateway.csproj" -c Release -o /app/publish --no-restore
 
 FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS runtime
 WORKDIR /app

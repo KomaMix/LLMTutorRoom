@@ -128,6 +128,7 @@ Content-Type: application/json
 - PostgreSQL;
 - Node.js и npm для сборки React-клиента;
 - RabbitMQ для очереди проверки;
+- Docker и Docker Compose для контейнерного запуска;
 - Ollama или другой OpenAI-compatible provider, если нужен реальный LLM-вызов.
 
 Сборка решения:
@@ -160,4 +161,50 @@ React-клиент `LLMTutorRoom` собирается автоматическ�
 
 Для локальной разработки используются настройки из `appsettings.json` и
 `appsettings.Development.json`: строки подключения к PostgreSQL, JWT-настройки,
-internal service token и начальные пользователи.
+RabbitMQ-настройки и начальные пользователи.
+
+### Docker Compose
+
+Полный запуск всего стека в Docker:
+
+```bash
+docker compose up --build
+```
+
+После запуска:
+
+- приложение через nginx: `http://localhost:8080`
+- AuthService: `http://localhost:5210`
+- TeachingService: `http://localhost:5212`
+- LLMGateway: `http://localhost:5200`
+- LLMTutorRoom: `http://localhost:5206`
+- RabbitMQ management: `http://localhost:15672` (`llm` / `llm-dev`)
+- PostgreSQL доступен с хоста на `localhost:5433`
+
+Остановить стек:
+
+```bash
+docker compose down
+```
+
+Удалить данные PostgreSQL и RabbitMQ:
+
+```bash
+docker compose down -v
+```
+
+Для режима, где в Docker работают только nginx и RabbitMQ, а .NET-сервисы
+запускаются на хосте через `dotnet run` или Rider:
+
+```bash
+docker compose -f docker-compose.infra.yml up
+```
+
+В этом режиме nginx проксирует в локальные порты `5210`, `5212`, `5200` и
+`5206`, а RabbitMQ доступен на `localhost:5672`.
+
+Контейнеры полного стека собираются как publish-образы. Изменения C# или
+React-клиента не появляются внутри них автоматически: после правок нужен
+повторный `docker compose up --build`. В infra-only режиме код выполняется на
+хосте, поэтому обновления зависят от способа запуска: Rider перезапускает
+проект, а `dotnet watch run` подхватывает изменения автоматически.

@@ -37,11 +37,11 @@
         <ClientBuildInput Include="$(ClientAppDirectory)/src/**/*" />
     </ItemGroup>
 
-    <Target Name="InstallClientDependencies" BeforeTargets="Build" Condition="!Exists('$(ClientAppDirectory)/node_modules')">
+    <Target Name="InstallClientDependencies" BeforeTargets="Build" Condition="'$(SkipClientBuild)' != 'true' And !Exists('$(ClientAppDirectory)/node_modules')">
         <Exec WorkingDirectory="$(ClientAppDirectory)" Command="npm ci" />
     </Target>
 
-    <Target Name="BuildClientApp" BeforeTargets="Build" DependsOnTargets="InstallClientDependencies" Inputs="@(ClientBuildInput)" Outputs="$(ClientBuildStamp);wwwroot/index.html">
+    <Target Name="BuildClientApp" BeforeTargets="Build" DependsOnTargets="InstallClientDependencies" Condition="'$(SkipClientBuild)' != 'true'" Inputs="@(ClientBuildInput)" Outputs="$(ClientBuildStamp);wwwroot/index.html">
         <Exec WorkingDirectory="$(ClientAppDirectory)" Command="npm run build" />
         <Touch Files="$(ClientBuildStamp)" AlwaysCreate="true" />
     </Target>

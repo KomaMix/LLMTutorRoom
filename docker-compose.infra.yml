@@ -1,0 +1,28 @@
+services:
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    environment:
+      RABBITMQ_DEFAULT_USER: llm
+      RABBITMQ_DEFAULT_PASS: llm-dev
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  nginx:
+    image: nginx:1.27
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./infra/nginx/nginx.docker.conf:/etc/nginx/nginx.conf:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+volumes:
+  rabbitmq-data:
