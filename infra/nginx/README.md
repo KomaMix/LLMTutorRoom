@@ -6,6 +6,7 @@ Expected local service ports:
 
 - AuthService: `http://localhost:5210`
 - LLMTutorRoom: `http://localhost:5206`
+- TeachingService: `http://localhost:5212`
 - LLMGateway: `http://localhost:5200`
 - Nginx gateway: `http://localhost:8080`
 
@@ -14,6 +15,7 @@ Routes:
 - `/api/auth/*` -> AuthService
 - `/api/users/*` -> AuthService
 - `/api/classroom/*` -> LLMTutorRoom
+- `/api/teaching/*` -> TeachingService
 - `/api/llm/*` -> LLMGateway, with `/api/llm/chat/...` rewritten to `/api/chat/...`
 - `/` -> LLMTutorRoom frontend
 

@@ -3,9 +3,12 @@ using LLMTutorRoom.DTOs;
 using LLMTutorRoom.Models;
 using LLMTutorRoom.Services;
 using LLMTutorRoom.Services.ReviewProcessing;
+using LLMTutorRoom.Services.Teaching;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using TeachingService.Contracts.Enums;
+using TeachingService.Contracts.Models;
 
 namespace LLMTutorRoom.Tests
 {
@@ -17,11 +20,12 @@ namespace LLMTutorRoom.Tests
             await using var dbContext = CreateDbContext();
             var publisher = new FakeReviewQueuePublisher();
             var task = CreateSingleChoiceTask();
+            var test = CreateTest(task);
             var attempt = await AddAttemptAsync(
                 dbContext,
-                task,
+                test.Id,
                 new Dictionary<string, string> { [task.Id] = "option-correct" });
-            var service = CreateClassroomService(dbContext, publisher);
+            var service = CreateClassroomService(dbContext, publisher, test);
 
             var submittedAttempt = await service.SubmitAttemptAsync(
                 attempt.Id,
@@ -46,11 +50,12 @@ namespace LLMTutorRoom.Tests
             await using var dbContext = CreateDbContext();
             var publisher = new FakeReviewQueuePublisher();
             var task = CreateFreeTextTask(TestTaskCheckMode.Llm);
+            var test = CreateTest(task);
             var attempt = await AddAttemptAsync(
                 dbContext,
-                task,
+                test.Id,
                 new Dictionary<string, string> { [task.Id] = "Развернутый ответ ученика." });
-            var service = CreateClassroomService(dbContext, publisher);
+            var service = CreateClassroomService(dbContext, publisher, test);
 
             await service.SubmitAttemptAsync(
                 attempt.Id,
@@ -77,9 +82,10 @@ namespace LLMTutorRoom.Tests
         {
             await using var dbContext = CreateDbContext();
             var task = CreateFreeTextTask(TestTaskCheckMode.Llm);
+            var test = CreateTest(task);
             var attempt = await AddAttemptAsync(
                 dbContext,
-                task,
+                test.Id,
                 new Dictionary<string, string> { [task.Id] = "Ответ для ручной проверки." },
                 TestAttemptStatus.Submitted);
             var review = new SubmissionReview
@@ -101,6 +107,7 @@ namespace LLMTutorRoom.Tests
                     {
                         TaskId = task.Id,
                         TaskTitle = task.Title,
+                        TaskPrompt = task.Prompt,
                         CheckMode = TestTaskCheckMode.Llm,
                         Status = TaskReviewResultStatus.Pending,
                         MaxScore = task.MaxPoints
@@ -139,9 +146,10 @@ namespace LLMTutorRoom.Tests
             await using var dbContext = CreateDbContext();
             var publisher = new FakeReviewQueuePublisher();
             var task = CreateFreeTextTask(TestTaskCheckMode.Manual);
+            var test = CreateTest(task);
             await AddAttemptAsync(
                 dbContext,
-                task,
+                test.Id,
                 new Dictionary<string, string> { [task.Id] = "Ответ." },
                 TestAttemptStatus.Submitted);
             var review = new SubmissionReview
@@ -160,6 +168,7 @@ namespace LLMTutorRoom.Tests
                     {
                         TaskId = task.Id,
                         TaskTitle = task.Title,
+                        TaskPrompt = task.Prompt,
                         CheckMode = TestTaskCheckMode.Manual,
                         Status = TaskReviewResultStatus.ManualReview,
                         MaxScore = task.MaxPoints
@@ -168,7 +177,7 @@ namespace LLMTutorRoom.Tests
             };
             dbContext.SubmissionReviews.Add(review);
             await dbContext.SaveChangesAsync();
-            var service = CreateClassroomService(dbContext, publisher);
+            var service = CreateClassroomService(dbContext, publisher, test);
 
             var updatedReview = await service.UpdateManualTaskReviewAsync(
                 review.Id,
@@ -190,10 +199,12 @@ namespace LLMTutorRoom.Tests
 
         private static ClassroomService CreateClassroomService(
             TutorRoomDbContext dbContext,
-            FakeReviewQueuePublisher publisher)
+            FakeReviewQueuePublisher publisher,
+            params CourseTestDto[] tests)
         {
             return new ClassroomService(
                 dbContext,
+                new FakeTeachingServiceClient(tests),
                 new ReviewScoringService(),
                 publisher,
                 Options.Create(new ReviewProcessingOptions
@@ -235,24 +246,13 @@ namespace LLMTutorRoom.Tests
 
         private static async Task<TestAttempt> AddAttemptAsync(
             TutorRoomDbContext dbContext,
-            TestTask task,
+            string testId,
             Dictionary<string, string> answers,
             TestAttemptStatus status = TestAttemptStatus.InProgress)
         {
-            dbContext.Tests.Add(new CourseTest
-            {
-                Id = "test-1",
-                Title = "Test",
-                Subject = "Subject",
-                Status = CourseTestStatus.Published,
-                Deadline = DateTimeOffset.UtcNow.AddDays(1),
-                TimeLimitMinutes = 45,
-                Tasks = new List<TestTask> { task }
-            });
-
             var attempt = new TestAttempt
             {
-                TestId = "test-1",
+                TestId = testId,
                 StudentUserId = "student",
                 Status = status,
                 StartedAt = DateTimeOffset.UtcNow.AddMinutes(-5),
@@ -270,9 +270,26 @@ namespace LLMTutorRoom.Tests
             return attempt;
         }
 
-        private static TestTask CreateSingleChoiceTask()
+        private static CourseTestDto CreateTest(params TestTaskDto[] tasks)
         {
-            return new TestTask
+            return new CourseTestDto
+            {
+                Id = "test-1",
+                Title = "Test",
+                Subject = "Subject",
+                Status = CourseTestStatus.Published,
+                Deadline = DateTimeOffset.UtcNow.AddDays(1),
+                TimeLimitMinutes = 45,
+                TotalPoints = tasks
+                    .Where(task => !task.IsHidden)
+                    .Sum(task => task.MaxPoints),
+                Tasks = tasks.ToList()
+            };
+        }
+
+        private static TestTaskDto CreateSingleChoiceTask()
+        {
+            return new TestTaskDto
             {
                 Id = "task-choice",
                 Type = TestTaskType.SingleChoice,
@@ -281,19 +298,18 @@ namespace LLMTutorRoom.Tests
                 Prompt = "Choose.",
                 MaxPoints = 2,
                 CreatedAt = DateTimeOffset.UtcNow,
-                Options = new List<AnswerOption>
+                CorrectOptionIds = new List<string> { "option-correct" },
+                Options = new List<AnswerOptionDto>
                 {
                     new()
                     {
                         Id = "option-correct",
-                        TestTaskId = "task-choice",
                         Text = "Correct",
                         IsCorrect = true
                     },
                     new()
                     {
                         Id = "option-wrong",
-                        TestTaskId = "task-choice",
                         Text = "Wrong",
                         IsCorrect = false
                     }
@@ -301,9 +317,9 @@ namespace LLMTutorRoom.Tests
             };
         }
 
-        private static TestTask CreateFreeTextTask(TestTaskCheckMode checkMode)
+        private static TestTaskDto CreateFreeTextTask(TestTaskCheckMode checkMode)
         {
-            return new TestTask
+            return new TestTaskDto
             {
                 Id = "task-free",
                 Type = TestTaskType.FreeText,
@@ -326,6 +342,57 @@ namespace LLMTutorRoom.Tests
             {
                 PublishedMessages.Add((message, retryDelaySeconds));
                 return Task.CompletedTask;
+            }
+        }
+
+        private sealed class FakeTeachingServiceClient : ITeachingServiceClient
+        {
+            private readonly List<CourseTestDto> _tests;
+
+            public FakeTeachingServiceClient(IEnumerable<CourseTestDto> tests)
+            {
+                _tests = tests.ToList();
+            }
+
+            public Task<List<CourseTestDto>> GetTestsAsync(
+                bool publishedOnly,
+                bool includeHidden,
+                CancellationToken cancellationToken)
+            {
+                var tests = _tests.AsEnumerable();
+                if (publishedOnly)
+                    tests = tests.Where(test => test.Status == CourseTestStatus.Published);
+
+                return Task.FromResult(tests.Select(test => CopyTest(test, includeHidden)).ToList());
+            }
+
+            public Task<CourseTestDto?> GetTestAsync(
+                string testId,
+                bool includeHidden,
+                CancellationToken cancellationToken)
+            {
+                var test = _tests.SingleOrDefault(item => item.Id == testId);
+                return Task.FromResult(test is null ? null : CopyTest(test, includeHidden));
+            }
+
+            private static CourseTestDto CopyTest(CourseTestDto test, bool includeHidden)
+            {
+                var tasks = includeHidden
+                    ? test.Tasks
+                    : test.Tasks.Where(task => !task.IsHidden).ToList();
+
+                return new CourseTestDto
+                {
+                    Id = test.Id,
+                    Title = test.Title,
+                    Subject = test.Subject,
+                    Status = test.Status,
+                    Deadline = test.Deadline,
+                    TimeLimitMinutes = test.TimeLimitMinutes,
+                    Summary = test.Summary,
+                    TotalPoints = tasks.Sum(task => task.MaxPoints),
+                    Tasks = tasks.ToList()
+                };
             }
         }
     }

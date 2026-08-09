@@ -33,6 +33,10 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "infra", "infra", "{0F0327BC
 		infra\nginx\README.md = infra\nginx\README.md
 	EndProjectSection
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TeachingService.Contracts", "TeachingService.Contracts\TeachingService.Contracts.csproj", "{6C3B2A20-BFD6-449F-9C19-10D4D9528FD4}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TeachingService", "TeachingService\TeachingService.csproj", "{7DA10348-4027-4801-8F59-412C4013C778}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -63,6 +67,14 @@ Global
 		{27393FD9-92C8-4659-B0AF-B0F468674980}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{27393FD9-92C8-4659-B0AF-B0F468674980}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{27393FD9-92C8-4659-B0AF-B0F468674980}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6C3B2A20-BFD6-449F-9C19-10D4D9528FD4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6C3B2A20-BFD6-449F-9C19-10D4D9528FD4}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6C3B2A20-BFD6-449F-9C19-10D4D9528FD4}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6C3B2A20-BFD6-449F-9C19-10D4D9528FD4}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7DA10348-4027-4801-8F59-412C4013C778}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7DA10348-4027-4801-8F59-412C4013C778}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7DA10348-4027-4801-8F59-412C4013C778}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7DA10348-4027-4801-8F59-412C4013C778}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

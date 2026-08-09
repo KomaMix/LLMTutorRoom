@@ -1,7 +1,7 @@
 using System.Net.Http.Json;
 using System.Text.Json;
-using Microsoft.Extensions.Options;
 using LLMTutorRoom.Models;
+using Microsoft.Extensions.Options;
 
 namespace LLMTutorRoom.Services.ReviewProcessing
 {
@@ -21,7 +21,7 @@ namespace LLMTutorRoom.Services.ReviewProcessing
         }
 
         public async Task<LlmTaskReviewResult> ReviewFreeTextAnswerAsync(
-            TestTask task,
+            TaskReviewResult task,
             string answer,
             CancellationToken cancellationToken)
         {
@@ -56,9 +56,9 @@ namespace LLMTutorRoom.Services.ReviewProcessing
                         Role = "user",
                         Content = JsonSerializer.Serialize(new
                         {
-                            taskTitle = task.Title,
-                            taskPrompt = task.Prompt,
-                            maxScore = task.MaxPoints,
+                            taskTitle = task.TaskTitle,
+                            taskPrompt = task.TaskPrompt,
+                            maxScore = task.MaxScore,
                             studentAnswer = answer
                         }, JsonOptions)
                     }

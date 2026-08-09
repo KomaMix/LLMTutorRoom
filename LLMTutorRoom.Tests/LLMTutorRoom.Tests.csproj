@@ -24,6 +24,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\LLMTutorRoom\LLMTutorRoom.csproj" />
+    <ProjectReference Include="..\TeachingService.Contracts\TeachingService.Contracts.csproj" />
   </ItemGroup>
 
 </Project>

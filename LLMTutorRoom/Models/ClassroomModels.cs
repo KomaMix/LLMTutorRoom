@@ -1,22 +1,11 @@
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using TeachingService.Contracts.Enums;
+using TeachingService.Contracts.Models;
 
 namespace LLMTutorRoom.Models
 {
-    public enum CourseTestStatus
-    {
-        Draft,
-        Published
-    }
-
-    public enum TestTaskType
-    {
-        SingleChoice,
-        MultipleChoice,
-        FreeText
-    }
-
     public enum SubmissionReviewStatus
     {
         Checked,
@@ -25,13 +14,6 @@ namespace LLMTutorRoom.Models
         RetryScheduled,
         ManualReview,
         Failed
-    }
-
-    public enum TestTaskCheckMode
-    {
-        Auto,
-        Llm,
-        Manual
     }
 
     public enum TaskReviewResultStatus
@@ -53,10 +35,10 @@ namespace LLMTutorRoom.Models
 
     public sealed class ClassroomOverview
     {
-        public IReadOnlyCollection<CourseTest> Tests { get; set; } = Array.Empty<CourseTest>();
-        public IReadOnlyCollection<LanguageModel> Models { get; set; } = Array.Empty<LanguageModel>();
-        public IReadOnlyCollection<SubmissionReview> Reviews { get; set; } = Array.Empty<SubmissionReview>();
-        public IReadOnlyCollection<TestAttemptResponse> Attempts { get; set; } = Array.Empty<TestAttemptResponse>();
+        public List<CourseTestDto> Tests { get; set; } = new();
+        public List<LanguageModel> Models { get; set; } = new();
+        public List<SubmissionReview> Reviews { get; set; } = new();
+        public List<TestAttemptResponse> Attempts { get; set; } = new();
         public DashboardMetrics Metrics { get; set; } = new();
     }
 
@@ -66,64 +48,6 @@ namespace LLMTutorRoom.Models
         public int Tasks { get; set; }
         public int PendingReviews { get; set; }
         public decimal AverageScore { get; set; }
-    }
-
-    public sealed class CourseTest
-    {
-        public string Id { get; set; } = string.Empty;
-        public string Title { get; set; } = string.Empty;
-        public string Subject { get; set; } = string.Empty;
-        public CourseTestStatus Status { get; set; } = CourseTestStatus.Draft;
-        public DateTimeOffset Deadline { get; set; }
-        public int TimeLimitMinutes { get; set; }
-        public string Summary { get; set; } = string.Empty;
-        public List<TestTask> Tasks { get; set; } = new();
-
-        [NotMapped]
-        public decimal TotalPoints
-        {
-            get
-            {
-                return Tasks
-                    .Where(t => !t.IsHidden)
-                    .Sum(t => t.MaxPoints);
-            }
-        }
-    }
-
-    public sealed class TestTask
-    {
-        public string Id { get; set; } = string.Empty;
-        public string CourseTestId { get; set; } = string.Empty;
-        public TestTaskType Type { get; set; } = TestTaskType.FreeText;
-        public TestTaskCheckMode CheckMode { get; set; } = TestTaskCheckMode.Auto;
-        public string Title { get; set; } = string.Empty;
-        public string Prompt { get; set; } = string.Empty;
-        public decimal MaxPoints { get; set; }
-        public decimal WrongAnswerPenalty { get; set; }
-        public bool IsHidden { get; set; }
-        public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
-        public List<AnswerOption> Options { get; set; } = new();
-
-        [NotMapped]
-        public List<string> CorrectOptionIds
-        {
-            get
-            {
-                return Options
-                    .Where(option => option.IsCorrect)
-                    .Select(option => option.Id)
-                    .ToList();
-            }
-        }
-    }
-
-    public sealed class AnswerOption
-    {
-        public string Id { get; set; } = string.Empty;
-        public string TestTaskId { get; set; } = string.Empty;
-        public string Text { get; set; } = string.Empty;
-        public bool IsCorrect { get; set; }
     }
 
     public sealed class LanguageModel
@@ -194,6 +118,7 @@ namespace LLMTutorRoom.Models
         public int SubmissionReviewId { get; set; }
         public string TaskId { get; set; } = string.Empty;
         public string TaskTitle { get; set; } = string.Empty;
+        public string TaskPrompt { get; set; } = string.Empty;
         public TestTaskCheckMode CheckMode { get; set; } = TestTaskCheckMode.Auto;
         public TaskReviewResultStatus Status { get; set; } = TaskReviewResultStatus.Pending;
         public int Attempts { get; set; }

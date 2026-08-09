@@ -1,11 +1,16 @@
 # LLMGateway
 
-Репозиторий состоит из двух связанных проектов:
+Репозиторий состоит из нескольких связанных сервисов:
 
 - **LLMGateway** - единый HTTP API для обращения к LLM-моделям через локальные
   или удаленные deployment-ы.
+- **AuthService** - пользователи, роли и выдача JWT.
+- **TeachingService** - преподавательский каталог тестов и заданий.
 - **LLMTutorRoom** - учебное веб-приложение на ASP.NET Core и React, где
-  преподаватели создают тесты, а ученики проходят их с серверным учетом времени.
+  ученики проходят тесты с серверным учетом времени, а результаты отправляются
+  на проверку.
+- **Shared.Auth** и **TeachingService.Contracts** - общие библиотеки для JWT и
+  контрактов между сервисами.
 
 ## LLMGateway
 
@@ -81,15 +86,16 @@ Content-Type: application/json
 ## LLMTutorRoom
 
 `LLMTutorRoom` - прототип учебного сервиса для преподавателей и учеников. Проект
-построен на контроллерах ASP.NET Core, React-клиенте и PostgreSQL.
+построен на контроллерах ASP.NET Core, React-клиенте, PostgreSQL и RabbitMQ.
 
 Основной функционал:
 
 - JWT-авторизация;
 - роли `Admin`, `Teacher`, `Student`;
-- пользователи из `appsettings.json` синхронизируются с базой при запуске;
+- пользователи из `AuthService/appsettings.json` синхронизируются с auth-базой
+  при запуске `AuthService`;
 - администратор может добавлять преподавателей;
-- преподаватель может создавать и редактировать тесты;
+- преподаватель может создавать и редактировать тесты через `TeachingService`;
 - у теста есть статус, дедлайн, время выполнения и описание;
 - задания бывают трех типов: один ответ, несколько ответов, свободный ответ;
 - для заданий можно задать баллы, варианты ответов и штраф за неправильный
@@ -99,11 +105,10 @@ Content-Type: application/json
 - таймер попытки хранится на backend-е, поэтому после перезагрузки страницы
   выполнение можно продолжить;
 - после истечения времени ответы нельзя изменить;
-- автоматическая проверка ответов через LLM пока вынесена в отдельный будущий
-  этап.
+- проверка свободных ответов идет асинхронно через RabbitMQ и `LLMGateway`.
 
-Функционал тестов отделен от будущей LLM-проверки: создание тестов, прохождение
-и хранение попыток не завязаны на выбор модели.
+Каталог тестов отделен от ученических попыток: `TeachingService` владеет тестами
+и заданиями, а `LLMTutorRoom` хранит попытки, ответы и результаты проверки.
 
 ## Скриншоты
 
@@ -122,6 +127,7 @@ Content-Type: application/json
 - .NET 9 SDK;
 - PostgreSQL;
 - Node.js и npm для сборки React-клиента;
+- RabbitMQ для очереди проверки;
 - Ollama или другой OpenAI-compatible provider, если нужен реальный LLM-вызов.
 
 Сборка решения:
@@ -131,22 +137,27 @@ dotnet restore LLMGateway.sln
 dotnet build LLMGateway.sln
 ```
 
-Запуск gateway:
+Запуск сервисов:
 
 ```bash
+dotnet run --project AuthService/AuthService.csproj
+dotnet run --project TeachingService/TeachingService.csproj
 dotnet run --project LLMGateway/LLMGateway.csproj
-```
-
-Запуск учебного приложения:
-
-```bash
 dotnet run --project LLMTutorRoom/LLMTutorRoom.csproj
 ```
 
+Локальные порты по умолчанию:
+
+- AuthService: `http://localhost:5210`
+- TeachingService: `http://localhost:5212`
+- LLMGateway: `http://localhost:5200`
+- LLMTutorRoom: `http://localhost:5206`
+- nginx: `http://localhost:8080`
+
 React-клиент `LLMTutorRoom` собирается автоматически при сборке проекта и
 попадает в `LLMTutorRoom/wwwroot`. Миграции базы данных применяются при запуске
-приложения.
+соответствующего сервиса.
 
 Для локальной разработки используются настройки из `appsettings.json` и
-`appsettings.Development.json`: строка подключения к PostgreSQL, JWT-настройки и
-начальные пользователи.
+`appsettings.Development.json`: строки подключения к PostgreSQL, JWT-настройки,
+internal service token и начальные пользователи.

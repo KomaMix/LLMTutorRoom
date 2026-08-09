@@ -1,10 +1,13 @@
+using System.Text.Json;
 using LLMTutorRoom.Data;
 using LLMTutorRoom.DTOs;
 using LLMTutorRoom.Models;
 using LLMTutorRoom.Services.ReviewProcessing;
+using LLMTutorRoom.Services.Teaching;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
-using System.Text.Json;
+using TeachingService.Contracts.Enums;
+using TeachingService.Contracts.Models;
 
 namespace LLMTutorRoom.Services
 {
@@ -13,6 +16,7 @@ namespace LLMTutorRoom.Services
         private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
         private readonly TutorRoomDbContext _dbContext;
+        private readonly ITeachingServiceClient _teachingServiceClient;
         private readonly ReviewScoringService _reviewScoringService;
         private readonly IReviewQueuePublisher _reviewQueuePublisher;
         private readonly ReviewProcessingOptions _reviewProcessingOptions;
@@ -20,12 +24,14 @@ namespace LLMTutorRoom.Services
 
         public ClassroomService(
             TutorRoomDbContext dbContext,
+            ITeachingServiceClient teachingServiceClient,
             ReviewScoringService reviewScoringService,
             IReviewQueuePublisher reviewQueuePublisher,
             IOptions<ReviewProcessingOptions> reviewProcessingOptions,
             ILogger<ClassroomService> logger)
         {
             _dbContext = dbContext;
+            _teachingServiceClient = teachingServiceClient;
             _reviewScoringService = reviewScoringService;
             _reviewQueuePublisher = reviewQueuePublisher;
             _reviewProcessingOptions = reviewProcessingOptions.Value;
@@ -34,19 +40,22 @@ namespace LLMTutorRoom.Services
 
         public async Task<ClassroomOverview> GetTeacherOverviewAsync(CancellationToken cancellationToken)
         {
-            var tests = await LoadTests()
-                .OrderByDescending(test => test.Deadline)
-                .ToListAsync(cancellationToken);
+            var tests = await _teachingServiceClient.GetTestsAsync(
+                publishedOnly: false,
+                includeHidden: true,
+                cancellationToken);
             var reviews = await LoadReviews()
                 .OrderByDescending(review => review.SubmittedAt)
                 .ToListAsync(cancellationToken);
 
             return new ClassroomOverview
             {
-                Tests = tests,
-                Models = Array.Empty<LanguageModel>(),
+                Tests = tests
+                    .OrderByDescending(test => test.Deadline)
+                    .ToList(),
+                Models = new List<LanguageModel>(),
                 Reviews = reviews,
-                Attempts = Array.Empty<TestAttemptResponse>(),
+                Attempts = new List<TestAttemptResponse>(),
                 Metrics = CreateMetrics(tests, reviews)
             };
         }
@@ -57,10 +66,10 @@ namespace LLMTutorRoom.Services
         {
             await ExpireStudentAttemptsAsync(studentUserId, cancellationToken);
 
-            var tests = await LoadVisibleTests()
-                .Where(test => test.Status == CourseTestStatus.Published)
-                .OrderBy(test => test.Deadline)
-                .ToListAsync(cancellationToken);
+            var tests = await _teachingServiceClient.GetTestsAsync(
+                publishedOnly: true,
+                includeHidden: false,
+                cancellationToken);
             var reviews = await LoadReviews()
                 .Where(review => review.StudentUserId.ToLower() == studentUserId.ToLower())
                 .OrderByDescending(review => review.SubmittedAt)
@@ -73,173 +82,14 @@ namespace LLMTutorRoom.Services
 
             return new ClassroomOverview
             {
-                Tests = tests,
-                Models = Array.Empty<LanguageModel>(),
+                Tests = tests
+                    .OrderBy(test => test.Deadline)
+                    .ToList(),
+                Models = new List<LanguageModel>(),
                 Reviews = reviews,
                 Attempts = attempts.Select(ToAttemptResponse).ToList(),
                 Metrics = CreateMetrics(tests, reviews)
             };
-        }
-
-        public async Task<IReadOnlyCollection<CourseTest>> GetTestsAsync(CancellationToken cancellationToken)
-        {
-            return await LoadTests()
-                .OrderByDescending(test => test.Deadline)
-                .ToListAsync(cancellationToken);
-        }
-
-        public async Task<CourseTest> CreateTestAsync(
-            CreateTestRequest request,
-            CancellationToken cancellationToken)
-        {
-            var test = new CourseTest
-            {
-                Id = CreateId("test"),
-                Title = request.Title.Trim(),
-                Subject = request.Subject.Trim(),
-                Status = request.Status,
-                Deadline = request.Deadline ?? DateTimeOffset.UtcNow.AddDays(7),
-                TimeLimitMinutes = request.TimeLimitMinutes,
-                Summary = request.Summary?.Trim() ?? string.Empty
-            };
-
-            _dbContext.Tests.Add(test);
-            await _dbContext.SaveChangesAsync(cancellationToken);
-
-            return test;
-        }
-
-        public async Task<CourseTest?> UpdateTestAsync(
-            string testId,
-            CreateTestRequest request,
-            CancellationToken cancellationToken)
-        {
-            var test = await _dbContext.Tests
-                .SingleOrDefaultAsync(item => item.Id == testId, cancellationToken);
-
-            if (test is null)
-                return null;
-
-            test.Title = request.Title.Trim();
-            test.Subject = request.Subject.Trim();
-            test.Status = request.Status;
-            test.Deadline = request.Deadline ?? test.Deadline;
-            test.TimeLimitMinutes = request.TimeLimitMinutes;
-            test.Summary = request.Summary?.Trim() ?? string.Empty;
-
-            await _dbContext.SaveChangesAsync(cancellationToken);
-            return await LoadTests()
-                .SingleAsync(item => item.Id == testId, cancellationToken);
-        }
-
-        public async Task<TestTask?> AddTaskAsync(
-            string testId,
-            CreateTaskRequest request,
-            CancellationToken cancellationToken)
-        {
-            var testExists = await _dbContext.Tests
-                .AnyAsync(test => test.Id == testId, cancellationToken);
-
-            if (!testExists)
-                return null;
-
-            var taskId = CreateId("task");
-            var task = new TestTask
-            {
-                Id = taskId,
-                CourseTestId = testId,
-                Type = request.Type,
-                CheckMode = NormalizeTaskCheckMode(request),
-                Title = request.Title.Trim(),
-                Prompt = request.Prompt.Trim(),
-                MaxPoints = request.MaxPoints,
-                CreatedAt = DateTimeOffset.UtcNow,
-                WrongAnswerPenalty = request.Type == TestTaskType.MultipleChoice
-                    ? request.WrongAnswerPenalty
-                    : 0,
-                Options = request.Type == TestTaskType.FreeText
-                    ? new List<AnswerOption>()
-                    : CreateOptions(request, taskId)
-            };
-
-            _dbContext.TestTasks.Add(task);
-            await _dbContext.SaveChangesAsync(cancellationToken);
-
-            return task;
-        }
-
-        public async Task<TestTask?> UpdateTaskAsync(
-            string testId,
-            string taskId,
-            CreateTaskRequest request,
-            CancellationToken cancellationToken)
-        {
-            var task = await _dbContext.TestTasks
-                .Include(item => item.Options)
-                .SingleOrDefaultAsync(
-                    item => item.CourseTestId == testId && item.Id == taskId,
-                    cancellationToken);
-
-            if (task is null)
-                return null;
-
-            task.Type = request.Type;
-            task.CheckMode = NormalizeTaskCheckMode(request);
-            task.Title = request.Title.Trim();
-            task.Prompt = request.Prompt.Trim();
-            task.MaxPoints = request.MaxPoints;
-            task.WrongAnswerPenalty = request.Type == TestTaskType.MultipleChoice
-                ? request.WrongAnswerPenalty
-                : 0;
-
-            _dbContext.AnswerOptions.RemoveRange(task.Options);
-            task.Options.Clear();
-
-            if (request.Type != TestTaskType.FreeText)
-            {
-                foreach (var option in CreateOptions(request, task.Id))
-                    task.Options.Add(option);
-            }
-
-            await _dbContext.SaveChangesAsync(cancellationToken);
-            return task;
-        }
-
-        public async Task<TestTask?> SetTaskVisibilityAsync(
-            string testId,
-            string taskId,
-            bool isHidden,
-            CancellationToken cancellationToken)
-        {
-            var task = await _dbContext.TestTasks
-                .SingleOrDefaultAsync(
-                    item => item.CourseTestId == testId && item.Id == taskId,
-                    cancellationToken);
-
-            if (task is null)
-                return null;
-
-            task.IsHidden = isHidden;
-            await _dbContext.SaveChangesAsync(cancellationToken);
-            return task;
-        }
-
-        public async Task<bool> DeleteTaskAsync(
-            string testId,
-            string taskId,
-            CancellationToken cancellationToken)
-        {
-            var task = await _dbContext.TestTasks
-                .SingleOrDefaultAsync(
-                    item => item.CourseTestId == testId && item.Id == taskId,
-                    cancellationToken);
-
-            if (task is null)
-                return false;
-
-            _dbContext.TestTasks.Remove(task);
-            await _dbContext.SaveChangesAsync(cancellationToken);
-            return true;
         }
 
         public async Task<TestAttemptResponse?> StartAttemptAsync(
@@ -249,12 +99,12 @@ namespace LLMTutorRoom.Services
         {
             await ExpireStudentAttemptsAsync(studentUserId, cancellationToken);
 
-            var test = await LoadVisibleTests()
-                .SingleOrDefaultAsync(
-                    item => item.Id == testId && item.Status == CourseTestStatus.Published,
-                    cancellationToken);
+            var test = await _teachingServiceClient.GetTestAsync(
+                testId,
+                includeHidden: false,
+                cancellationToken);
 
-            if (test is null)
+            if (test is null || test.Status != CourseTestStatus.Published)
                 return null;
 
             var existingAttempt = await _dbContext.TestAttempts
@@ -360,8 +210,10 @@ namespace LLMTutorRoom.Services
             string studentName,
             CancellationToken cancellationToken)
         {
-            var test = await LoadVisibleTests()
-                .SingleOrDefaultAsync(item => item.Id == request.TestId, cancellationToken);
+            var test = await _teachingServiceClient.GetTestAsync(
+                request.TestId,
+                includeHidden: false,
+                cancellationToken);
 
             if (test is null)
                 return null;
@@ -428,27 +280,6 @@ namespace LLMTutorRoom.Services
             return review;
         }
 
-        private IQueryable<CourseTest> LoadTests()
-        {
-            return _dbContext.Tests
-                .AsNoTracking()
-                .Include(test => test.Tasks
-                    .OrderBy(task => task.CreatedAt)
-                    .ThenBy(task => task.Id))
-                .ThenInclude(task => task.Options);
-        }
-
-        private IQueryable<CourseTest> LoadVisibleTests()
-        {
-            return _dbContext.Tests
-                .AsNoTracking()
-                .Include(test => test.Tasks
-                    .Where(task => !task.IsHidden)
-                    .OrderBy(task => task.CreatedAt)
-                    .ThenBy(task => task.Id))
-                .ThenInclude(task => task.Options);
-        }
-
         private IQueryable<SubmissionReview> LoadReviews()
         {
             return _dbContext.SubmissionReviews
@@ -481,38 +312,26 @@ namespace LLMTutorRoom.Services
             Dictionary<string, string> answers,
             CancellationToken cancellationToken)
         {
-            var taskIds = await _dbContext.TestTasks
-                .AsNoTracking()
-                .Where(task => task.CourseTestId == testId && !task.IsHidden)
+            var test = await _teachingServiceClient.GetTestAsync(
+                testId,
+                includeHidden: false,
+                cancellationToken);
+
+            if (test is null)
+                return new Dictionary<string, string>();
+
+            var allowedTaskIds = test.Tasks
                 .Select(task => task.Id)
-                .ToListAsync(cancellationToken);
-            var allowedTaskIds = taskIds.ToHashSet();
+                .ToHashSet();
 
             return answers
                 .Where(answer => allowedTaskIds.Contains(answer.Key))
                 .ToDictionary(answer => answer.Key, answer => answer.Value);
         }
 
-        private static List<AnswerOption> CreateOptions(
-            CreateTaskRequest request,
-            string taskId)
-        {
-            var correctOptionIndexes = request.CorrectOptionIndexes
-                .Distinct()
-                .ToHashSet();
-
-            return request.Options.Select((option, index) => new AnswerOption
-            {
-                Id = CreateId("option"),
-                TestTaskId = taskId,
-                Text = option.Trim(),
-                IsCorrect = correctOptionIndexes.Contains(index)
-            }).ToList();
-        }
-
         private static DashboardMetrics CreateMetrics(
-            IReadOnlyCollection<CourseTest> tests,
-            IReadOnlyCollection<SubmissionReview> reviews)
+            List<CourseTestDto> tests,
+            List<SubmissionReview> reviews)
         {
             var checkedReviews = reviews
                 .Where(review => review.Status == SubmissionReviewStatus.Checked && review.MaxScore > 0)
@@ -554,8 +373,10 @@ namespace LLMTutorRoom.Services
                 return;
             }
 
-            var test = await LoadVisibleTests()
-                .SingleOrDefaultAsync(item => item.Id == attempt.TestId, cancellationToken);
+            var test = await _teachingServiceClient.GetTestAsync(
+                attempt.TestId,
+                includeHidden: false,
+                cancellationToken);
 
             if (test is null)
                 return;
@@ -575,7 +396,7 @@ namespace LLMTutorRoom.Services
         }
 
         private SubmissionReview CreateReviewEntity(
-            CourseTest test,
+            CourseTestDto test,
             int? attemptId,
             string studentUserId,
             string studentName,
@@ -647,8 +468,7 @@ namespace LLMTutorRoom.Services
             }
         }
 
-        private static SubmissionReviewStatus GetInitialReviewStatus(
-            IReadOnlyCollection<TaskReviewResult> taskResults)
+        private static SubmissionReviewStatus GetInitialReviewStatus(List<TaskReviewResult> taskResults)
         {
             if (taskResults.Any(result => result.Status == TaskReviewResultStatus.Pending))
                 return SubmissionReviewStatus.Queued;
@@ -680,14 +500,6 @@ namespace LLMTutorRoom.Services
 
             review.Status = GetInitialReviewStatus(review.TaskResults);
             review.QueuedAt = null;
-        }
-
-        private static TestTaskCheckMode NormalizeTaskCheckMode(CreateTaskRequest request)
-        {
-            if (request.Type != TestTaskType.FreeText)
-                return TestTaskCheckMode.Auto;
-
-            return request.CheckMode ?? TestTaskCheckMode.Llm;
         }
 
         private static bool ExpireAttemptIfNeeded(
@@ -736,11 +548,6 @@ namespace LLMTutorRoom.Services
             return left <= right
                 ? left
                 : right;
-        }
-
-        private static string CreateId(string prefix)
-        {
-            return $"{prefix}-{Guid.NewGuid().ToString("N")[..8]}";
         }
     }
 }

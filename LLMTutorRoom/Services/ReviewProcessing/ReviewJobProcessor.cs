@@ -3,6 +3,7 @@ using LLMTutorRoom.Data;
 using LLMTutorRoom.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using TeachingService.Contracts.Enums;
 
 namespace LLMTutorRoom.Services.ReviewProcessing
 {
@@ -82,48 +83,25 @@ namespace LLMTutorRoom.Services.ReviewProcessing
                 return ReviewProcessingOutcome.Poison();
             }
 
-            var test = await _dbContext.Tests
-                .AsNoTracking()
-                .Include(item => item.Tasks
-                    .Where(task => !task.IsHidden)
-                    .OrderBy(task => task.CreatedAt)
-                    .ThenBy(task => task.Id))
-                .ThenInclude(task => task.Options)
-                .SingleOrDefaultAsync(item => item.Id == attempt.TestId, cancellationToken);
-
-            if (test is null)
-            {
-                MarkReviewFailed(review, "Test was not found.");
-                await _dbContext.SaveChangesAsync(cancellationToken);
-                return ReviewProcessingOutcome.Poison();
-            }
-
             var answers = DeserializeAnswers(attempt.AnswersJson);
             var retryDelaySeconds = 0;
 
-            foreach (var task in test.Tasks.Where(task => task.CheckMode == TestTaskCheckMode.Llm))
+            foreach (var result in review.TaskResults.Where(result => result.CheckMode == TestTaskCheckMode.Llm))
             {
-                var result = review.TaskResults.SingleOrDefault(item => item.TaskId == task.Id);
-                if (result is null)
-                {
-                    result = _scoringService.CreateInitialResult(task, string.Empty);
-                    review.TaskResults.Add(result);
-                }
-
                 if (result.Status == TaskReviewResultStatus.Succeeded
                     || result.Status == TaskReviewResultStatus.ManualReview)
                 {
                     continue;
                 }
 
-                answers.TryGetValue(task.Id, out var answer);
+                answers.TryGetValue(result.TaskId, out var answer);
                 result.Status = TaskReviewResultStatus.Processing;
                 await _dbContext.SaveChangesAsync(cancellationToken);
 
                 try
                 {
                     var llmResult = await _llmGatewayReviewClient.ReviewFreeTextAnswerAsync(
-                        task,
+                        result,
                         answer ?? string.Empty,
                         cancellationToken);
 
@@ -143,7 +121,7 @@ namespace LLMTutorRoom.Services.ReviewProcessing
                         "LLM review for review {ReviewId}, attempt {AttemptId}, task {TaskId} failed.",
                         review.Id,
                         attempt.Id,
-                        task.Id);
+                        result.TaskId);
                 }
             }
 

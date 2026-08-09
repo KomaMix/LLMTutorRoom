@@ -4,9 +4,6 @@ namespace LLMTutorRoom.Data
 {
     public sealed class TutorRoomDbContext : DbContext
     {
-        public DbSet<CourseTest> Tests { get; set; } = null!;
-        public DbSet<TestTask> TestTasks { get; set; } = null!;
-        public DbSet<AnswerOption> AnswerOptions { get; set; } = null!;
         public DbSet<SubmissionReview> SubmissionReviews { get; set; } = null!;
         public DbSet<TaskReviewResult> TaskReviewResults { get; set; } = null!;
         public DbSet<TestAttempt> TestAttempts { get; set; } = null!;
@@ -15,33 +12,6 @@ namespace LLMTutorRoom.Data
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
-            modelBuilder.Entity<CourseTest>(entity =>
-            {
-                entity.HasKey(test => test.Id);
-                entity.Property(test => test.Status).HasConversion<string>();
-                entity.HasMany(test => test.Tasks)
-                    .WithOne()
-                    .HasForeignKey(task => task.CourseTestId)
-                    .OnDelete(DeleteBehavior.Cascade);
-            });
-
-            modelBuilder.Entity<TestTask>(entity =>
-            {
-                entity.HasKey(task => task.Id);
-                entity.Property(task => task.Type).HasConversion<string>();
-                entity.Property(task => task.CheckMode).HasConversion<string>();
-                entity.Property(task => task.CreatedAt).HasDefaultValueSql("now()");
-                entity.HasMany(task => task.Options)
-                    .WithOne()
-                    .HasForeignKey(option => option.TestTaskId)
-                    .OnDelete(DeleteBehavior.Cascade);
-            });
-
-            modelBuilder.Entity<AnswerOption>(entity =>
-            {
-                entity.HasKey(option => option.Id);
-            });
-
             modelBuilder.Entity<SubmissionReview>(entity =>
             {
                 entity.Property(review => review.Status).HasConversion<string>();
@@ -76,10 +46,6 @@ namespace LLMTutorRoom.Data
                     .HasColumnType("jsonb");
                 entity.HasIndex(attempt => new { attempt.TestId, attempt.StudentUserId })
                     .IsUnique();
-                entity.HasOne<CourseTest>()
-                    .WithMany()
-                    .HasForeignKey(attempt => attempt.TestId)
-                    .OnDelete(DeleteBehavior.Cascade);
             });
         }
     }

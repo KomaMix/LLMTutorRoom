@@ -1,6 +1,7 @@
 using LLMTutorRoom.Data;
 using LLMTutorRoom.Services;
 using LLMTutorRoom.Services.ReviewProcessing;
+using LLMTutorRoom.Services.Teaching;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.StaticFiles;
 using Shared.Auth;
@@ -25,6 +26,8 @@ builder.Services.Configure<RabbitMqOptions>(
     builder.Configuration.GetSection("RabbitMq"));
 builder.Services.Configure<ReviewProcessingOptions>(
     builder.Configuration.GetSection("ReviewProcessing"));
+builder.Services.Configure<TeachingServiceOptions>(
+    builder.Configuration.GetSection(TeachingServiceOptions.SectionName));
 builder.Services.AddScoped<ClassroomService>();
 builder.Services.AddSingleton<ReviewScoringService>();
 builder.Services.AddSingleton<RabbitMqConnectionProvider>();
@@ -39,6 +42,15 @@ builder.Services.AddHttpClient<LlmGatewayReviewClient>((serviceProvider, client)
 
     client.BaseAddress = new Uri(options.LlmGatewayBaseUrl);
     client.Timeout = TimeSpan.FromSeconds(options.LlmRequestTimeoutSeconds);
+});
+builder.Services.AddHttpClient<ITeachingServiceClient, TeachingServiceClient>((serviceProvider, client) =>
+{
+    var options = serviceProvider
+        .GetRequiredService<Microsoft.Extensions.Options.IOptions<TeachingServiceOptions>>()
+        .Value;
+
+    client.BaseAddress = new Uri(options.BaseUrl);
+    client.Timeout = TimeSpan.FromSeconds(options.RequestTimeoutSeconds);
 });
 builder.Services.AddHostedService<ReviewProcessingWorker>();
 builder.Services.AddHostedService<ReviewQueueMaintenanceService>();

@@ -1,11 +1,13 @@
 using System.Text.Json;
 using LLMTutorRoom.Models;
+using TeachingService.Contracts.Enums;
+using TeachingService.Contracts.Models;
 
 namespace LLMTutorRoom.Services.ReviewProcessing
 {
     public sealed class ReviewScoringService
     {
-        public TaskReviewResult CreateInitialResult(TestTask task, string answer)
+        public TaskReviewResult CreateInitialResult(TestTaskDto task, string answer)
         {
             return task.CheckMode switch
             {
@@ -76,7 +78,7 @@ namespace LLMTutorRoom.Services.ReviewProcessing
             return "Работа пока не закрывает ключевые требования.";
         }
 
-        private static TaskReviewResult CreateAutoResult(TestTask task, string answer)
+        private static TaskReviewResult CreateAutoResult(TestTaskDto task, string answer)
         {
             if (task.Type == TestTaskType.SingleChoice)
                 return CreateSingleChoiceTaskReview(task, answer);
@@ -87,7 +89,7 @@ namespace LLMTutorRoom.Services.ReviewProcessing
             return CreateFreeTextHeuristicTaskReview(task, answer);
         }
 
-        private static TaskReviewResult CreateSingleChoiceTaskReview(TestTask task, string answer)
+        private static TaskReviewResult CreateSingleChoiceTaskReview(TestTaskDto task, string answer)
         {
             var selectedOptionIds = answer
                 .Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
@@ -99,6 +101,7 @@ namespace LLMTutorRoom.Services.ReviewProcessing
             {
                 TaskId = task.Id,
                 TaskTitle = task.Title,
+                TaskPrompt = task.Prompt,
                 CheckMode = TestTaskCheckMode.Auto,
                 Status = TaskReviewResultStatus.Succeeded,
                 Score = isCorrect ? task.MaxPoints : 0,
@@ -113,7 +116,7 @@ namespace LLMTutorRoom.Services.ReviewProcessing
             };
         }
 
-        private static TaskReviewResult CreateMultipleChoiceTaskReview(TestTask task, string answer)
+        private static TaskReviewResult CreateMultipleChoiceTaskReview(TestTaskDto task, string answer)
         {
             var selectedOptionIds = answer
                 .Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
@@ -133,6 +136,7 @@ namespace LLMTutorRoom.Services.ReviewProcessing
             {
                 TaskId = task.Id,
                 TaskTitle = task.Title,
+                TaskPrompt = task.Prompt,
                 CheckMode = TestTaskCheckMode.Auto,
                 Status = TaskReviewResultStatus.Succeeded,
                 Score = score,
@@ -149,7 +153,7 @@ namespace LLMTutorRoom.Services.ReviewProcessing
             };
         }
 
-        private static TaskReviewResult CreateFreeTextHeuristicTaskReview(TestTask task, string answer)
+        private static TaskReviewResult CreateFreeTextHeuristicTaskReview(TestTaskDto task, string answer)
         {
             var normalizedAnswer = answer.Trim();
             var score = 0m;
@@ -176,6 +180,7 @@ namespace LLMTutorRoom.Services.ReviewProcessing
             {
                 TaskId = task.Id,
                 TaskTitle = task.Title,
+                TaskPrompt = task.Prompt,
                 CheckMode = TestTaskCheckMode.Auto,
                 Status = TaskReviewResultStatus.Succeeded,
                 Score = score,
@@ -188,12 +193,13 @@ namespace LLMTutorRoom.Services.ReviewProcessing
             };
         }
 
-        private static TaskReviewResult CreatePendingLlmResult(TestTask task)
+        private static TaskReviewResult CreatePendingLlmResult(TestTaskDto task)
         {
             return new TaskReviewResult
             {
                 TaskId = task.Id,
                 TaskTitle = task.Title,
+                TaskPrompt = task.Prompt,
                 CheckMode = TestTaskCheckMode.Llm,
                 Status = TaskReviewResultStatus.Pending,
                 Score = 0,
@@ -203,12 +209,13 @@ namespace LLMTutorRoom.Services.ReviewProcessing
             };
         }
 
-        private static TaskReviewResult CreateManualResult(TestTask task)
+        private static TaskReviewResult CreateManualResult(TestTaskDto task)
         {
             return new TaskReviewResult
             {
                 TaskId = task.Id,
                 TaskTitle = task.Title,
+                TaskPrompt = task.Prompt,
                 CheckMode = TestTaskCheckMode.Manual,
                 Status = TaskReviewResultStatus.ManualReview,
                 Score = 0,

@@ -1005,7 +1005,7 @@ function TeacherTests({
     setTestMessage("");
 
     try {
-      const response = await authorizedFetch("/api/classroom/tests", {
+      const response = await authorizedFetch("/api/teaching/tests", {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
@@ -1046,7 +1046,7 @@ function TeacherTests({
     setTestEditMessage("");
 
     try {
-      const response = await authorizedFetch(`/api/classroom/tests/${selectedTest.id}`, {
+      const response = await authorizedFetch(`/api/teaching/tests/${selectedTest.id}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json"
@@ -1091,7 +1091,7 @@ function TeacherTests({
     setTaskMessage("");
 
     try {
-      const response = await authorizedFetch(`/api/classroom/tests/${selectedTest.id}/tasks`, {
+      const response = await authorizedFetch(`/api/teaching/tests/${selectedTest.id}/tasks`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
@@ -1131,7 +1131,7 @@ function TeacherTests({
     setTaskEditMessage("");
 
     try {
-      const response = await authorizedFetch(`/api/classroom/tests/${selectedTest.id}/tasks/${editingTaskId}`, {
+      const response = await authorizedFetch(`/api/teaching/tests/${selectedTest.id}/tasks/${editingTaskId}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json"
@@ -1160,7 +1160,7 @@ function TeacherTests({
     setBusyTaskId(task.id);
 
     try {
-      const response = await authorizedFetch(`/api/classroom/tests/${selectedTest.id}/tasks/${task.id}/visibility`, {
+      const response = await authorizedFetch(`/api/teaching/tests/${selectedTest.id}/tasks/${task.id}/visibility`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json"
@@ -1186,7 +1186,7 @@ function TeacherTests({
     setBusyTaskId(task.id);
 
     try {
-      const response = await authorizedFetch(`/api/classroom/tests/${selectedTest.id}/tasks/${task.id}`, {
+      const response = await authorizedFetch(`/api/teaching/tests/${selectedTest.id}/tasks/${task.id}`, {
         method: "DELETE"
       });
 
