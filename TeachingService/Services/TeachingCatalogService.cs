@@ -57,7 +57,7 @@ namespace TeachingService.Services
                 Title = request.Title.Trim(),
                 Subject = request.Subject.Trim(),
                 Status = request.Status,
-                Deadline = request.Deadline.Value,
+                Deadline = GetRequiredDeadline(request),
                 TimeLimitMinutes = request.TimeLimitMinutes,
                 Summary = request.Summary?.Trim() ?? string.Empty
             };
@@ -82,7 +82,7 @@ namespace TeachingService.Services
             test.Title = request.Title.Trim();
             test.Subject = request.Subject.Trim();
             test.Status = request.Status;
-            test.Deadline = request.Deadline.Value;
+            test.Deadline = GetRequiredDeadline(request);
             test.TimeLimitMinutes = request.TimeLimitMinutes;
             test.Summary = request.Summary?.Trim() ?? string.Empty;
 
@@ -239,6 +239,12 @@ namespace TeachingService.Services
                 return TestTaskCheckMode.Auto;
 
             return request.CheckMode ?? TestTaskCheckMode.Llm;
+        }
+
+        private static DateTimeOffset GetRequiredDeadline(CreateTestRequest request)
+        {
+            return request.Deadline
+                ?? throw new ArgumentException("Deadline is required.", nameof(request));
         }
     }
 }
