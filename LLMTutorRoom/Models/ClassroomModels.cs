@@ -12,6 +12,7 @@ namespace LLMTutorRoom.Models
         Queued,
         Processing,
         RetryScheduled,
+        Paused,
         ManualReview,
         Failed
     }
@@ -22,6 +23,7 @@ namespace LLMTutorRoom.Models
         Processing,
         Succeeded,
         RetryScheduled,
+        Paused,
         ManualReview,
         Failed
     }
@@ -85,6 +87,18 @@ namespace LLMTutorRoom.Models
         public DateTimeOffset PeriodStart { get; set; }
         public int PeriodSeconds { get; set; }
         public int UsedChecks { get; set; }
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+    }
+
+    public sealed class TestLlmPause
+    {
+        public int Id { get; set; }
+        public string TestId { get; set; } = string.Empty;
+        public string ModelKey { get; set; } = string.Empty;
+        public DateTimeOffset PausedUntil { get; set; }
+        public string LastError { get; set; } = string.Empty;
+        public int FailureCount { get; set; }
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
     }

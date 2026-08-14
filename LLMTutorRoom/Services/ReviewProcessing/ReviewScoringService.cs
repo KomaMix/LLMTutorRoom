@@ -52,6 +52,9 @@ namespace LLMTutorRoom.Services.ReviewProcessing
             if (review.TaskResults.Any(result => result.Status == TaskReviewResultStatus.ManualReview))
                 return SubmissionReviewStatus.ManualReview;
 
+            if (review.TaskResults.Any(result => result.Status == TaskReviewResultStatus.Paused))
+                return SubmissionReviewStatus.Paused;
+
             if (review.TaskResults.Any(result =>
                     result.Status == TaskReviewResultStatus.Pending
                     || result.Status == TaskReviewResultStatus.Processing

@@ -80,7 +80,8 @@ namespace LLMTutorRoom.Services.ReviewProcessing
             var dueReviews = await dbContext.SubmissionReviews
                 .Where(review => review.AttemptId.HasValue
                     && (review.Status == SubmissionReviewStatus.Queued
-                        || review.Status == SubmissionReviewStatus.RetryScheduled)
+                        || review.Status == SubmissionReviewStatus.RetryScheduled
+                        || review.Status == SubmissionReviewStatus.Paused)
                     && (!review.NextRetryAt.HasValue || review.NextRetryAt <= now)
                     && (!review.LastEnqueuedAt.HasValue || review.LastEnqueuedAt <= enqueueCutoff))
                 .OrderBy(review => review.SubmittedAt)

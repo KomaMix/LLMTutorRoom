@@ -9,6 +9,7 @@ namespace LLMTutorRoom.Data
         public DbSet<TestAttempt> TestAttempts { get; set; } = null!;
         public DbSet<TeacherModelAccess> TeacherModelAccesses { get; set; } = null!;
         public DbSet<TeacherModelUsage> TeacherModelUsages { get; set; } = null!;
+        public DbSet<TestLlmPause> TestLlmPauses { get; set; } = null!;
 
         public TutorRoomDbContext(DbContextOptions<TutorRoomDbContext> options) : base(options) { }
 
@@ -69,6 +70,13 @@ namespace LLMTutorRoom.Data
                     })
                     .IsUnique();
                 entity.HasIndex(usage => usage.TeacherUserId);
+            });
+
+            modelBuilder.Entity<TestLlmPause>(entity =>
+            {
+                entity.HasIndex(pause => new { pause.TestId, pause.ModelKey })
+                    .IsUnique();
+                entity.HasIndex(pause => pause.PausedUntil);
             });
         }
     }

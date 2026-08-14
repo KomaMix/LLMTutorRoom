@@ -118,8 +118,8 @@ namespace LLMGateway.Tests
 
             await AddModelAsync(dbContext, new[]
             {
-                CreateDeployment("primary", priority: 0, endpoint: "http://primary.test:11434"),
-                CreateDeployment("secondary", priority: 1, endpoint: "http://secondary.test:11434")
+                CreateDeployment("primary", priority: 0, endpoint: "http://primary.test:11434/v1"),
+                CreateDeployment("secondary", priority: 1, endpoint: "http://secondary.test:11434/v1")
             });
 
             var service = CreateService(

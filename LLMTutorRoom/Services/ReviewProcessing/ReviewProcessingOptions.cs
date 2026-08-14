@@ -10,5 +10,6 @@ namespace LLMTutorRoom.Services.ReviewProcessing
         public int ProcessingLeaseSeconds { get; set; } = 300;
         public int QueueMaintenanceIntervalSeconds { get; set; } = 30;
         public int EnqueueThrottleSeconds { get; set; } = 120;
+        public int TestLlmFailurePauseSeconds { get; set; } = 1800;
     }
 }

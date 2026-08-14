@@ -156,7 +156,7 @@ namespace LLMTutorRoom.Tests
         }
 
         [Fact]
-        public async Task ProcessAsync_WhenLlmGatewayIsDisabled_MovesLlmTaskToManualReviewWithoutRetry()
+        public async Task ProcessAsync_WhenLlmGatewayIsDisabled_PausesReviewWithoutManualFallback()
         {
             await using var dbContext = CreateDbContext();
             var task = CreateFreeTextTask(TestTaskCheckMode.Llm);
@@ -212,10 +212,85 @@ namespace LLMTutorRoom.Tests
                 .SingleAsync();
             var taskResult = processedReview.TaskResults.Single();
 
-            Assert.Equal(ReviewProcessingOutcomeType.Completed, outcome.Type);
-            Assert.Equal(SubmissionReviewStatus.ManualReview, processedReview.Status);
-            Assert.Equal(TaskReviewResultStatus.ManualReview, taskResult.Status);
+            Assert.Equal(ReviewProcessingOutcomeType.Paused, outcome.Type);
+            Assert.Equal(SubmissionReviewStatus.Paused, processedReview.Status);
+            Assert.Equal(TaskReviewResultStatus.Paused, taskResult.Status);
             Assert.Equal(0, taskResult.Attempts);
+            Assert.NotNull(processedReview.NextRetryAt);
+            Assert.Single(dbContext.TestLlmPauses);
+        }
+
+        [Fact]
+        public async Task ProcessAsync_WhenLlmProviderKeepsFailing_PausesTestInsteadOfManualReview()
+        {
+            await using var dbContext = CreateDbContext();
+            var task = CreateFreeTextTask(TestTaskCheckMode.Llm);
+            var attempt = await AddAttemptAsync(
+                dbContext,
+                "test-1",
+                new Dictionary<string, string> { [task.Id] = "Ответ для LLM." },
+                TestAttemptStatus.Submitted);
+            var review = new SubmissionReview
+            {
+                AttemptId = attempt.Id,
+                TestId = "test-1",
+                TestTitle = "Test",
+                StudentUserId = "student",
+                StudentName = "Student",
+                Status = SubmissionReviewStatus.Queued,
+                ModelKey = "gemma3:12b",
+                SubmittedAt = DateTimeOffset.UtcNow,
+                QueuedAt = DateTimeOffset.UtcNow,
+                MaxScore = task.MaxPoints,
+                Summary = string.Empty,
+                TaskResults = new List<TaskReviewResult>
+                {
+                    new()
+                    {
+                        TaskId = task.Id,
+                        TaskTitle = task.Title,
+                        TaskPrompt = task.Prompt,
+                        CheckMode = TestTaskCheckMode.Llm,
+                        Status = TaskReviewResultStatus.RetryScheduled,
+                        Attempts = 4,
+                        MaxScore = task.MaxPoints
+                    }
+                }
+            };
+            dbContext.SubmissionReviews.Add(review);
+            await dbContext.SaveChangesAsync();
+            var processor = CreateProcessor(
+                dbContext,
+                new ReviewProcessingOptions
+                {
+                    LlmGatewayEnabled = true,
+                    TestLlmFailurePauseSeconds = 60
+                },
+                _ => new HttpResponseMessage(HttpStatusCode.ServiceUnavailable));
+
+            var outcome = await processor.ProcessAsync(
+                new ReviewQueueMessage
+                {
+                    ReviewId = review.Id,
+                    AttemptId = attempt.Id,
+                    ModelKey = "gemma3:12b"
+                },
+                CancellationToken.None);
+
+            var processedReview = await dbContext.SubmissionReviews
+                .Include(item => item.TaskResults)
+                .SingleAsync(item => item.Id == review.Id);
+            var taskResult = processedReview.TaskResults.Single();
+            var pause = await dbContext.TestLlmPauses.SingleAsync();
+
+            Assert.Equal(ReviewProcessingOutcomeType.Paused, outcome.Type);
+            Assert.Equal(SubmissionReviewStatus.Paused, processedReview.Status);
+            Assert.Equal(TaskReviewResultStatus.Paused, taskResult.Status);
+            Assert.Equal(5, taskResult.Attempts);
+            Assert.Equal("test-1", pause.TestId);
+            Assert.Equal("gemma3:12b", pause.ModelKey);
+            Assert.True(pause.PausedUntil > DateTimeOffset.UtcNow);
+            Assert.Contains("503", taskResult.LastError);
         }
 
         [Fact]
@@ -359,11 +434,16 @@ namespace LLMTutorRoom.Tests
 
         private static ReviewJobProcessor CreateProcessor(
             TutorRoomDbContext dbContext,
-            ReviewProcessingOptions processingOptions)
+            ReviewProcessingOptions processingOptions,
+            Func<HttpRequestMessage, HttpResponseMessage>? llmGatewayHandler = null)
         {
             var rabbitMqOptions = Options.Create(new RabbitMqOptions());
             var topology = new RabbitMqReviewTopology(rabbitMqOptions);
-            var httpClient = new HttpClient
+            var httpClient = new HttpClient(new FakeHttpMessageHandler(
+                llmGatewayHandler ?? (_ => new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = CreateJsonContent("""{"model":"gemma3:12b","text":"{\"score\":1,\"feedback\":\"ok\",\"findings\":[\"ok\"]}"}""")
+                })))
             {
                 BaseAddress = new Uri("http://localhost:5200")
             };

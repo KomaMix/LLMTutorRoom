@@ -361,6 +361,7 @@ namespace LLMTutorRoom.Services
                     review.Status is SubmissionReviewStatus.Queued
                         or SubmissionReviewStatus.Processing
                         or SubmissionReviewStatus.RetryScheduled
+                        or SubmissionReviewStatus.Paused
                         or SubmissionReviewStatus.ManualReview),
                 AverageScore = checkedReviews.Count == 0
                     ? 0

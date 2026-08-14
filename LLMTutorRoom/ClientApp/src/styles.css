@@ -1013,7 +1013,8 @@ textarea:disabled {
 .status.in-progress,
 .status.queued,
 .status.processing,
-.status.retry-scheduled {
+.status.retry-scheduled,
+.status.paused {
   color: #6c5410;
   background: #f8edc7;
 }

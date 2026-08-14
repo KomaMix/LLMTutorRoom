@@ -61,6 +61,7 @@ const statusText = {
   queued: "В очереди",
   processing: "Проверяется",
   "retry-scheduled": "Повторная проверка",
+  paused: "Пауза",
   "manual-review": "Ручная проверка",
   failed: "Ошибка",
   available: "Доступна",
@@ -3005,6 +3006,10 @@ function getAttemptStatusText(status) {
 function getReviewStatusMessage(status) {
   if (status === "manual-review") {
     return "Проверка ожидает преподавателя.";
+  }
+
+  if (status === "paused") {
+    return "Автоматическая проверка временно приостановлена. Она продолжится позже.";
   }
 
   if (status === "failed") {

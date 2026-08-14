@@ -5,6 +5,7 @@ namespace LLMTutorRoom.Services.ReviewProcessing
         Ignored,
         Completed,
         RetryScheduled,
+        Paused,
         Poison
     }
 
@@ -27,6 +28,11 @@ namespace LLMTutorRoom.Services.ReviewProcessing
         {
             Type = ReviewProcessingOutcomeType.RetryScheduled,
             RetryDelaySeconds = retryDelaySeconds
+        };
+
+        public static ReviewProcessingOutcome Paused() => new()
+        {
+            Type = ReviewProcessingOutcomeType.Paused
         };
 
         public static ReviewProcessingOutcome Poison() => new()

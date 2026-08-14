@@ -65,6 +65,21 @@ namespace LLMTutorRoom.Services.ReviewProcessing
             if (!ShouldProcess(review, now))
                 return ReviewProcessingOutcome.Ignored();
 
+            var activePause = await GetActiveTestLlmPauseAsync(
+                review.TestId,
+                review.ModelKey,
+                now,
+                cancellationToken);
+            if (activePause is not null)
+            {
+                MarkReviewPaused(
+                    review,
+                    activePause.LastError,
+                    activePause.PausedUntil);
+                await _dbContext.SaveChangesAsync(cancellationToken);
+                return ReviewProcessingOutcome.Paused();
+            }
+
             review.Status = SubmissionReviewStatus.Processing;
             review.StartedAt ??= now;
             review.ProcessingAttempts++;
@@ -85,6 +100,7 @@ namespace LLMTutorRoom.Services.ReviewProcessing
 
             var answers = DeserializeAnswers(attempt.AnswersJson);
             var retryDelaySeconds = 0;
+            DateTimeOffset? pauseUntil = null;
 
             foreach (var result in review.TaskResults.Where(result => result.CheckMode == TestTaskCheckMode.Llm))
             {
@@ -110,23 +126,51 @@ namespace LLMTutorRoom.Services.ReviewProcessing
                 }
                 catch (LlmGatewayReviewDisabledException ex)
                 {
-                    MarkTaskForManualReview(result, ex.Message);
+                    pauseUntil = await PauseTestLlmProcessingAsync(
+                        review,
+                        result,
+                        ex.Message,
+                        now,
+                        cancellationToken);
+                    break;
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
-                    var delaySeconds = MarkTaskForRetryOrManualReview(result, ex);
-                    retryDelaySeconds = Math.Max(retryDelaySeconds, delaySeconds);
-
                     _logger.LogWarning(
                         ex,
                         "LLM review for review {ReviewId}, attempt {AttemptId}, task {TaskId} failed.",
                         review.Id,
                         attempt.Id,
                         result.TaskId);
+
+                    var delaySeconds = MarkTaskForRetryOrPause(result, ex);
+                    if (delaySeconds > 0)
+                    {
+                        retryDelaySeconds = Math.Max(retryDelaySeconds, delaySeconds);
+                        continue;
+                    }
+
+                    pauseUntil = await PauseTestLlmProcessingAsync(
+                        review,
+                        result,
+                        ex.Message,
+                        now,
+                        cancellationToken);
+                    break;
                 }
             }
 
             _scoringService.RecalculateReview(review);
+
+            if (pauseUntil.HasValue)
+            {
+                MarkReviewPaused(
+                    review,
+                    CreateReviewErrorSummary(review),
+                    pauseUntil.Value);
+                await _dbContext.SaveChangesAsync(cancellationToken);
+                return ReviewProcessingOutcome.Paused();
+            }
 
             if (retryDelaySeconds > 0)
             {
@@ -159,6 +203,13 @@ namespace LLMTutorRoom.Services.ReviewProcessing
                 return false;
             }
 
+            if (review.Status == SubmissionReviewStatus.Paused
+                && review.NextRetryAt.HasValue
+                && review.NextRetryAt.Value > now)
+            {
+                return false;
+            }
+
             if (review.Status == SubmissionReviewStatus.Processing
                 && review.ProcessingLeaseExpiresAt.HasValue
                 && review.ProcessingLeaseExpiresAt.Value > now)
@@ -176,7 +227,7 @@ namespace LLMTutorRoom.Services.ReviewProcessing
             return true;
         }
 
-        private int MarkTaskForRetryOrManualReview(
+        private int MarkTaskForRetryOrPause(
             TaskReviewResult result,
             Exception exception)
         {
@@ -184,10 +235,7 @@ namespace LLMTutorRoom.Services.ReviewProcessing
             result.LastError = exception.Message;
 
             if (result.Attempts > _rabbitMqOptions.RetryDelaysSeconds.Length)
-            {
-                MarkTaskForManualReview(result, exception.Message);
                 return 0;
-            }
 
             var delaySeconds = _topology.GetRetryDelaySeconds(result.Attempts);
             result.Status = TaskReviewResultStatus.RetryScheduled;
@@ -195,18 +243,85 @@ namespace LLMTutorRoom.Services.ReviewProcessing
             return delaySeconds;
         }
 
-        private static void MarkTaskForManualReview(
-            TaskReviewResult result,
-            string error)
+        private async Task<TestLlmPause?> GetActiveTestLlmPauseAsync(
+            string testId,
+            string modelKey,
+            DateTimeOffset now,
+            CancellationToken cancellationToken)
         {
-            result.Status = TaskReviewResultStatus.ManualReview;
-            result.NextRetryAt = null;
-            result.LastError = error;
-            result.Feedback = "Автоматическая проверка не завершилась. Требуется ручная проверка.";
-            result.Findings = new List<string>
+            if (string.IsNullOrWhiteSpace(testId) || string.IsNullOrWhiteSpace(modelKey))
+                return null;
+
+            return await _dbContext.TestLlmPauses
+                .AsNoTracking()
+                .SingleOrDefaultAsync(
+                    pause => pause.TestId == testId
+                        && pause.ModelKey == modelKey
+                        && pause.PausedUntil > now,
+                    cancellationToken);
+        }
+
+        private async Task<DateTimeOffset> PauseTestLlmProcessingAsync(
+            SubmissionReview review,
+            TaskReviewResult result,
+            string error,
+            DateTimeOffset now,
+            CancellationToken cancellationToken)
+        {
+            var pauseUntil = now.AddSeconds(Math.Max(1, _processingOptions.TestLlmFailurePauseSeconds));
+            MarkTaskPaused(result, error, pauseUntil);
+
+            var pause = await _dbContext.TestLlmPauses
+                .SingleOrDefaultAsync(
+                    item => item.TestId == review.TestId && item.ModelKey == review.ModelKey,
+                    cancellationToken);
+
+            if (pause is null)
             {
-                "Задание ожидает ручной проверки преподавателем."
-            };
+                pause = new TestLlmPause
+                {
+                    TestId = review.TestId,
+                    ModelKey = review.ModelKey,
+                    CreatedAt = DateTime.UtcNow
+                };
+                _dbContext.TestLlmPauses.Add(pause);
+            }
+
+            pause.PausedUntil = pauseUntil;
+            pause.LastError = error;
+            pause.FailureCount++;
+            pause.UpdatedAt = DateTime.UtcNow;
+
+            return pauseUntil;
+        }
+
+        private static void MarkTaskPaused(
+            TaskReviewResult result,
+            string error,
+            DateTimeOffset pauseUntil)
+        {
+            result.Status = TaskReviewResultStatus.Paused;
+            result.NextRetryAt = pauseUntil;
+            result.LastError = error;
+        }
+
+        private static void MarkReviewPaused(
+            SubmissionReview review,
+            string error,
+            DateTimeOffset pauseUntil)
+        {
+            foreach (var result in review.TaskResults
+                         .Where(result => result.CheckMode == TestTaskCheckMode.Llm
+                             && result.Status is not TaskReviewResultStatus.Succeeded
+                             && result.Status is not TaskReviewResultStatus.ManualReview))
+            {
+                MarkTaskPaused(result, error, pauseUntil);
+            }
+
+            review.Status = SubmissionReviewStatus.Paused;
+            review.LastError = error;
+            review.NextRetryAt = pauseUntil;
+            review.ProcessingLeaseExpiresAt = null;
         }
 
         private static void MarkReviewFailed(SubmissionReview review, string error)
@@ -222,6 +337,7 @@ namespace LLMTutorRoom.Services.ReviewProcessing
         {
             var failedTask = review.TaskResults
                 .Where(result => result.Status == TaskReviewResultStatus.RetryScheduled)
+                .Concat(review.TaskResults.Where(result => result.Status == TaskReviewResultStatus.Paused))
                 .OrderByDescending(result => result.NextRetryAt)
                 .FirstOrDefault();
 
