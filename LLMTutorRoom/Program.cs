@@ -43,6 +43,16 @@ builder.Services.AddHttpClient<LlmGatewayReviewClient>((serviceProvider, client)
     client.BaseAddress = new Uri(options.LlmGatewayBaseUrl);
     client.Timeout = TimeSpan.FromSeconds(options.LlmRequestTimeoutSeconds);
 });
+builder.Services.AddHttpClient<LlmGatewayModelCatalogClient>((serviceProvider, client) =>
+{
+    var options = serviceProvider
+        .GetRequiredService<Microsoft.Extensions.Options.IOptions<ReviewProcessingOptions>>()
+        .Value;
+
+    client.BaseAddress = new Uri(options.LlmGatewayBaseUrl);
+    client.Timeout = TimeSpan.FromSeconds(options.LlmRequestTimeoutSeconds);
+});
+builder.Services.AddScoped<TeacherModelAccessService>();
 builder.Services.AddHttpClient<ITeachingServiceClient, TeachingServiceClient>((serviceProvider, client) =>
 {
     var options = serviceProvider

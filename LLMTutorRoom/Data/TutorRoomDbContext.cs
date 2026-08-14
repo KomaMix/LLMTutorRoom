@@ -7,6 +7,8 @@ namespace LLMTutorRoom.Data
         public DbSet<SubmissionReview> SubmissionReviews { get; set; } = null!;
         public DbSet<TaskReviewResult> TaskReviewResults { get; set; } = null!;
         public DbSet<TestAttempt> TestAttempts { get; set; } = null!;
+        public DbSet<TeacherModelAccess> TeacherModelAccesses { get; set; } = null!;
+        public DbSet<TeacherModelUsage> TeacherModelUsages { get; set; } = null!;
 
         public TutorRoomDbContext(DbContextOptions<TutorRoomDbContext> options) : base(options) { }
 
@@ -15,6 +17,7 @@ namespace LLMTutorRoom.Data
             modelBuilder.Entity<SubmissionReview>(entity =>
             {
                 entity.Property(review => review.Status).HasConversion<string>();
+                entity.HasIndex(review => review.TeacherUserId);
                 entity.HasIndex(review => review.AttemptId)
                     .IsUnique();
                 entity.HasOne(review => review.Attempt)
@@ -46,6 +49,26 @@ namespace LLMTutorRoom.Data
                     .HasColumnType("jsonb");
                 entity.HasIndex(attempt => new { attempt.TestId, attempt.StudentUserId })
                     .IsUnique();
+            });
+
+            modelBuilder.Entity<TeacherModelAccess>(entity =>
+            {
+                entity.HasIndex(access => new { access.TeacherUserId, access.ModelKey })
+                    .IsUnique();
+                entity.HasIndex(access => access.TeacherUserId);
+            });
+
+            modelBuilder.Entity<TeacherModelUsage>(entity =>
+            {
+                entity.HasIndex(usage => new
+                    {
+                        usage.TeacherUserId,
+                        usage.ModelKey,
+                        usage.PeriodStart,
+                        usage.PeriodSeconds
+                    })
+                    .IsUnique();
+                entity.HasIndex(usage => usage.TeacherUserId);
             });
         }
     }

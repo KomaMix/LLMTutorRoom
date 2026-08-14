@@ -19,6 +19,7 @@ namespace LLMTutorRoom.Services
         private readonly ITeachingServiceClient _teachingServiceClient;
         private readonly ReviewScoringService _reviewScoringService;
         private readonly IReviewQueuePublisher _reviewQueuePublisher;
+        private readonly TeacherModelAccessService _modelAccessService;
         private readonly ReviewProcessingOptions _reviewProcessingOptions;
         private readonly ILogger<ClassroomService> _logger;
 
@@ -27,6 +28,7 @@ namespace LLMTutorRoom.Services
             ITeachingServiceClient teachingServiceClient,
             ReviewScoringService reviewScoringService,
             IReviewQueuePublisher reviewQueuePublisher,
+            TeacherModelAccessService modelAccessService,
             IOptions<ReviewProcessingOptions> reviewProcessingOptions,
             ILogger<ClassroomService> logger)
         {
@@ -34,26 +36,40 @@ namespace LLMTutorRoom.Services
             _teachingServiceClient = teachingServiceClient;
             _reviewScoringService = reviewScoringService;
             _reviewQueuePublisher = reviewQueuePublisher;
+            _modelAccessService = modelAccessService;
             _reviewProcessingOptions = reviewProcessingOptions.Value;
             _logger = logger;
         }
 
-        public async Task<ClassroomOverview> GetTeacherOverviewAsync(CancellationToken cancellationToken)
+        public async Task<ClassroomOverview> GetTeacherOverviewAsync(
+            string teacherUserId,
+            CancellationToken cancellationToken)
         {
             var tests = await _teachingServiceClient.GetTestsAsync(
                 publishedOnly: false,
                 includeHidden: true,
                 cancellationToken);
+            tests = tests
+                .Where(test => test.TeacherUserId == teacherUserId)
+                .ToList();
             var reviews = await LoadReviews()
+                .Where(review => review.TeacherUserId == teacherUserId)
                 .OrderByDescending(review => review.SubmittedAt)
                 .ToListAsync(cancellationToken);
+            var modelAccess = await _modelAccessService.GetTeacherAccessAsync(
+                teacherUserId,
+                includeDisabled: false,
+                cancellationToken);
+            var models = modelAccess
+                .Select(ToLanguageModel)
+                .ToList();
 
             return new ClassroomOverview
             {
                 Tests = tests
                     .OrderByDescending(test => test.Deadline)
                     .ToList(),
-                Models = new List<LanguageModel>(),
+                Models = models,
                 Reviews = reviews,
                 Attempts = new List<TestAttemptResponse>(),
                 Metrics = CreateMetrics(tests, reviews)
@@ -419,12 +435,13 @@ namespace LLMTutorRoom.Services
                 AttemptId = attemptId,
                 TestId = test.Id,
                 TestTitle = test.Title,
+                TeacherUserId = test.TeacherUserId.Trim(),
                 StudentUserId = studentUserId.Trim(),
                 StudentName = string.IsNullOrWhiteSpace(studentName)
                     ? null
                     : studentName.Trim(),
                 Status = status,
-                ModelKey = _reviewProcessingOptions.LlmModelKey,
+                ModelKey = GetReviewModelKey(test),
                 SubmittedAt = now,
                 QueuedAt = status == SubmissionReviewStatus.Queued ? now : null,
                 CompletedAt = status == SubmissionReviewStatus.Checked ? now : null,
@@ -440,6 +457,9 @@ namespace LLMTutorRoom.Services
             CancellationToken cancellationToken)
         {
             if (!review.AttemptId.HasValue)
+                return;
+
+            if (!await TryReserveLlmQuotaAsync(review, cancellationToken))
                 return;
 
             var now = DateTimeOffset.UtcNow;
@@ -500,6 +520,132 @@ namespace LLMTutorRoom.Services
 
             review.Status = GetInitialReviewStatus(review.TaskResults);
             review.QueuedAt = null;
+        }
+
+        private async Task<bool> TryReserveLlmQuotaAsync(
+            SubmissionReview review,
+            CancellationToken cancellationToken)
+        {
+            if (!_reviewProcessingOptions.LlmGatewayEnabled)
+                return true;
+
+            if (review.LlmQuotaReservedAt.HasValue)
+                return true;
+
+            var llmCheckCount = review.TaskResults.Count(result =>
+                result.CheckMode == TestTaskCheckMode.Llm
+                && result.Status == TaskReviewResultStatus.Pending);
+
+            if (llmCheckCount == 0)
+                return true;
+
+            if (string.IsNullOrWhiteSpace(review.TeacherUserId))
+            {
+                MovePendingLlmTasksToManualReview(
+                    review,
+                    "Для теста не указан преподаватель-владелец.");
+                await _dbContext.SaveChangesAsync(cancellationToken);
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(review.ModelKey))
+            {
+                MovePendingLlmTasksToManualReview(
+                    review,
+                    "Для теста не выбрана LLM-модель проверки.");
+                await _dbContext.SaveChangesAsync(cancellationToken);
+                return false;
+            }
+
+            var quota = await _modelAccessService.TryConsumeChecksAsync(
+                review.TeacherUserId,
+                review.ModelKey,
+                llmCheckCount,
+                cancellationToken);
+
+            if (quota.Status == ModelQuotaConsumptionStatus.Allowed)
+            {
+                review.LlmQuotaReservedAt = DateTimeOffset.UtcNow;
+                review.LlmQuotaReservationError = string.Empty;
+                await _dbContext.SaveChangesAsync(cancellationToken);
+                return true;
+            }
+
+            MovePendingLlmTasksToManualReview(
+                review,
+                CreateQuotaReservationError(review.ModelKey, quota));
+            await _dbContext.SaveChangesAsync(cancellationToken);
+            return false;
+        }
+
+        private void MovePendingLlmTasksToManualReview(
+            SubmissionReview review,
+            string error)
+        {
+            foreach (var result in review.TaskResults
+                         .Where(result => result.CheckMode == TestTaskCheckMode.Llm
+                             && result.Status == TaskReviewResultStatus.Pending))
+            {
+                result.Status = TaskReviewResultStatus.ManualReview;
+                result.NextRetryAt = null;
+                result.LastError = error;
+                result.Feedback = "Автоматическая проверка недоступна. Требуется ручная проверка.";
+                result.Findings = new List<string>
+                {
+                    "Задание ожидает ручной проверки преподавателем."
+                };
+            }
+
+            _reviewScoringService.RecalculateReview(review);
+            review.Status = _reviewScoringService.GetReviewStatusAfterTaskProcessing(review);
+            review.QueuedAt = null;
+            review.NextRetryAt = null;
+            review.ProcessingLeaseExpiresAt = null;
+            review.LlmQuotaReservationError = error;
+        }
+
+        private static string CreateQuotaReservationError(
+            string modelKey,
+            ModelQuotaConsumptionResult quota)
+        {
+            return quota.Status switch
+            {
+                ModelQuotaConsumptionStatus.AccessNotFound =>
+                    $"Преподавателю не выдан доступ к модели '{modelKey}'.",
+                ModelQuotaConsumptionStatus.LimitExceeded =>
+                    $"Лимит проверок для модели '{modelKey}' исчерпан. Осталось: {quota.RemainingChecks}.",
+                ModelQuotaConsumptionStatus.InvalidCheckCount =>
+                    "Количество LLM-проверок должно быть больше нуля.",
+                ModelQuotaConsumptionStatus.GatewayUnavailable =>
+                    "LLMGateway недоступен для резервирования лимита проверок.",
+                _ => "Не удалось зарезервировать лимит LLM-проверок."
+            };
+        }
+
+        private string GetReviewModelKey(CourseTestDto test)
+        {
+            if (!string.IsNullOrWhiteSpace(test.LlmModelKey))
+                return test.LlmModelKey.Trim();
+
+            return _reviewProcessingOptions.LlmModelKey;
+        }
+
+        private static LanguageModel ToLanguageModel(TeacherModelAccessResponse access)
+        {
+            return new LanguageModel
+            {
+                Key = access.ModelKey,
+                DisplayName = access.DisplayName,
+                Provider = "LLMGateway",
+                Status = access.RemainingChecks > 0 ? "available" : "standby",
+                Priority = 0,
+                MaxConcurrentRequests = 0,
+                PeriodSeconds = access.PeriodSeconds,
+                MaxChecks = access.MaxChecks,
+                UsedChecks = access.UsedChecks,
+                RemainingChecks = access.RemainingChecks,
+                PeriodEndsAt = access.PeriodEndsAt
+            };
         }
 
         private static bool ExpireAttemptIfNeeded(

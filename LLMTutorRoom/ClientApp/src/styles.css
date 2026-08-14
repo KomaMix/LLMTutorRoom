@@ -607,8 +607,15 @@ button {
   font-weight: 750;
 }
 
+.task-type-grid button:disabled {
+  cursor: default;
+  color: #9aabad;
+  border-color: #e0e7e7;
+  background: #f4f7f7;
+}
+
 .task-type-grid button.active,
-.task-type-grid button:hover {
+.task-type-grid button:not(:disabled):hover {
   color: #ffffff;
   border-color: #256f6d;
   background: #256f6d;
@@ -715,6 +722,23 @@ textarea:disabled {
   cursor: default;
 }
 
+.inline-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+  color: #3f5154;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.inline-toggle input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: #256f6d;
+}
+
 .task-list,
 .answer-stack,
 .result-list,
@@ -812,6 +836,14 @@ textarea:disabled {
   display: grid;
   gap: 3px;
   min-width: 0;
+}
+
+.review-row .row-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: max-content;
 }
 
 .review-row strong,

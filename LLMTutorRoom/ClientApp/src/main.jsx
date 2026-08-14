@@ -39,7 +39,8 @@ import "./styles.css";
 
 const navigation = {
   admin: [
-    { id: "teachers", label: "Преподаватели", icon: UsersRound }
+    { id: "teachers", label: "Преподаватели", icon: UsersRound },
+    { id: "model-access", label: "Доступ к моделям", icon: Server }
   ],
   teacher: [
     { id: "dashboard", label: "Панель", icon: BarChart3 },
@@ -94,7 +95,8 @@ const initialTestForm = {
   summary: "",
   status: "draft",
   deadline: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
-  timeLimitMinutes: 45
+  timeLimitMinutes: 45,
+  llmModelKey: ""
 };
 
 function createInitialTaskForm() {
@@ -568,6 +570,10 @@ function App() {
           <AdminTeachers />
         )}
 
+        {role === "admin" && section === "model-access" && (
+          <AdminModelAccess />
+        )}
+
         {role === "teacher" && section === "dashboard" && (
           selectedTest ? (
             <TeacherDashboard
@@ -584,6 +590,7 @@ function App() {
         {role === "teacher" && section === "tests" && (
           <TeacherTests
             tests={overview.tests}
+            models={overview.models}
             selectedTest={selectedTest}
             selectedTestId={selectedTestId}
             onSelectTest={setSelectedTestId}
@@ -872,6 +879,323 @@ function AdminTeachers() {
   );
 }
 
+function AdminModelAccess() {
+  const [teachers, setTeachers] = useState([]);
+  const [models, setModels] = useState([]);
+  const [accessList, setAccessList] = useState([]);
+  const [selectedTeacherId, setSelectedTeacherId] = useState("");
+  const [form, setForm] = useState({
+    modelKey: "",
+    isEnabled: true,
+    periodSeconds: 30 * 24 * 60 * 60,
+    maxChecks: 100
+  });
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [busyModelKey, setBusyModelKey] = useState("");
+  const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    let ignore = false;
+
+    async function loadInitialData() {
+      try {
+        const [teachersResponse, modelsResponse] = await Promise.all([
+          authorizedFetch("/api/users/teachers"),
+          authorizedFetch("/api/classroom/model-access/models")
+        ]);
+
+        if (!teachersResponse.ok || !modelsResponse.ok) {
+          throw new Error("Could not load model access data.");
+        }
+
+        const [teachersData, modelsData] = await Promise.all([
+          teachersResponse.json(),
+          modelsResponse.json()
+        ]);
+
+        if (ignore) {
+          return;
+        }
+
+        setTeachers(teachersData);
+        setModels(modelsData);
+        setSelectedTeacherId(teachersData[0]?.id ?? "");
+        setForm(current => ({
+          ...current,
+          modelKey: modelsData[0]?.key ?? ""
+        }));
+      } catch (error) {
+        if (!ignore) {
+          setMessage("Не удалось загрузить данные доступа.");
+        }
+      } finally {
+        if (!ignore) {
+          setIsLoading(false);
+        }
+      }
+    }
+
+    loadInitialData();
+
+    return () => {
+      ignore = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!selectedTeacherId) {
+      setAccessList([]);
+      return;
+    }
+
+    let ignore = false;
+
+    async function loadAccess() {
+      try {
+        const response = await authorizedFetch(`/api/classroom/model-access/teachers/${encodeURIComponent(selectedTeacherId)}`);
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+
+        const data = await response.json();
+        if (!ignore) {
+          setAccessList(data);
+        }
+      } catch (error) {
+        if (!ignore) {
+          setMessage("Не удалось загрузить лимиты преподавателя.");
+        }
+      }
+    }
+
+    loadAccess();
+
+    return () => {
+      ignore = true;
+    };
+  }, [selectedTeacherId]);
+
+  async function saveAccess(event) {
+    event.preventDefault();
+
+    if (!selectedTeacherId || !form.modelKey) {
+      return;
+    }
+
+    setIsSaving(true);
+    setMessage("");
+
+    try {
+      const response = await authorizedFetch(
+        `/api/classroom/model-access/models/${encodeURIComponent(form.modelKey)}/teachers/${encodeURIComponent(selectedTeacherId)}`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            isEnabled: form.isEnabled,
+            periodSeconds: Number(form.periodSeconds),
+            maxChecks: Number(form.maxChecks)
+          })
+        });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const access = await response.json();
+      setAccessList(current => [
+        access,
+        ...current.filter(item => item.modelKey !== access.modelKey)
+      ].sort((left, right) => left.modelKey.localeCompare(right.modelKey)));
+      setMessage("Доступ сохранен.");
+    } catch (error) {
+      setMessage("Не удалось сохранить доступ.");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function removeAccess(access) {
+    if (!selectedTeacherId) {
+      return;
+    }
+
+    setBusyModelKey(access.modelKey);
+    setMessage("");
+
+    try {
+      const response = await authorizedFetch(
+        `/api/classroom/model-access/models/${encodeURIComponent(access.modelKey)}/teachers/${encodeURIComponent(selectedTeacherId)}`,
+        {
+          method: "DELETE"
+        });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      setAccessList(current => current.filter(item => item.modelKey !== access.modelKey));
+      setMessage("Доступ удален.");
+    } catch (error) {
+      setMessage("Не удалось удалить доступ.");
+    } finally {
+      setBusyModelKey("");
+    }
+  }
+
+  function updateForm(field, value) {
+    setForm(current => ({ ...current, [field]: value }));
+  }
+
+  function editAccess(access) {
+    setForm({
+      modelKey: access.modelKey,
+      isEnabled: access.isEnabled,
+      periodSeconds: access.periodSeconds,
+      maxChecks: access.maxChecks
+    });
+  }
+
+  const selectedTeacher = teachers.find(teacher => teacher.id === selectedTeacherId);
+
+  return (
+    <section className="admin-layout">
+      <div className="panel">
+        <div className="panel-header">
+          <div>
+            <span className="eyebrow">LLMGateway</span>
+            <h2>Лимит модели</h2>
+          </div>
+          <Server size={18} aria-hidden="true" />
+        </div>
+
+        {isLoading ? (
+          <p className="muted">Загрузка моделей.</p>
+        ) : (
+          <form className="login-form" onSubmit={saveAccess}>
+            <div className="field">
+              <label htmlFor="access-teacher">Преподаватель</label>
+              <select
+                id="access-teacher"
+                value={selectedTeacherId}
+                onChange={event => setSelectedTeacherId(event.target.value)}
+              >
+                {teachers.map(teacher => (
+                  <option key={teacher.id} value={teacher.id}>
+                    {teacher.displayName}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="field">
+              <label htmlFor="access-model">Модель</label>
+              <select
+                id="access-model"
+                value={form.modelKey}
+                onChange={event => updateForm("modelKey", event.target.value)}
+              >
+                {models.map(model => (
+                  <option key={model.key} value={model.key}>
+                    {model.displayName || model.key}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="form-row">
+              <div className="field">
+                <label htmlFor="access-period">Период, секунд</label>
+                <input
+                  id="access-period"
+                  min="1"
+                  type="number"
+                  value={form.periodSeconds}
+                  onChange={event => updateForm("periodSeconds", event.target.value)}
+                  required
+                />
+              </div>
+              <div className="field">
+                <label htmlFor="access-limit">Проверок</label>
+                <input
+                  id="access-limit"
+                  min="1"
+                  type="number"
+                  value={form.maxChecks}
+                  onChange={event => updateForm("maxChecks", event.target.value)}
+                  required
+                />
+              </div>
+            </div>
+            <label className="inline-toggle">
+              <input
+                type="checkbox"
+                checked={form.isEnabled}
+                onChange={event => updateForm("isEnabled", event.target.checked)}
+              />
+              Доступ включен
+            </label>
+
+            {message && <p className="form-note">{message}</p>}
+
+            <button
+              type="submit"
+              className="button primary"
+              disabled={isSaving || !selectedTeacherId || !form.modelKey}
+            >
+              {isSaving ? <Loader2 className="spin" size={16} aria-hidden="true" /> : <Save size={16} aria-hidden="true" />}
+              {isSaving ? "Сохранение..." : "Сохранить лимит"}
+            </button>
+          </form>
+        )}
+      </div>
+
+      <div className="panel">
+        <div className="panel-header">
+          <div>
+            <span className="eyebrow">{selectedTeacher?.userName ?? "teacher"}</span>
+            <h2>Выданный доступ</h2>
+          </div>
+          <ShieldCheck size={18} aria-hidden="true" />
+        </div>
+
+        {accessList.length === 0 ? (
+          <p className="muted">Доступ к моделям пока не выдан.</p>
+        ) : (
+          <div className="review-table">
+            {accessList.map(access => (
+              <article className="review-row" key={access.modelKey}>
+                <div>
+                  <strong>{access.displayName || access.modelKey}</strong>
+                  <span>{access.remainingChecks} из {access.maxChecks} проверок, период {formatPeriod(access.periodSeconds)}</span>
+                </div>
+                <div className="row-actions">
+                  <StatusBadge status={access.isEnabled ? "available" : "standby"} />
+                  <button type="button" className="icon-button" title="Редактировать" onClick={() => editAccess(access)}>
+                    <Pencil size={16} aria-hidden="true" />
+                  </button>
+                  <button
+                    type="button"
+                    className="icon-button danger"
+                    title="Удалить доступ"
+                    disabled={busyModelKey === access.modelKey}
+                    onClick={() => removeAccess(access)}
+                  >
+                    {busyModelKey === access.modelKey
+                      ? <Loader2 className="spin" size={16} aria-hidden="true" />
+                      : <Trash2 size={16} aria-hidden="true" />}
+                  </button>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
 function EmptyTeacherState({ onOpenTests }) {
   return (
     <section className="panel empty-state">
@@ -967,6 +1291,7 @@ function TeacherDashboard({ overview, selectedTest, activeReviews, onOpenTests }
 
 function TeacherTests({
   tests,
+  models,
   selectedTest,
   selectedTestId,
   onSelectTest,
@@ -999,6 +1324,16 @@ function TeacherTests({
     setTaskEditMessage("");
   }, [selectedTest?.id]);
 
+  useEffect(() => {
+    if (models.length === 0) {
+      return;
+    }
+
+    setTestForm(current => current.llmModelKey
+      ? current
+      : { ...current, llmModelKey: models[0].key });
+  }, [models]);
+
   async function createTest(event) {
     event.preventDefault();
     setIsCreatingTest(true);
@@ -1016,7 +1351,8 @@ function TeacherTests({
           summary: testForm.summary,
           status: testForm.status,
           deadline: `${testForm.deadline}T23:59:00.000Z`,
-          timeLimitMinutes: Number(testForm.timeLimitMinutes)
+          timeLimitMinutes: Number(testForm.timeLimitMinutes),
+          llmModelKey: testForm.llmModelKey
         })
       });
 
@@ -1057,7 +1393,8 @@ function TeacherTests({
           summary: testEditForm.summary,
           status: testEditForm.status,
           deadline: `${testEditForm.deadline}T23:59:00.000Z`,
-          timeLimitMinutes: Number(testEditForm.timeLimitMinutes)
+          timeLimitMinutes: Number(testEditForm.timeLimitMinutes),
+          llmModelKey: testEditForm.llmModelKey
         })
       });
 
@@ -1096,7 +1433,7 @@ function TeacherTests({
         headers: {
           "Content-Type": "application/json"
         },
-        body: JSON.stringify(createTaskPayload(taskForm))
+        body: JSON.stringify(createTaskPayload(taskForm, selectedTestHasLlmModel))
       });
 
       if (!response.ok) {
@@ -1136,7 +1473,7 @@ function TeacherTests({
         headers: {
           "Content-Type": "application/json"
         },
-        body: JSON.stringify(createTaskPayload(taskEditForm))
+        body: JSON.stringify(createTaskPayload(taskEditForm, selectedTestHasLlmModel))
       });
 
       if (!response.ok) {
@@ -1224,6 +1561,10 @@ function TeacherTests({
     setTaskPanelMode("edit");
   }
 
+  const createModelOptions = getModelOptions(models, testForm.llmModelKey);
+  const editModelOptions = getModelOptions(models, testEditForm.llmModelKey);
+  const selectedTestHasLlmModel = Boolean(selectedTest?.llmModelKey);
+
   return (
     <section className="tests-layout">
       <div className="list-panel">
@@ -1304,6 +1645,21 @@ function TeacherTests({
             />
           </div>
           <div className="field">
+            <label htmlFor="test-llm-model">LLM-модель проверки</label>
+            <select
+              id="test-llm-model"
+              value={testForm.llmModelKey}
+              onChange={event => updateTestForm("llmModelKey", event.target.value)}
+            >
+              <option value="">Без LLM-модели</option>
+              {createModelOptions.map(model => (
+                <option key={model.key} value={model.key}>
+                  {getModelOptionLabel(model)}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="field">
             <label htmlFor="test-summary">Краткое описание</label>
             <textarea
               id="test-summary"
@@ -1340,6 +1696,7 @@ function TeacherTests({
               <InfoTile label="Задания" value={createTaskCountSummary(selectedTest)} />
               <InfoTile label="Баллы" value={selectedTest.totalPoints} />
               <InfoTile label="Дедлайн" value={formatDate(selectedTest.deadline)} />
+              <InfoTile label="LLM" value={selectedTest.llmModelKey || "не выбрана"} />
             </div>
 
             <form className="editor-form test-edit-form" onSubmit={updateTest}>
@@ -1406,6 +1763,22 @@ function TeacherTests({
                   onChange={event => updateTestEditForm("deadline", event.target.value)}
                   required
                 />
+              </div>
+
+              <div className="field">
+                <label htmlFor="edit-test-llm-model">LLM-модель проверки</label>
+                <select
+                  id="edit-test-llm-model"
+                  value={testEditForm.llmModelKey}
+                  onChange={event => updateTestEditForm("llmModelKey", event.target.value)}
+                >
+                  <option value="">Без LLM-модели</option>
+                  {editModelOptions.map(model => (
+                    <option key={model.key} value={model.key}>
+                      {getModelOptionLabel(model)}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div className="field">
@@ -1544,6 +1917,7 @@ function TeacherTests({
                   submittingLabel="Добавление..."
                   message={taskMessage}
                   isSubmitting={isCreatingTask}
+                  hasLlmModel={selectedTestHasLlmModel}
                   onChange={setTaskForm}
                   onSubmit={createTask}
                 />
@@ -1559,6 +1933,7 @@ function TeacherTests({
                     submittingLabel="Сохранение..."
                     message={taskEditMessage}
                     isSubmitting={isSavingTask}
+                    hasLlmModel={selectedTestHasLlmModel}
                     onChange={setTaskEditForm}
                     onSubmit={updateTask}
                   />
@@ -1603,6 +1978,7 @@ function TaskEditorForm({
   submittingLabel,
   message,
   isSubmitting,
+  hasLlmModel,
   onChange,
   onSubmit
 }) {
@@ -1623,7 +1999,7 @@ function TaskEditorForm({
     onChange({
       ...form,
       type,
-      checkMode: type === "free-text" ? "llm" : "auto",
+      checkMode: type === "free-text" && hasLlmModel ? "llm" : type === "free-text" ? "manual" : "auto",
       options,
       correctOptionIndexes: type === "free-text"
         ? []
@@ -1754,11 +2130,13 @@ function TaskEditorForm({
           <div className="task-type-grid check-mode-grid" aria-label="Режим проверки">
             {taskCheckModes.map(mode => {
               const Icon = mode.icon;
+              const isDisabled = mode.value === "llm" && !hasLlmModel;
               return (
                 <button
                   key={mode.value}
                   type="button"
-                  className={form.checkMode === mode.value ? "active" : ""}
+                  disabled={isDisabled}
+                  className={form.checkMode === mode.value && !isDisabled ? "active" : ""}
                   onClick={() => updateForm("checkMode", mode.value)}
                 >
                   <Icon size={17} aria-hidden="true" />
@@ -1868,7 +2246,8 @@ function createTestFormFromTest(test) {
     summary: test.summary,
     status: test.status,
     deadline: toInputDate(test.deadline),
-    timeLimitMinutes: test.timeLimitMinutes
+    timeLimitMinutes: test.timeLimitMinutes,
+    llmModelKey: test.llmModelKey ?? ""
   };
 }
 
@@ -1887,13 +2266,13 @@ function createTaskFormFromTask(task) {
   };
 }
 
-function createTaskPayload(form) {
+function createTaskPayload(form, hasLlmModel = true) {
   const isChoiceTask = form.type !== "free-text";
   const choiceData = getChoiceTaskData(form);
 
   return {
     type: form.type,
-    checkMode: isChoiceTask ? "auto" : form.checkMode,
+    checkMode: isChoiceTask ? "auto" : hasLlmModel ? form.checkMode : "manual",
     title: form.title,
     prompt: form.prompt,
     maxPoints: Number(form.maxPoints),
@@ -1903,6 +2282,31 @@ function createTaskPayload(form) {
     options: isChoiceTask ? choiceData.options : [],
     correctOptionIndexes: isChoiceTask ? choiceData.correctOptionIndexes : []
   };
+}
+
+function getModelOptions(models, currentModelKey) {
+  if (!currentModelKey || models.some(model => model.key === currentModelKey)) {
+    return models;
+  }
+
+  return [
+    ...models,
+    {
+      key: currentModelKey,
+      displayName: currentModelKey,
+      remainingChecks: 0,
+      maxChecks: 0
+    }
+  ];
+}
+
+function getModelOptionLabel(model) {
+  const name = model.displayName || model.key;
+  if (typeof model.remainingChecks !== "number" || typeof model.maxChecks !== "number") {
+    return name;
+  }
+
+  return `${name} (${model.remainingChecks}/${model.maxChecks})`;
 }
 
 function validateTaskForm(form) {
@@ -2188,18 +2592,18 @@ function ModelPanel({ models }) {
               <Sparkles size={18} aria-hidden="true" />
             </div>
             <div>
-              <strong>{model.key}</strong>
+              <strong>{model.displayName || model.key}</strong>
               <span>{model.provider}</span>
             </div>
             <StatusBadge status={model.status} />
             <dl>
               <div>
-                <dt>priority</dt>
-                <dd>{model.priority}</dd>
+                <dt>лимит</dt>
+                <dd>{model.remainingChecks}/{model.maxChecks}</dd>
               </div>
               <div>
-                <dt>concurrency</dt>
-                <dd>{model.maxConcurrentRequests}</dd>
+                <dt>период</dt>
+                <dd>{formatPeriod(model.periodSeconds)}</dd>
               </div>
             </dl>
           </article>
@@ -2511,6 +2915,10 @@ function parseOverview(data) {
   }
 
   data.tests.forEach((test, testIndex) => {
+    if (typeof test.llmModelKey !== "string") {
+      throw new Error(`tests[${testIndex}].llmModelKey must be a string.`);
+    }
+
     requireArray(test.tasks, `tests[${testIndex}].tasks`);
 
     test.tasks.forEach((task, taskIndex) => {
@@ -2621,6 +3029,29 @@ function formatDate(value) {
     hour: "2-digit",
     minute: "2-digit"
   }).format(new Date(value));
+}
+
+function formatPeriod(seconds) {
+  if (!seconds || seconds <= 0) {
+    return "не задан";
+  }
+
+  const days = seconds / 86400;
+  if (Number.isInteger(days) && days >= 1) {
+    return `${days} дн.`;
+  }
+
+  const hours = seconds / 3600;
+  if (Number.isInteger(hours) && hours >= 1) {
+    return `${hours} ч.`;
+  }
+
+  const minutes = seconds / 60;
+  if (Number.isInteger(minutes) && minutes >= 1) {
+    return `${minutes} мин.`;
+  }
+
+  return `${seconds} сек.`;
 }
 
 function toInputDate(value) {

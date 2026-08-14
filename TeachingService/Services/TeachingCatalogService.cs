@@ -17,16 +17,33 @@ namespace TeachingService.Services
             _dbContext = dbContext;
         }
 
-        public async Task<List<CourseTestDto>> GetTestsAsync(
+        public async Task<List<CourseTestDto>> GetAllTestsAsync(
             bool publishedOnly,
             bool includeHidden,
             CancellationToken cancellationToken)
         {
-            var query = LoadTests(includeHidden);
+            var query = LoadOwnedTests(includeHidden);
             if (publishedOnly)
                 query = query.Where(test => test.Status == CourseTestStatus.Published);
 
             var tests = await query
+                .OrderByDescending(test => test.Deadline)
+                .ToListAsync(cancellationToken);
+
+            return tests
+                .Select(test => CourseTestMapper.ToDto(test, includeHidden))
+                .ToList();
+        }
+
+        public async Task<List<CourseTestDto>> GetTeacherTestsAsync(
+            string teacherUserId,
+            bool includeHidden,
+            CancellationToken cancellationToken)
+        {
+            EnsureTeacherUserId(teacherUserId);
+
+            var tests = await LoadOwnedTests(includeHidden)
+                .Where(test => test.TeacherUserId == teacherUserId)
                 .OrderByDescending(test => test.Deadline)
                 .ToListAsync(cancellationToken);
 
@@ -40,7 +57,24 @@ namespace TeachingService.Services
             bool includeHidden,
             CancellationToken cancellationToken)
         {
-            var test = await LoadTests(includeHidden)
+            var test = await LoadOwnedTests(includeHidden)
+                .SingleOrDefaultAsync(item => item.Id == testId, cancellationToken);
+
+            return test is null
+                ? null
+                : CourseTestMapper.ToDto(test, includeHidden);
+        }
+
+        public async Task<CourseTestDto?> GetTeacherTestAsync(
+            Guid testId,
+            string teacherUserId,
+            bool includeHidden,
+            CancellationToken cancellationToken)
+        {
+            EnsureTeacherUserId(teacherUserId);
+
+            var test = await LoadOwnedTests(includeHidden)
+                .Where(item => item.TeacherUserId == teacherUserId)
                 .SingleOrDefaultAsync(item => item.Id == testId, cancellationToken);
 
             return test is null
@@ -50,16 +84,21 @@ namespace TeachingService.Services
 
         public async Task<CourseTestDto> CreateTestAsync(
             CreateTestRequest request,
+            string teacherUserId,
             CancellationToken cancellationToken)
         {
+            EnsureTeacherUserId(teacherUserId);
+
             var test = new CourseTest
             {
+                TeacherUserId = teacherUserId,
                 Title = request.Title.Trim(),
                 Subject = request.Subject.Trim(),
                 Status = request.Status,
                 Deadline = GetRequiredDeadline(request),
                 TimeLimitMinutes = request.TimeLimitMinutes,
-                Summary = request.Summary?.Trim() ?? string.Empty
+                Summary = request.Summary?.Trim() ?? string.Empty,
+                LlmModelKey = request.LlmModelKey?.Trim() ?? string.Empty
             };
 
             _dbContext.Tests.Add(test);
@@ -71,10 +110,12 @@ namespace TeachingService.Services
         public async Task<CourseTestDto?> UpdateTestAsync(
             Guid testId,
             CreateTestRequest request,
+            string teacherUserId,
             CancellationToken cancellationToken)
         {
-            var test = await _dbContext.Tests
-                .SingleOrDefaultAsync(item => item.Id == testId, cancellationToken);
+            EnsureTeacherUserId(teacherUserId);
+
+            var test = await GetTeacherOwnedTestEntityAsync(testId, teacherUserId, cancellationToken);
 
             if (test is null)
                 return null;
@@ -85,20 +126,23 @@ namespace TeachingService.Services
             test.Deadline = GetRequiredDeadline(request);
             test.TimeLimitMinutes = request.TimeLimitMinutes;
             test.Summary = request.Summary?.Trim() ?? string.Empty;
+            test.LlmModelKey = request.LlmModelKey?.Trim() ?? string.Empty;
 
             await _dbContext.SaveChangesAsync(cancellationToken);
-            return await GetTestAsync(testId, includeHidden: true, cancellationToken);
+            return await GetTeacherTestAsync(testId, teacherUserId, includeHidden: true, cancellationToken);
         }
 
         public async Task<TestTaskDto?> AddTaskAsync(
             Guid testId,
             CreateTaskRequest request,
+            string teacherUserId,
             CancellationToken cancellationToken)
         {
-            var testExists = await _dbContext.Tests
-                .AnyAsync(test => test.Id == testId, cancellationToken);
+            EnsureTeacherUserId(teacherUserId);
 
-            if (!testExists)
+            var test = await GetTeacherOwnedTestEntityAsync(testId, teacherUserId, cancellationToken);
+
+            if (test is null)
                 return null;
 
             var task = new TestTask
@@ -128,8 +172,15 @@ namespace TeachingService.Services
             Guid testId,
             Guid taskId,
             CreateTaskRequest request,
+            string teacherUserId,
             CancellationToken cancellationToken)
         {
+            EnsureTeacherUserId(teacherUserId);
+
+            var test = await GetTeacherOwnedTestEntityAsync(testId, teacherUserId, cancellationToken);
+            if (test is null)
+                return null;
+
             var task = await _dbContext.TestTasks
                 .Include(item => item.Options)
                 .SingleOrDefaultAsync(
@@ -165,8 +216,15 @@ namespace TeachingService.Services
             Guid testId,
             Guid taskId,
             bool isHidden,
+            string teacherUserId,
             CancellationToken cancellationToken)
         {
+            EnsureTeacherUserId(teacherUserId);
+
+            var test = await GetTeacherOwnedTestEntityAsync(testId, teacherUserId, cancellationToken);
+            if (test is null)
+                return null;
+
             var task = await _dbContext.TestTasks
                 .Include(item => item.Options)
                 .SingleOrDefaultAsync(
@@ -184,8 +242,15 @@ namespace TeachingService.Services
         public async Task<bool> DeleteTaskAsync(
             Guid testId,
             Guid taskId,
+            string teacherUserId,
             CancellationToken cancellationToken)
         {
+            EnsureTeacherUserId(teacherUserId);
+
+            var test = await GetTeacherOwnedTestEntityAsync(testId, teacherUserId, cancellationToken);
+            if (test is null)
+                return false;
+
             var task = await _dbContext.TestTasks
                 .SingleOrDefaultAsync(
                     item => item.CourseTestId == testId && item.Id == taskId,
@@ -197,6 +262,31 @@ namespace TeachingService.Services
             _dbContext.TestTasks.Remove(task);
             await _dbContext.SaveChangesAsync(cancellationToken);
             return true;
+        }
+
+        private Task<CourseTest?> GetTeacherOwnedTestEntityAsync(
+            Guid testId,
+            string teacherUserId,
+            CancellationToken cancellationToken)
+        {
+            return _dbContext.Tests
+                .SingleOrDefaultAsync(
+                    test => test.Id == testId
+                        && test.TeacherUserId == teacherUserId,
+                    cancellationToken);
+        }
+
+        private IQueryable<CourseTest> LoadOwnedTests(bool includeHidden)
+        {
+            return LoadTests(includeHidden)
+                .Where(test => test.TeacherUserId != string.Empty);
+        }
+
+        private static void EnsureTeacherUserId(
+            string teacherUserId)
+        {
+            if (string.IsNullOrWhiteSpace(teacherUserId))
+                throw new ArgumentException("Teacher user id is required.", nameof(teacherUserId));
         }
 
         private IQueryable<CourseTest> LoadTests(bool includeHidden)

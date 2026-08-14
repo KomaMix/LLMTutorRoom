@@ -7,6 +7,8 @@ using LLMTutorRoom.Services.Teaching;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using System.Net;
+using System.Text;
 using TeachingService.Contracts.Enums;
 using TeachingService.Contracts.Models;
 
@@ -75,6 +77,82 @@ namespace LLMTutorRoom.Tests
             Assert.Equal(review.Id, publisher.PublishedMessages[0].Message.ReviewId);
             Assert.Equal(attempt.Id, publisher.PublishedMessages[0].Message.AttemptId);
             Assert.Equal(TaskReviewResultStatus.Pending, review.TaskResults.Single().Status);
+        }
+
+        [Fact]
+        public async Task SubmitAttempt_WhenModelQuotaIsExceeded_MovesLlmTaskToManualReviewWithoutPublishing()
+        {
+            await using var dbContext = CreateDbContext();
+            var publisher = new FakeReviewQueuePublisher();
+            var task = CreateFreeTextTask(TestTaskCheckMode.Llm);
+            var test = CreateTest(task);
+            var attempt = await AddAttemptAsync(
+                dbContext,
+                test.Id,
+                new Dictionary<string, string> { [task.Id] = "Развернутый ответ ученика." });
+            await AddExhaustedModelAccessAsync(
+                dbContext,
+                "teacher",
+                "gemma3:12b");
+            var modelAccessService = CreateModelAccessService(dbContext);
+            var service = CreateClassroomService(
+                dbContext,
+                publisher,
+                new ReviewProcessingOptions
+                {
+                    LlmGatewayEnabled = true,
+                    LlmModelKey = "gemma3:12b"
+                },
+                modelAccessService,
+                test);
+
+            await service.SubmitAttemptAsync(
+                attempt.Id,
+                "student",
+                "Student",
+                CancellationToken.None);
+
+            var review = await dbContext.SubmissionReviews
+                .Include(item => item.TaskResults)
+                .SingleAsync();
+
+            Assert.Equal(SubmissionReviewStatus.ManualReview, review.Status);
+            Assert.Equal(TaskReviewResultStatus.ManualReview, review.TaskResults.Single().Status);
+            Assert.Null(review.LlmQuotaReservedAt);
+            Assert.Contains("Лимит проверок", review.LlmQuotaReservationError);
+            Assert.Empty(publisher.PublishedMessages);
+        }
+
+        [Fact]
+        public async Task TeacherModelAccessService_WhenConsumingMultipleChecks_UsesRequestedCheckCount()
+        {
+            await using var dbContext = CreateDbContext();
+            dbContext.TeacherModelAccesses.Add(new TeacherModelAccess
+            {
+                TeacherUserId = "teacher",
+                ModelKey = "gemma3:12b",
+                IsEnabled = true,
+                PeriodSeconds = 3600,
+                MaxChecks = 3
+            });
+            await dbContext.SaveChangesAsync();
+            var service = CreateModelAccessService(dbContext);
+
+            var first = await service.TryConsumeChecksAsync(
+                "teacher",
+                "gemma3:12b",
+                2,
+                CancellationToken.None);
+            var second = await service.TryConsumeChecksAsync(
+                "teacher",
+                "gemma3:12b",
+                2,
+                CancellationToken.None);
+
+            Assert.Equal(ModelQuotaConsumptionStatus.Allowed, first.Status);
+            Assert.Equal(1, first.RemainingChecks);
+            Assert.Equal(ModelQuotaConsumptionStatus.LimitExceeded, second.Status);
+            Assert.Equal(1, second.RemainingChecks);
         }
 
         [Fact]
@@ -202,16 +280,81 @@ namespace LLMTutorRoom.Tests
             FakeReviewQueuePublisher publisher,
             params CourseTestDto[] tests)
         {
+            return CreateClassroomService(
+                dbContext,
+                publisher,
+                new ReviewProcessingOptions
+                {
+                    LlmModelKey = "gemma3:12b"
+                },
+                CreateModelAccessService(dbContext),
+                tests);
+        }
+
+        private static ClassroomService CreateClassroomService(
+            TutorRoomDbContext dbContext,
+            FakeReviewQueuePublisher publisher,
+            ReviewProcessingOptions processingOptions,
+            TeacherModelAccessService modelAccessService,
+            params CourseTestDto[] tests)
+        {
             return new ClassroomService(
                 dbContext,
                 new FakeTeachingServiceClient(tests),
                 new ReviewScoringService(),
                 publisher,
-                Options.Create(new ReviewProcessingOptions
-                {
-                    LlmModelKey = "gemma3:12b"
-                }),
+                modelAccessService,
+                Options.Create(processingOptions),
                 NullLogger<ClassroomService>.Instance);
+        }
+
+        private static TeacherModelAccessService CreateModelAccessService(
+            TutorRoomDbContext dbContext)
+        {
+            var httpClient = new HttpClient(new FakeHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = CreateJsonContent(
+                    """
+                    [
+                      {
+                        "key": "gemma3:12b",
+                        "displayName": "Gemma 3",
+                        "deployments": [
+                          { "isEnabled": true }
+                        ]
+                      }
+                    ]
+                    """)
+            }))
+            {
+                BaseAddress = new Uri("http://localhost:5200")
+            };
+
+            return new TeacherModelAccessService(
+                dbContext,
+                new LlmGatewayModelCatalogClient(httpClient));
+        }
+
+        private static StringContent CreateJsonContent(string content)
+        {
+            return new StringContent(content, Encoding.UTF8, "application/json");
+        }
+
+        private sealed class FakeHttpMessageHandler : HttpMessageHandler
+        {
+            private readonly Func<HttpRequestMessage, HttpResponseMessage> _handler;
+
+            public FakeHttpMessageHandler(Func<HttpRequestMessage, HttpResponseMessage> handler)
+            {
+                _handler = handler;
+            }
+
+            protected override Task<HttpResponseMessage> SendAsync(
+                HttpRequestMessage request,
+                CancellationToken cancellationToken)
+            {
+                return Task.FromResult(_handler(request));
+            }
         }
 
         private static ReviewJobProcessor CreateProcessor(
@@ -242,6 +385,36 @@ namespace LLMTutorRoom.Tests
                 .Options;
 
             return new TutorRoomDbContext(options);
+        }
+
+        private static async Task AddExhaustedModelAccessAsync(
+            TutorRoomDbContext dbContext,
+            string teacherUserId,
+            string modelKey)
+        {
+            const int periodSeconds = 3600;
+            var periodStart = TeacherModelAccessService.GetPeriodStart(
+                DateTimeOffset.UtcNow,
+                periodSeconds);
+
+            dbContext.TeacherModelAccesses.Add(new TeacherModelAccess
+            {
+                TeacherUserId = teacherUserId,
+                ModelKey = modelKey,
+                IsEnabled = true,
+                PeriodSeconds = periodSeconds,
+                MaxChecks = 1
+            });
+            dbContext.TeacherModelUsages.Add(new TeacherModelUsage
+            {
+                TeacherUserId = teacherUserId,
+                ModelKey = modelKey,
+                PeriodStart = periodStart,
+                PeriodSeconds = periodSeconds,
+                UsedChecks = 1
+            });
+
+            await dbContext.SaveChangesAsync();
         }
 
         private static async Task<TestAttempt> AddAttemptAsync(
@@ -275,11 +448,13 @@ namespace LLMTutorRoom.Tests
             return new CourseTestDto
             {
                 Id = "test-1",
+                TeacherUserId = "teacher",
                 Title = "Test",
                 Subject = "Subject",
                 Status = CourseTestStatus.Published,
                 Deadline = DateTimeOffset.UtcNow.AddDays(1),
                 TimeLimitMinutes = 45,
+                LlmModelKey = "gemma3:12b",
                 TotalPoints = tasks
                     .Where(task => !task.IsHidden)
                     .Sum(task => task.MaxPoints),
@@ -384,12 +559,14 @@ namespace LLMTutorRoom.Tests
                 return new CourseTestDto
                 {
                     Id = test.Id,
+                    TeacherUserId = test.TeacherUserId,
                     Title = test.Title,
                     Subject = test.Subject,
                     Status = test.Status,
                     Deadline = test.Deadline,
                     TimeLimitMinutes = test.TimeLimitMinutes,
                     Summary = test.Summary,
+                    LlmModelKey = test.LlmModelKey,
                     TotalPoints = tasks.Sum(task => task.MaxPoints),
                     Tasks = tasks.ToList()
                 };

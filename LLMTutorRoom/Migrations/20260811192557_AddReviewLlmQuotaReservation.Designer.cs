@@ -3,6 +3,7 @@ using System;
 using LLMTutorRoom.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace LLMTutorRoom.Migrations
 {
     [DbContext(typeof(TutorRoomDbContext))]
-    partial class TutorRoomDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260811192557_AddReviewLlmQuotaReservation")]
+    partial class AddReviewLlmQuotaReservation
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -180,88 +183,6 @@ namespace LLMTutorRoom.Migrations
                         .IsUnique();
 
                     b.ToTable("TaskReviewResults");
-                });
-
-            modelBuilder.Entity("LLMTutorRoom.Models.TeacherModelAccess", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<bool>("IsEnabled")
-                        .HasColumnType("boolean");
-
-                    b.Property<int>("MaxChecks")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("ModelKey")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<int>("PeriodSeconds")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("TeacherUserId")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("TeacherUserId");
-
-                    b.HasIndex("TeacherUserId", "ModelKey")
-                        .IsUnique();
-
-                    b.ToTable("TeacherModelAccesses");
-                });
-
-            modelBuilder.Entity("LLMTutorRoom.Models.TeacherModelUsage", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("ModelKey")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<int>("PeriodSeconds")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTimeOffset>("PeriodStart")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("TeacherUserId")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("UsedChecks")
-                        .HasColumnType("integer");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("TeacherUserId");
-
-                    b.HasIndex("TeacherUserId", "ModelKey", "PeriodStart", "PeriodSeconds")
-                        .IsUnique();
-
-                    b.ToTable("TeacherModelUsages");
                 });
 
             modelBuilder.Entity("LLMTutorRoom.Models.TestAttempt", b =>

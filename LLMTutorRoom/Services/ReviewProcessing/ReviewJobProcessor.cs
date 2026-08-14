@@ -101,6 +101,7 @@ namespace LLMTutorRoom.Services.ReviewProcessing
                 try
                 {
                     var llmResult = await _llmGatewayReviewClient.ReviewFreeTextAnswerAsync(
+                        review.ModelKey,
                         result,
                         answer ?? string.Empty,
                         cancellationToken);

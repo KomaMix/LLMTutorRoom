@@ -1,7 +1,6 @@
 using LLMGateway.Data;
 using LLMGateway.Data.Models;
 using LLMGateway.DTOs.Models;
-using LLMGateway.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -29,6 +28,19 @@ namespace LLMGateway.Controllers
                 .ToListAsync(cancellationToken);
 
             return Ok(models);
+        }
+
+        [HttpGet("catalog")]
+        public async Task<ActionResult<IReadOnlyCollection<ModelResponse>>> GetModelCatalog(
+            CancellationToken cancellationToken)
+        {
+            var models = await _dbContext.Models
+                .AsNoTracking()
+                .Include(model => model.Deployments)
+                .OrderBy(model => model.Key)
+                .ToListAsync(cancellationToken);
+
+            return Ok(models.Select(ToResponse).ToList());
         }
 
         [HttpPost]

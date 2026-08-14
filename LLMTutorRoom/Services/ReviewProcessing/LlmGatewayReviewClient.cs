@@ -21,6 +21,7 @@ namespace LLMTutorRoom.Services.ReviewProcessing
         }
 
         public async Task<LlmTaskReviewResult> ReviewFreeTextAnswerAsync(
+            string modelKey,
             TaskReviewResult task,
             string answer,
             CancellationToken cancellationToken)
@@ -31,10 +32,10 @@ namespace LLMTutorRoom.Services.ReviewProcessing
                     "LLMGateway review processing is disabled.");
             }
 
-            if (string.IsNullOrWhiteSpace(_options.LlmModelKey))
+            if (string.IsNullOrWhiteSpace(modelKey))
             {
                 throw new InvalidOperationException(
-                    "ReviewProcessing:LlmModelKey is required for LLM task checks.");
+                    "Model key is required for LLM task checks.");
             }
 
             var request = new LlmGatewayChatRequest
@@ -66,7 +67,7 @@ namespace LLMTutorRoom.Services.ReviewProcessing
             };
 
             using var response = await _httpClient.PostAsJsonAsync(
-                $"/api/chat/{Uri.EscapeDataString(_options.LlmModelKey)}",
+                $"/api/chat/{Uri.EscapeDataString(modelKey)}",
                 request,
                 JsonOptions,
                 cancellationToken);

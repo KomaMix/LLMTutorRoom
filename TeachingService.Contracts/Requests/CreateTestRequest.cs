@@ -10,5 +10,6 @@ namespace TeachingService.Contracts.Requests
         public CourseTestStatus Status { get; set; } = CourseTestStatus.Draft;
         public DateTimeOffset? Deadline { get; set; }
         public int TimeLimitMinutes { get; set; } = 45;
+        public string LlmModelKey { get; set; } = string.Empty;
     }
 }

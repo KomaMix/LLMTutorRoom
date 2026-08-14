@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 using TeachingService.Contracts.Enums;
 using TeachingService.Contracts.Models;
 using TeachingService.Contracts.Requests;
@@ -22,8 +23,11 @@ namespace TeachingService.Controllers
         [HttpGet("tests")]
         public async Task<ActionResult<List<CourseTestDto>>> GetTests(CancellationToken cancellationToken)
         {
-            return Ok(await _teachingCatalogService.GetTestsAsync(
-                publishedOnly: false,
+            if (!TryGetTeacherUserId(out var teacherUserId))
+                return Unauthorized("Teacher user id claim is required.");
+
+            return Ok(await _teachingCatalogService.GetTeacherTestsAsync(
+                teacherUserId,
                 includeHidden: true,
                 cancellationToken));
         }
@@ -33,8 +37,12 @@ namespace TeachingService.Controllers
             Guid testId,
             CancellationToken cancellationToken)
         {
-            var test = await _teachingCatalogService.GetTestAsync(
+            if (!TryGetTeacherUserId(out var teacherUserId))
+                return Unauthorized("Teacher user id claim is required.");
+
+            var test = await _teachingCatalogService.GetTeacherTestAsync(
                 testId,
+                teacherUserId,
                 includeHidden: true,
                 cancellationToken);
 
@@ -51,8 +59,12 @@ namespace TeachingService.Controllers
             if (!TryValidateTest(request, out var error))
                 return BadRequest(error);
 
+            if (!TryGetTeacherUserId(out var teacherUserId))
+                return Unauthorized("Teacher user id claim is required.");
+
             var test = await _teachingCatalogService.CreateTestAsync(
                 request,
+                teacherUserId,
                 cancellationToken);
 
             return Ok(test);
@@ -67,9 +79,13 @@ namespace TeachingService.Controllers
             if (!TryValidateTest(request, out var error))
                 return BadRequest(error);
 
+            if (!TryGetTeacherUserId(out var teacherUserId))
+                return Unauthorized("Teacher user id claim is required.");
+
             var test = await _teachingCatalogService.UpdateTestAsync(
                 testId,
                 request,
+                teacherUserId,
                 cancellationToken);
 
             return test is null
@@ -86,9 +102,13 @@ namespace TeachingService.Controllers
             if (!TryValidateTask(request, out var error))
                 return BadRequest(error);
 
+            if (!TryGetTeacherUserId(out var teacherUserId))
+                return Unauthorized("Teacher user id claim is required.");
+
             var task = await _teachingCatalogService.AddTaskAsync(
                 testId,
                 request,
+                teacherUserId,
                 cancellationToken);
 
             return task is null
@@ -106,10 +126,14 @@ namespace TeachingService.Controllers
             if (!TryValidateTask(request, out var error))
                 return BadRequest(error);
 
+            if (!TryGetTeacherUserId(out var teacherUserId))
+                return Unauthorized("Teacher user id claim is required.");
+
             var task = await _teachingCatalogService.UpdateTaskAsync(
                 testId,
                 taskId,
                 request,
+                teacherUserId,
                 cancellationToken);
 
             return task is null
@@ -124,10 +148,14 @@ namespace TeachingService.Controllers
             [FromBody] UpdateTaskVisibilityRequest request,
             CancellationToken cancellationToken)
         {
+            if (!TryGetTeacherUserId(out var teacherUserId))
+                return Unauthorized("Teacher user id claim is required.");
+
             var task = await _teachingCatalogService.SetTaskVisibilityAsync(
                 testId,
                 taskId,
                 request.IsHidden,
+                teacherUserId,
                 cancellationToken);
 
             return task is null
@@ -141,9 +169,13 @@ namespace TeachingService.Controllers
             Guid taskId,
             CancellationToken cancellationToken)
         {
+            if (!TryGetTeacherUserId(out var teacherUserId))
+                return Unauthorized("Teacher user id claim is required.");
+
             var deleted = await _teachingCatalogService.DeleteTaskAsync(
                 testId,
                 taskId,
+                teacherUserId,
                 cancellationToken);
 
             return deleted
@@ -181,6 +213,14 @@ namespace TeachingService.Controllers
 
             error = string.Empty;
             return true;
+        }
+
+        private bool TryGetTeacherUserId(out string teacherUserId)
+        {
+            teacherUserId = User.FindFirstValue(ClaimTypes.NameIdentifier)
+                ?? string.Empty;
+
+            return !string.IsNullOrWhiteSpace(teacherUserId);
         }
 
         private static bool TryValidateTask(

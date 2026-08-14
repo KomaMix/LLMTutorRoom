@@ -14,12 +14,14 @@ namespace TeachingService.Mappers
             return new CourseTestDto
             {
                 Id = test.Id.ToString(),
+                TeacherUserId = test.TeacherUserId,
                 Title = test.Title,
                 Subject = test.Subject,
                 Status = test.Status,
                 Deadline = test.Deadline,
                 TimeLimitMinutes = test.TimeLimitMinutes,
                 Summary = test.Summary,
+                LlmModelKey = test.LlmModelKey,
                 TotalPoints = GetTotalPoints(test),
                 Tasks = tasks
                     .OrderBy(task => task.CreatedAt)

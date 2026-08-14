@@ -53,10 +53,40 @@ namespace LLMTutorRoom.Models
     public sealed class LanguageModel
     {
         public string Key { get; set; } = string.Empty;
+        public string DisplayName { get; set; } = string.Empty;
         public string Provider { get; set; } = string.Empty;
         public string Status { get; set; } = string.Empty;
         public int Priority { get; set; }
         public int MaxConcurrentRequests { get; set; }
+        public int PeriodSeconds { get; set; }
+        public int MaxChecks { get; set; }
+        public int UsedChecks { get; set; }
+        public int RemainingChecks { get; set; }
+        public DateTimeOffset? PeriodEndsAt { get; set; }
+    }
+
+    public sealed class TeacherModelAccess
+    {
+        public int Id { get; set; }
+        public string TeacherUserId { get; set; } = string.Empty;
+        public string ModelKey { get; set; } = string.Empty;
+        public bool IsEnabled { get; set; } = true;
+        public int PeriodSeconds { get; set; } = 30 * 24 * 60 * 60;
+        public int MaxChecks { get; set; }
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+    }
+
+    public sealed class TeacherModelUsage
+    {
+        public int Id { get; set; }
+        public string TeacherUserId { get; set; } = string.Empty;
+        public string ModelKey { get; set; } = string.Empty;
+        public DateTimeOffset PeriodStart { get; set; }
+        public int PeriodSeconds { get; set; }
+        public int UsedChecks { get; set; }
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
     }
 
     public sealed class SubmissionReview
@@ -66,6 +96,7 @@ namespace LLMTutorRoom.Models
         public TestAttempt? Attempt { get; set; }
         public string TestId { get; set; } = string.Empty;
         public string TestTitle { get; set; } = string.Empty;
+        public string TeacherUserId { get; set; } = string.Empty;
         public string StudentUserId { get; set; } = string.Empty;
         public string? StudentName { get; set; }
         public SubmissionReviewStatus Status { get; set; } = SubmissionReviewStatus.Checked;
@@ -77,6 +108,8 @@ namespace LLMTutorRoom.Models
         public DateTimeOffset? NextRetryAt { get; set; }
         public DateTimeOffset? ProcessingLeaseExpiresAt { get; set; }
         public DateTimeOffset? LastEnqueuedAt { get; set; }
+        public DateTimeOffset? LlmQuotaReservedAt { get; set; }
+        public string LlmQuotaReservationError { get; set; } = string.Empty;
         public int ProcessingAttempts { get; set; }
         public string LastError { get; set; } = string.Empty;
         public decimal Score { get; set; }

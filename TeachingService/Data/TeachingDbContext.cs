@@ -18,6 +18,7 @@ namespace TeachingService.Data
             modelBuilder.Entity<CourseTest>(entity =>
             {
                 entity.HasKey(test => test.Id);
+                entity.HasIndex(test => test.TeacherUserId);
                 entity.Property(test => test.Status).HasConversion<string>();
                 entity.HasMany(test => test.Tasks)
                     .WithOne()

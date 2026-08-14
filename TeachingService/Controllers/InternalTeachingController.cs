@@ -21,7 +21,7 @@ namespace TeachingService.Controllers
             [FromQuery] bool includeHidden,
             CancellationToken cancellationToken)
         {
-            return Ok(await _teachingCatalogService.GetTestsAsync(
+            return Ok(await _teachingCatalogService.GetAllTestsAsync(
                 publishedOnly,
                 includeHidden,
                 cancellationToken));
