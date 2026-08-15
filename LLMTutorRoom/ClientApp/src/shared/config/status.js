@@ -1,0 +1,23 @@
+export const statusText = {
+  published: "Опубликован",
+  draft: "Черновик",
+  checked: "Проверено",
+  queued: "В очереди",
+  processing: "Проверяется",
+  "retry-scheduled": "Повторная проверка",
+  paused: "Пауза",
+  "manual-review": "Ручная проверка",
+  failed: "Ошибка",
+  available: "Доступна",
+  standby: "Резерв",
+  admin: "Администратор",
+  teacher: "Преподаватель",
+  student: "Ученик",
+  "single-choice": "Один ответ",
+  "multiple-choice": "Несколько ответов",
+  "free-text": "Письменный ответ",
+  hidden: "Скрыто",
+  "in-progress": "Выполняется",
+  submitted: "Отправлено",
+  expired: "Время вышло"
+};

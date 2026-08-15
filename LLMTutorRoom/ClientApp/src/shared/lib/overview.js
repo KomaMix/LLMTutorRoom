@@ -1,0 +1,85 @@
+function requireArray(value, fieldName) {
+  if (!Array.isArray(value)) {
+    throw new Error(`${fieldName} must be an array.`);
+  }
+}
+
+export function parseOverview(data) {
+  if (!data || typeof data !== "object") {
+    throw new Error("Overview response must be an object.");
+  }
+
+  requireArray(data.tests, "tests");
+  requireArray(data.models, "models");
+  requireArray(data.reviews, "reviews");
+  requireArray(data.attempts, "attempts");
+
+  if (!data.metrics || typeof data.metrics !== "object") {
+    throw new Error("Overview response must contain metrics.");
+  }
+
+  data.tests.forEach((test, testIndex) => {
+    if (typeof test.llmModelKey !== "string") {
+      throw new Error(`tests[${testIndex}].llmModelKey must be a string.`);
+    }
+
+    requireArray(test.tasks, `tests[${testIndex}].tasks`);
+
+    test.tasks.forEach((task, taskIndex) => {
+      if (typeof task.isHidden !== "boolean") {
+        throw new Error(`tests[${testIndex}].tasks[${taskIndex}].isHidden must be a boolean.`);
+      }
+
+      if (typeof task.wrongAnswerPenalty !== "number") {
+        throw new Error(`tests[${testIndex}].tasks[${taskIndex}].wrongAnswerPenalty must be a number.`);
+      }
+
+      if (typeof task.createdAt !== "string") {
+        throw new Error(`tests[${testIndex}].tasks[${taskIndex}].createdAt must be a string.`);
+      }
+
+      if (typeof task.checkMode !== "string") {
+        throw new Error(`tests[${testIndex}].tasks[${taskIndex}].checkMode must be a string.`);
+      }
+
+      requireArray(task.options, `tests[${testIndex}].tasks[${taskIndex}].options`);
+      requireArray(task.correctOptionIds, `tests[${testIndex}].tasks[${taskIndex}].correctOptionIds`);
+    });
+  });
+
+  data.reviews.forEach((review, reviewIndex) => {
+    requireArray(review.taskResults, `reviews[${reviewIndex}].taskResults`);
+
+    review.taskResults.forEach((taskResult, taskResultIndex) => {
+      requireArray(taskResult.findings, `reviews[${reviewIndex}].taskResults[${taskResultIndex}].findings`);
+    });
+  });
+
+  data.attempts.forEach((attempt, attemptIndex) => {
+    if (typeof attempt.id !== "number") {
+      throw new Error(`attempts[${attemptIndex}].id must be a number.`);
+    }
+
+    if (typeof attempt.testId !== "string") {
+      throw new Error(`attempts[${attemptIndex}].testId must be a string.`);
+    }
+
+    if (typeof attempt.status !== "string") {
+      throw new Error(`attempts[${attemptIndex}].status must be a string.`);
+    }
+
+    if (typeof attempt.startedAt !== "string") {
+      throw new Error(`attempts[${attemptIndex}].startedAt must be a string.`);
+    }
+
+    if (typeof attempt.endsAt !== "string") {
+      throw new Error(`attempts[${attemptIndex}].endsAt must be a string.`);
+    }
+
+    if (!attempt.answers || typeof attempt.answers !== "object" || Array.isArray(attempt.answers)) {
+      throw new Error(`attempts[${attemptIndex}].answers must be an object.`);
+    }
+  });
+
+  return data;
+}

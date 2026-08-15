@@ -159,6 +159,9 @@ React-клиент `LLMTutorRoom` собирается автоматическ�
 попадает в `LLMTutorRoom/wwwroot`. Миграции базы данных применяются при запуске
 соответствующего сервиса.
 
+Структура фронтенда, клиентские маршруты и команды локальной разработки описаны
+в [`LLMTutorRoom/ClientApp/README.md`](LLMTutorRoom/ClientApp/README.md).
+
 Для локальной разработки используются настройки из `appsettings.json` и
 `appsettings.Development.json`: строки подключения к PostgreSQL, JWT-настройки,
 RabbitMQ-настройки и начальные пользователи.

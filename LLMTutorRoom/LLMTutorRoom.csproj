@@ -33,11 +33,16 @@
         <ClientBuildInput Include="$(ClientAppDirectory)/index.html" />
         <ClientBuildInput Include="$(ClientAppDirectory)/package.json" />
         <ClientBuildInput Include="$(ClientAppDirectory)/package-lock.json" />
+        <ClientBuildInput Include="$(ClientAppDirectory)/.nvmrc" />
+        <ClientBuildInput Include="$(ClientAppDirectory)/eslint.config.js" />
         <ClientBuildInput Include="$(ClientAppDirectory)/vite.config.js" />
         <ClientBuildInput Include="$(ClientAppDirectory)/src/**/*" />
     </ItemGroup>
 
-    <Target Name="InstallClientDependencies" BeforeTargets="Build" Condition="'$(SkipClientBuild)' != 'true' And !Exists('$(ClientAppDirectory)/node_modules')">
+    <Target Name="InstallClientDependencies" BeforeTargets="Build"
+            Condition="'$(SkipClientBuild)' != 'true'"
+            Inputs="$(ClientAppDirectory)/package.json;$(ClientAppDirectory)/package-lock.json"
+            Outputs="$(ClientAppDirectory)/node_modules/.package-lock.json">
         <Exec WorkingDirectory="$(ClientAppDirectory)" Command="npm ci" />
     </Target>
 

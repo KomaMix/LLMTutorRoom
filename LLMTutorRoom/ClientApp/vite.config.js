@@ -3,10 +3,21 @@ import react from "@vitejs/plugin-react";
 
 export default defineConfig({
   plugins: [react()],
+  build: {
+    outDir: "../wwwroot",
+    emptyOutDir: true
+  },
   server: {
     port: 5173,
     proxy: {
-      "/api": "http://localhost:5206"
+      "/api/auth": "http://localhost:5210",
+      "/api/users": "http://localhost:5210",
+      "/api/teaching": "http://localhost:5212",
+      "/api/classroom": "http://localhost:5206",
+      "/api/llm": {
+        target: "http://localhost:5200",
+        rewrite: path => path.replace(/^\/api\/llm/, "/api")
+      }
     }
   }
 });
