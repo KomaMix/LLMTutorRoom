@@ -3,6 +3,7 @@ WORKDIR /src
 
 COPY ["TeachingService/TeachingService.csproj", "TeachingService/"]
 COPY ["Shared.Auth/Shared.Auth.csproj", "Shared.Auth/"]
+COPY ["ReviewService.Contracts/ReviewService.Contracts.csproj", "ReviewService.Contracts/"]
 COPY ["TeachingService.Contracts/TeachingService.Contracts.csproj", "TeachingService.Contracts/"]
 RUN dotnet restore "TeachingService/TeachingService.csproj"
 

@@ -5,7 +5,7 @@ namespace TeachingService.Models
     public sealed class TestTask
     {
         public Guid Id { get; set; }
-        public Guid CourseTestId { get; set; }
+        public Guid CourseTestVersionId { get; set; }
         public TestTaskType Type { get; set; } = TestTaskType.FreeText;
         public TestTaskCheckMode CheckMode { get; set; } = TestTaskCheckMode.Auto;
         public string Title { get; set; } = string.Empty;

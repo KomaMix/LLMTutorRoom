@@ -31,10 +31,12 @@ namespace TeachingService.Controllers
         public async Task<ActionResult<CourseTestDto>> GetTest(
             Guid testId,
             [FromQuery] bool includeHidden,
+            [FromQuery] int? versionNumber,
             CancellationToken cancellationToken)
         {
             var test = await _teachingCatalogService.GetTestAsync(
                 testId,
+                versionNumber,
                 includeHidden,
                 cancellationToken);
 
