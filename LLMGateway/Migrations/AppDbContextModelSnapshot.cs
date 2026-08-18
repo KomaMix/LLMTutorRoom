@@ -91,10 +91,8 @@ namespace LLMGateway.Migrations
 
                     b.Property<string>("RateLimitRules")
                         .IsRequired()
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("jsonb")
-                        .HasColumnName("RateLimitRules")
-                        .HasDefaultValueSql("'[]'::jsonb");
+                        .HasColumnName("RateLimitRules");
 
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");

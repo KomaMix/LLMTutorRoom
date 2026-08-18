@@ -40,7 +40,7 @@ namespace LLMGateway.Migrations
                     IsEnabled = table.Column<bool>(type: "boolean", nullable: false),
                     Priority = table.Column<int>(type: "integer", nullable: false),
                     MaxConcurrentRequests = table.Column<int>(type: "integer", nullable: true),
-                    RateLimitRules = table.Column<string>(type: "jsonb", nullable: false, defaultValueSql: "'[]'::jsonb"),
+                    RateLimitRules = table.Column<string>(type: "jsonb", nullable: false),
                     CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
                     UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
                 },

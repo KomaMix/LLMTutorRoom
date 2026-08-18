@@ -32,8 +32,7 @@ namespace LLMGateway.Data
                         rules => SerializeRateLimitRules(rules),
                         json => DeserializeRateLimitRules(json))
                     .HasColumnName("RateLimitRules")
-                    .HasColumnType("jsonb")
-                    .HasDefaultValueSql("'[]'::jsonb");
+                    .HasColumnType("jsonb");
                 rateLimitRules.Metadata.SetValueComparer(RateLimitRulesComparer);
 
                 entity.HasOne(d => d.Model)
