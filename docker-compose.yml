@@ -13,6 +13,8 @@ services:
       interval: 5s
       timeout: 5s
       retries: 20
+    networks:
+      - backend
 
   rabbitmq:
     image: rabbitmq:3.13-management
@@ -29,6 +31,8 @@ services:
       interval: 5s
       timeout: 5s
       retries: 20
+    networks:
+      - backend
 
   auth-service:
     build:
@@ -43,6 +47,9 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    networks:
+      - edge
+      - backend
 
   teaching-service:
     build:
@@ -52,11 +59,20 @@ services:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_URLS: http://+:8080
       ConnectionStrings__DefaultConnection: Host=postgres;Database=llm_tutor_teaching;Username=postgres;Password=postgres;
-    ports:
-      - "5212:8080"
+      IntegrationEvents__HostName: rabbitmq
+      IntegrationEvents__Port: 5672
+      IntegrationEvents__UserName: llm
+      IntegrationEvents__Password: llm-dev
+    expose:
+      - "8080"
     depends_on:
       postgres:
         condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - edge
+      - backend
 
   llm-gateway:
     build:
@@ -71,6 +87,34 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    networks:
+      - edge
+      - backend
+
+  review-service:
+    build:
+      context: .
+      dockerfile: ReviewService/Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__DefaultConnection: Host=postgres;Database=llm_tutor_reviews;Username=postgres;Password=postgres;
+      RabbitMq__HostName: rabbitmq
+      RabbitMq__Port: 5672
+      RabbitMq__UserName: llm
+      RabbitMq__Password: llm-dev
+      ReviewProcessing__LlmGatewayBaseUrl: http://llm-gateway:8080
+    expose:
+      - "8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      llm-gateway:
+        condition: service_started
+    networks:
+      - backend
 
   tutor-room:
     build:
@@ -85,7 +129,7 @@ services:
       RabbitMq__UserName: llm
       RabbitMq__Password: llm-dev
       TeachingService__BaseUrl: http://teaching-service:8080
-      ReviewProcessing__LlmGatewayBaseUrl: http://llm-gateway:8080
+      ReviewService__BaseUrl: http://review-service:8080
     ports:
       - "5206:8080"
     depends_on:
@@ -95,8 +139,11 @@ services:
         condition: service_healthy
       teaching-service:
         condition: service_started
-      llm-gateway:
-        condition: service_started
+      review-service:
+        condition: service_healthy
+    networks:
+      - edge
+      - backend
 
   nginx:
     image: nginx:1.27
@@ -113,7 +160,14 @@ services:
         condition: service_started
       llm-gateway:
         condition: service_started
+    networks:
+      - edge
 
 volumes:
   postgres-data:
   rabbitmq-data:
+
+networks:
+  edge:
+  backend:
+    internal: true
