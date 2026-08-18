@@ -7,6 +7,7 @@ import {
   setAccessToken,
   subscribeToUnauthorized
 } from "../api/httpClient.js";
+import { normalizeRole } from "../shared/lib/roles.js";
 
 const AuthContext = createContext(null);
 
@@ -23,6 +24,8 @@ export function AuthProvider({ children }) {
     setError(message);
     setStatus("unauthenticated");
   }, []);
+
+  const clearError = useCallback(() => setError(""), []);
 
   useEffect(() => subscribeToUnauthorized(() => {
     logout("Сессия истекла. Войдите снова.");
@@ -64,7 +67,7 @@ export function AuthProvider({ children }) {
     return () => controller.abort();
   }, [restoreVersion]);
 
-  const login = useCallback(async credentials => {
+  const login = useCallback(async (credentials, expectedRole) => {
     setIsSigningIn(true);
     setError("");
 
@@ -72,6 +75,16 @@ export function AuthProvider({ children }) {
       const session = await loginRequest(credentials);
       if (!session?.accessToken || !session?.user) {
         throw new ApiError("AuthService вернул неполную сессию.");
+      }
+
+      const actualRole = normalizeRole(session.user.role);
+      if (actualRole !== "admin"
+        && (actualRole === "teacher" || actualRole === "student")
+        && expectedRole
+        && actualRole !== expectedRole) {
+        const roleLabel = actualRole === "teacher" ? "Преподаватель" : "Студент";
+        setError(`У этой учетной записи роль «${roleLabel}». Выберите соответствующий кабинет.`);
+        return false;
       }
 
       setAccessToken(session.accessToken);
@@ -96,9 +109,10 @@ export function AuthProvider({ children }) {
     error,
     isSigningIn,
     login,
+    clearError,
     logout,
     retrySession: () => setRestoreVersion(current => current + 1)
-  }), [currentUser, status, error, isSigningIn, login, logout]);
+  }), [currentUser, status, error, isSigningIn, login, clearError, logout]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

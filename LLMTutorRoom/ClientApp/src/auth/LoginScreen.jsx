@@ -1,11 +1,48 @@
 import { useState } from "react";
-import { Loader2, LockKeyhole, School, ShieldCheck } from "lucide-react";
+import {
+  BookOpen,
+  Check,
+  GraduationCap,
+  Loader2,
+  LockKeyhole,
+  School
+} from "lucide-react";
+import { useLocation } from "react-router-dom";
 import { useAuth } from "./AuthContext.jsx";
 
+const loginRoles = [
+  {
+    value: "teacher",
+    label: "Преподаватель",
+    description: "Тесты, задания и проверки",
+    icon: BookOpen
+  },
+  {
+    value: "student",
+    label: "Студент",
+    description: "Задания, результаты и прогресс",
+    icon: GraduationCap
+  }
+];
+
+function getInitialRole(locationState) {
+  const requestedPath = locationState?.from?.pathname;
+  return typeof requestedPath === "string" && requestedPath.startsWith("/student")
+    ? "student"
+    : "teacher";
+}
+
 export function LoginScreen() {
-  const { error, isSigningIn, login } = useAuth();
+  const location = useLocation();
+  const { clearError, error, isSigningIn, login } = useAuth();
+  const [selectedRole, setSelectedRole] = useState(() => getInitialRole(location.state));
   const [userName, setUserName] = useState("");
   const [password, setPassword] = useState("");
+
+  function selectRole(role) {
+    setSelectedRole(role);
+    clearError();
+  }
 
   return (
     <main className="login-screen">
@@ -15,37 +52,65 @@ export function LoginScreen() {
             <School size={22} aria-hidden="true" />
           </div>
           <div>
-            <strong>LLMTutorRoom</strong>
-            <span>умная проверка знаний</span>
+            <strong className="login-wordmark">LLMTutorRoom</strong>
           </div>
         </div>
 
-        <div>
-          <span className="eyebrow">Вход</span>
-          <h1>Учебный кабинет</h1>
-        </div>
-
-        <div className="preset-users">
-          <div className="preset-user">
-            <ShieldCheck size={17} aria-hidden="true" />
-            <span>Стартовый администратор создается из конфигурации.</span>
-          </div>
+        <div className="login-heading">
+          <span className="eyebrow">Добро пожаловать</span>
+          <h1>Вход в кабинет</h1>
+          <p>Выберите свою роль и войдите в учетную запись.</p>
         </div>
 
         <form
           className="login-form"
           onSubmit={event => {
             event.preventDefault();
-            login({ userName, password });
+            login({ userName, password }, selectedRole);
           }}
         >
+          <fieldset className="login-role-selector">
+            <legend>Кто вы?</legend>
+            <div className="login-role-grid">
+              {loginRoles.map(role => {
+                const Icon = role.icon;
+                const isSelected = selectedRole === role.value;
+                return (
+                  <button
+                    key={role.value}
+                    type="button"
+                    className={`login-role-option${isSelected ? " active" : ""}`}
+                    aria-pressed={isSelected}
+                    onClick={() => selectRole(role.value)}
+                  >
+                    <span className="login-role-icon">
+                      <Icon size={21} aria-hidden="true" />
+                    </span>
+                    <span className="login-role-copy">
+                      <strong>{role.label}</strong>
+                      <small>{role.description}</small>
+                    </span>
+                    <span className="login-role-check" aria-hidden="true">
+                      {isSelected && <Check size={15} strokeWidth={3} />}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </fieldset>
+
           <div className="field">
             <label htmlFor="login-user-name">Логин</label>
             <input
               id="login-user-name"
               autoComplete="username"
               value={userName}
-              onChange={event => setUserName(event.target.value)}
+              onChange={event => {
+                setUserName(event.target.value);
+                if (error) {
+                  clearError();
+                }
+              }}
               required
             />
           </div>
@@ -56,7 +121,12 @@ export function LoginScreen() {
               autoComplete="current-password"
               type="password"
               value={password}
-              onChange={event => setPassword(event.target.value)}
+              onChange={event => {
+                setPassword(event.target.value);
+                if (error) {
+                  clearError();
+                }
+              }}
               required
             />
           </div>
