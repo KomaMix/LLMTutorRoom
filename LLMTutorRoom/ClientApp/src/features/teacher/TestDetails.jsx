@@ -5,17 +5,22 @@ import { InfoTile } from "../../shared/ui/InfoTile.jsx";
 import { StatusBadge } from "../../shared/ui/StatusBadge.jsx";
 import { TaskPanel } from "./TaskPanel.jsx";
 import { TestForm } from "./TestForm.jsx";
+import { TestVersionPanel } from "./TestVersionPanel.jsx";
 import { createTaskCountSummary } from "./teacherTestHelpers.js";
 
 export function TestDetails({
   busyTaskId,
   deleteTaskCandidate,
   editingTaskId,
+  areDraftControlsDisabled,
   isCreatingTask,
   isSavingTask,
   isSavingTest,
+  isVersionBusy,
   models,
   onCreateTask,
+  onCreateVersion,
+  onDeleteVersion,
   onDeleteTask,
   onEditTask,
   onRequestDeleteTask,
@@ -24,6 +29,8 @@ export function TestDetails({
   onTaskPanelModeChange,
   onTestFormChange,
   onToggleTaskVisibility,
+  onPublishVersion,
+  onSelectVersion,
   onUpdateTask,
   onUpdateTest,
   selectedTest,
@@ -33,7 +40,8 @@ export function TestDetails({
   taskEditMessage,
   taskPanelMode,
   testEditForm,
-  testEditMessage
+  testEditMessage,
+  versionMessage
 }) {
   if (!selectedTest) {
     return (
@@ -45,6 +53,8 @@ export function TestDetails({
       </div>
     );
   }
+
+  const isDraft = selectedTest.status === "draft";
 
   return (
     <div className="detail-panel">
@@ -58,6 +68,16 @@ export function TestDetails({
 
       <p className="muted">{selectedTest.summary || "Описание пока не добавлено."}</p>
 
+      <TestVersionPanel
+        isBusy={isVersionBusy}
+        message={versionMessage}
+        onCreateDraft={onCreateVersion}
+        onDeleteDraft={onDeleteVersion}
+        onPublish={onPublishVersion}
+        onSelectVersion={onSelectVersion}
+        test={selectedTest}
+      />
+
       <div className="compact-grid test-meta-grid">
         <InfoTile label="Время" value={`${selectedTest.timeLimitMinutes} мин`} />
         <InfoTile label="Задания" value={createTaskCountSummary(selectedTest)} />
@@ -66,15 +86,18 @@ export function TestDetails({
         <InfoTile label="LLM" value={selectedTest.llmModelKey || "не выбрана"} />
       </div>
 
-      <TestForm
-        form={testEditForm}
-        isSubmitting={isSavingTest}
-        message={testEditMessage}
-        mode="edit"
-        models={models}
-        onChange={onTestFormChange}
-        onSubmit={onUpdateTest}
-      />
+      {isDraft && (
+        <TestForm
+          form={testEditForm}
+          isDisabled={areDraftControlsDisabled}
+          isSubmitting={isSavingTest}
+          message={testEditMessage}
+          mode="edit"
+          models={models}
+          onChange={onTestFormChange}
+          onSubmit={onUpdateTest}
+        />
+      )}
 
       <TaskPanel
         busyTaskId={busyTaskId}
@@ -84,6 +107,7 @@ export function TestDetails({
         editMessage={taskEditMessage}
         editingTaskId={editingTaskId}
         hasLlmModel={Boolean(selectedTest.llmModelKey)}
+        isDisabled={areDraftControlsDisabled}
         isCreating={isCreatingTask}
         isSaving={isSavingTask}
         mode={taskPanelMode}
@@ -95,6 +119,7 @@ export function TestDetails({
         onModeChange={onTaskPanelModeChange}
         onToggleVisibility={onToggleTaskVisibility}
         onUpdate={onUpdateTask}
+        readOnly={!isDraft}
         tasks={selectedTest.tasks}
       />
 

@@ -13,7 +13,7 @@ export function ReviewRows({ reviews, compact = false, onSelectReview = null }) 
         <article className="review-row" key={reviewItem.id}>
           <div>
             <strong>{reviewItem.studentName || reviewItem.studentUserId || "Студент"}</strong>
-            <span>{reviewItem.testTitle}</span>
+            <span>{reviewItem.testTitle} · v{reviewItem.testRevision}</span>
           </div>
           {!compact && <span>{formatDate(reviewItem.submittedAt)}</span>}
           <StatusBadge status={reviewItem.status} />

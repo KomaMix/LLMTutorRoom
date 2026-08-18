@@ -92,11 +92,12 @@ export function StudentWorkspace({
         </div>
 
         <div className="select-list">
-          {tests.filter(test => test.status === "published").map(test => (
+          {tests.map(test => (
             <button
               key={test.id}
               type="button"
               className={test.id === selectedTestId ? "active" : ""}
+              aria-current={test.id === selectedTestId ? "page" : undefined}
               disabled={isStartingAttempt || isSavingAttempt || isSubmittingAttempt}
               onClick={() => onSelectTest(test.id)}
             >
@@ -150,7 +151,9 @@ export function StudentWorkspace({
           )}
         </div>
 
-        {message && <p className="form-note">{message}</p>}
+        <div role="status" aria-atomic="true" aria-live="polite">
+          {message && <p className="form-note">{message}</p>}
+        </div>
 
         {!selectedAttempt && (
           <section className="empty-state compact-empty-state">

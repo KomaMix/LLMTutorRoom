@@ -11,7 +11,23 @@ import {
 function TeacherDashboardRoute({ overview }) {
   const navigate = useNavigate();
   const selectedTest = overview.tests[0] ?? null;
-  const activeReviews = overview.reviews.filter(item => item.status !== "checked");
+  const publishedVersions = new Map(overview.tests.map(test => [
+    test.id,
+    test.publishedVersionNumber
+      ?? (test.status === "published" ? test.versionNumber : null)
+  ]));
+  const activeReviews = overview.reviews.filter(item => {
+    if (item.status === "checked") {
+      return false;
+    }
+
+    if (item.status !== "failed") {
+      return true;
+    }
+
+    const currentVersion = publishedVersions.get(item.testId);
+    return currentVersion != null && item.testRevision === currentVersion;
+  });
 
   if (!selectedTest) {
     return <EmptyTeacherState onOpenTests={() => navigate("/teacher/tests")} />;
@@ -45,6 +61,8 @@ function TeacherTestsRoute({ overview, refresh }) {
     if (refreshed && nextTestId && nextTestId !== testId) {
       navigate(`/teacher/tests/${nextTestId}`);
     }
+
+    return refreshed;
   }
 
   return (
@@ -66,7 +84,13 @@ export function TeacherRoutes({ overview, refresh }) {
       <Route path="/teacher/tests/:testId?" element={<TeacherTestsRoute overview={overview} refresh={refresh} />} />
       <Route
         path="/teacher/reviews"
-        element={<ReviewQueue reviews={overview.reviews} onReviewsChanged={refresh} />}
+        element={(
+          <ReviewQueue
+            reviews={overview.reviews}
+            terminalReviewsNextCursor={overview.terminalReviewsNextCursor}
+            onReviewsChanged={refresh}
+          />
+        )}
       />
       <Route path="/teacher/models" element={<ModelPanel models={overview.models} />} />
       <Route path="*" element={<Navigate to="/teacher/dashboard" replace />} />

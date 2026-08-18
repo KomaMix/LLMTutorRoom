@@ -5,9 +5,12 @@ export function ConfirmDialog({
   title,
   description,
   confirmLabel,
+  busyLabel = "Удаление...",
+  icon: Icon = Trash2,
   isBusy,
   onCancel,
-  onConfirm
+  onConfirm,
+  variant = "danger"
 }) {
   const titleId = useId();
   const descriptionId = useId();
@@ -80,15 +83,16 @@ export function ConfirmDialog({
     >
       <section
         ref={dialogRef}
-        className="confirm-dialog"
+        className={`confirm-dialog ${variant}`}
         role="dialog"
         tabIndex={-1}
+        aria-busy={isBusy}
         aria-modal="true"
         aria-labelledby={titleId}
         aria-describedby={descriptionId}
       >
         <div className="confirm-dialog-icon">
-          <Trash2 size={20} aria-hidden="true" />
+          <Icon size={20} aria-hidden="true" />
         </div>
         <div>
           <h2 id={titleId}>{title}</h2>
@@ -104,11 +108,16 @@ export function ConfirmDialog({
           >
             Отмена
           </button>
-          <button type="button" className="button danger" onClick={onConfirm} disabled={isBusy}>
+          <button
+            type="button"
+            className={`button ${variant}`}
+            onClick={onConfirm}
+            disabled={isBusy}
+          >
             {isBusy
               ? <Loader2 className="spin" size={16} aria-hidden="true" />
-              : <Trash2 size={16} aria-hidden="true" />}
-            {isBusy ? "Удаление..." : confirmLabel}
+              : <Icon size={16} aria-hidden="true" />}
+            {isBusy ? busyLabel : confirmLabel}
           </button>
         </div>
       </section>

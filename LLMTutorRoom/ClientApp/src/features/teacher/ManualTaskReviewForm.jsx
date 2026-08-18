@@ -51,6 +51,16 @@ export function ManualTaskReviewForm({ reviewId, result, onSaved }) {
         <strong>{result.taskTitle}</strong>
         <span>{result.maxScore} баллов</span>
       </div>
+      <div className="manual-review-context">
+        <div>
+          <span>Задание</span>
+          <p>{result.taskPrompt}</p>
+        </div>
+        <div>
+          <span>Ответ ученика</span>
+          <p>{result.studentAnswer?.trim() || "Ответ не указан."}</p>
+        </div>
+      </div>
       <div className="form-row">
         <div className="field">
           <label htmlFor={`manual-score-${reviewId}-${result.taskId}`}>Балл</label>

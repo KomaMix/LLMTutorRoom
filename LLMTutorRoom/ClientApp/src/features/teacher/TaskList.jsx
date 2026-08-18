@@ -15,24 +15,28 @@ export function TaskList({
   onCreate,
   onDelete,
   onEdit,
-  onToggleVisibility
+  onToggleVisibility,
+  disabled = false,
+  readOnly = false
 }) {
-  const isTaskMutationBusy = Boolean(busyTaskId);
+  const isTaskMutationBusy = disabled || Boolean(busyTaskId);
 
   if (tasks.length === 0) {
     return (
       <section className="empty-state compact-empty-state">
         <FileText size={24} aria-hidden="true" />
         <h2>Заданий пока нет</h2>
-        <button
-          type="button"
-          className="button primary"
-          disabled={isTaskMutationBusy}
-          onClick={onCreate}
-        >
-          <Plus size={16} aria-hidden="true" />
-          Добавить задание
-        </button>
+        {!readOnly && (
+          <button
+            type="button"
+            className="button primary"
+            disabled={isTaskMutationBusy}
+            onClick={onCreate}
+          >
+            <Plus size={16} aria-hidden="true" />
+            Добавить задание
+          </button>
+        )}
       </section>
     );
   }
@@ -46,37 +50,39 @@ export function TaskList({
               <strong>{index + 1}. {task.title}</strong>
               <span>{task.maxPoints} баллов</span>
             </div>
-            <div className="task-actions">
-              <button
-                type="button"
-                className="icon-button"
-                title="Редактировать"
-                disabled={isTaskMutationBusy}
-                onClick={() => onEdit(task)}
-              >
-                <Pencil size={16} aria-hidden="true" />
-              </button>
-              <button
-                type="button"
-                className="icon-button"
-                title={task.isHidden ? "Показать задание" : "Скрыть задание"}
-                disabled={isTaskMutationBusy}
-                onClick={() => onToggleVisibility(task, !task.isHidden)}
-              >
-                {task.isHidden
-                  ? <Eye size={16} aria-hidden="true" />
-                  : <EyeOff size={16} aria-hidden="true" />}
-              </button>
-              <button
-                type="button"
-                className="icon-button danger"
-                title="Удалить задание"
-                disabled={isTaskMutationBusy}
-                onClick={() => onDelete(task)}
-              >
-                <Trash2 size={16} aria-hidden="true" />
-              </button>
-            </div>
+            {!readOnly && (
+              <div className="task-actions">
+                <button
+                  type="button"
+                  className="icon-button"
+                  title="Редактировать"
+                  disabled={isTaskMutationBusy}
+                  onClick={() => onEdit(task)}
+                >
+                  <Pencil size={16} aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  className="icon-button"
+                  title={task.isHidden ? "Показать задание" : "Скрыть задание"}
+                  disabled={isTaskMutationBusy}
+                  onClick={() => onToggleVisibility(task, !task.isHidden)}
+                >
+                  {task.isHidden
+                    ? <Eye size={16} aria-hidden="true" />
+                    : <EyeOff size={16} aria-hidden="true" />}
+                </button>
+                <button
+                  type="button"
+                  className="icon-button danger"
+                  title="Удалить задание"
+                  disabled={isTaskMutationBusy}
+                  onClick={() => onDelete(task)}
+                >
+                  <Trash2 size={16} aria-hidden="true" />
+                </button>
+              </div>
+            )}
           </div>
           <div className="task-subline">
             <StatusBadge status={task.type} />

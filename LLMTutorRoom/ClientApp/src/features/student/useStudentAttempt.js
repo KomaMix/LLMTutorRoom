@@ -34,8 +34,18 @@ function getConflictAttempt(error) {
     return null;
   }
 
-  return error.data && typeof error.data === "object"
-    ? error.data
+  const attempt = error.data;
+  const hasAnswers = attempt?.answers
+    && typeof attempt.answers === "object"
+    && !Array.isArray(attempt.answers);
+
+  return Number.isInteger(attempt?.id)
+    && typeof attempt.testId === "string"
+    && typeof attempt.status === "string"
+    && typeof attempt.startedAt === "string"
+    && typeof attempt.endsAt === "string"
+    && hasAnswers
+    ? attempt
     : null;
 }
 
@@ -72,6 +82,7 @@ export function useStudentAttempt({
   selectedTest,
   selectedAttempt,
   updateAttempt,
+  onAttemptVersionConflict,
   onSubmitted
 }) {
   const testId = selectedTest?.id ?? null;
@@ -101,8 +112,8 @@ export function useStudentAttempt({
   }
 
   const context = contextRef.current;
-  const callbacksRef = useRef({ updateAttempt, onSubmitted });
-  callbacksRef.current = { updateAttempt, onSubmitted };
+  const callbacksRef = useRef({ updateAttempt, onAttemptVersionConflict, onSubmitted });
+  callbacksRef.current = { updateAttempt, onAttemptVersionConflict, onSubmitted };
 
   const mountedRef = useRef(true);
   const accessTokenSnapshotRef = useRef(getAccessToken());
@@ -453,10 +464,37 @@ export function useStudentAttempt({
 
     operation.promise = (async () => {
       try {
-        const attempt = await startAttempt(operationContext.testId);
+        const expectedVersionNumber = operationContext.selectedTest?.versionNumber;
+        const attempt = await startAttempt(
+          operationContext.testId,
+          expectedVersionNumber
+        );
+        if (Number.isInteger(expectedVersionNumber)
+            && attempt.testRevision !== expectedVersionNumber) {
+          const refreshed = await callbacksRef.current.onAttemptVersionConflict?.();
+          if (!refreshed && isCurrentContext(operationContext)) {
+            setMessageState({
+              generation: operationContext.generation,
+              value: "Версия теста изменилась. Обновите страницу перед продолжением."
+            });
+          }
+          return Boolean(refreshed);
+        }
+
         callbacksRef.current.updateAttempt(attempt);
         return true;
       } catch (error) {
+        if (error instanceof ApiError && error.status === 409) {
+          await callbacksRef.current.onAttemptVersionConflict?.();
+          if (isCurrentContext(operationContext)) {
+            setMessageState({
+              generation: operationContext.generation,
+              value: "Опубликована новая версия теста. Каталог обновлён — начните ещё раз."
+            });
+          }
+          return false;
+        }
+
         if (isCurrentContext(operationContext)) {
           setMessageState({
             generation: operationContext.generation,

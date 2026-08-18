@@ -19,7 +19,6 @@ export function createInitialTestForm(defaultModelKey = "") {
     title: "",
     subject: "",
     summary: "",
-    status: "draft",
     deadline: toInputDate(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)),
     timeLimitMinutes: 45,
     llmModelKey: defaultModelKey
@@ -48,7 +47,6 @@ export function createTestFormFromTest(test) {
     title: test.title,
     subject: test.subject,
     summary: test.summary,
-    status: test.status,
     deadline: toInputDate(test.deadline),
     timeLimitMinutes: test.timeLimitMinutes,
     llmModelKey: test.llmModelKey ?? ""
@@ -60,7 +58,6 @@ export function createTestPayload(form) {
     title: form.title,
     subject: form.subject,
     summary: form.summary,
-    status: form.status,
     deadline: endOfLocalDayToIso(form.deadline),
     timeLimitMinutes: Number(form.timeLimitMinutes),
     llmModelKey: form.llmModelKey
@@ -200,7 +197,7 @@ export function createTestListSummary(test) {
     ? ` · скрыто ${hiddenTaskCount}`
     : "";
 
-  return `${test.subject} · ${visibleTaskCount} заданий${hiddenText} · ${test.timeLimitMinutes} мин`;
+  return `v${test.versionNumber} · ${test.subject} · ${visibleTaskCount} заданий${hiddenText} · ${test.timeLimitMinutes} мин`;
 }
 
 export function createTaskCountSummary(test) {

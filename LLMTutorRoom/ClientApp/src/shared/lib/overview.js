@@ -14,11 +14,20 @@ export function parseOverview(data) {
   requireArray(data.reviews, "reviews");
   requireArray(data.attempts, "attempts");
 
+  if (data.terminalReviewsNextCursor != null
+    && typeof data.terminalReviewsNextCursor !== "string") {
+    throw new Error("terminalReviewsNextCursor must be a string or null.");
+  }
+
   if (!data.metrics || typeof data.metrics !== "object") {
     throw new Error("Overview response must contain metrics.");
   }
 
   data.tests.forEach((test, testIndex) => {
+    if (!Number.isInteger(test.contentRevision) || test.contentRevision < 0) {
+      throw new Error(`tests[${testIndex}].contentRevision must be a non-negative integer.`);
+    }
+
     if (typeof test.llmModelKey !== "string") {
       throw new Error(`tests[${testIndex}].llmModelKey must be a string.`);
     }
@@ -64,6 +73,10 @@ export function parseOverview(data) {
       throw new Error(`attempts[${attemptIndex}].testId must be a string.`);
     }
 
+    if (!Number.isInteger(attempt.testRevision) || attempt.testRevision < 0) {
+      throw new Error(`attempts[${attemptIndex}].testRevision must be a non-negative integer.`);
+    }
+
     if (typeof attempt.status !== "string") {
       throw new Error(`attempts[${attemptIndex}].status must be a string.`);
     }
@@ -79,6 +92,28 @@ export function parseOverview(data) {
     if (!attempt.answers || typeof attempt.answers !== "object" || Array.isArray(attempt.answers)) {
       throw new Error(`attempts[${attemptIndex}].answers must be an object.`);
     }
+  });
+
+  return data;
+}
+
+export function parseReviewHistoryPage(data) {
+  if (!data || typeof data !== "object") {
+    throw new Error("Review history response must be an object.");
+  }
+
+  requireArray(data.reviews, "reviews");
+  if (data.nextCursor != null && typeof data.nextCursor !== "string") {
+    throw new Error("nextCursor must be a string or null.");
+  }
+
+  data.reviews.forEach((review, reviewIndex) => {
+    requireArray(review.taskResults, `reviews[${reviewIndex}].taskResults`);
+    review.taskResults.forEach((taskResult, taskResultIndex) => {
+      requireArray(
+        taskResult.findings,
+        `reviews[${reviewIndex}].taskResults[${taskResultIndex}].findings`);
+    });
   });
 
   return data;

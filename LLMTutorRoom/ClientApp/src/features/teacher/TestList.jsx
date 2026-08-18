@@ -4,6 +4,7 @@ import { createTestListSummary } from "./teacherTestHelpers.js";
 
 export function TestList({
   form,
+  isBusy,
   isCreating,
   message,
   models,
@@ -29,6 +30,8 @@ export function TestList({
             key={test.id}
             type="button"
             className={test.id === selectedTestId ? "active" : ""}
+            aria-current={test.id === selectedTestId ? "page" : undefined}
+            disabled={isBusy}
             onClick={() => onSelectTest(test.id)}
           >
             <span>{test.title}</span>
@@ -39,6 +42,7 @@ export function TestList({
 
       <TestForm
         form={form}
+        isDisabled={isBusy}
         isSubmitting={isCreating}
         message={message}
         mode="create"

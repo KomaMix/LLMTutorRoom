@@ -39,7 +39,7 @@ export function TeacherDashboard({ overview, selectedTest, activeReviews, onOpen
           <div className="panel-header">
             <div>
               <span className="eyebrow">Текущий тест</span>
-              <h2>{selectedTest.title}</h2>
+              <h2>{selectedTest.title} · v{selectedTest.versionNumber}</h2>
             </div>
             <button type="button" className="button secondary" onClick={onOpenTests}>
               <Layers3 size={16} aria-hidden="true" />

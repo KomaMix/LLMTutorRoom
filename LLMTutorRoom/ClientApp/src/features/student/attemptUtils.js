@@ -25,10 +25,6 @@ export function getReviewStatusMessage(status) {
     return "Проверка ожидает преподавателя.";
   }
 
-  if (status === "paused") {
-    return "Автоматическая проверка временно приостановлена. Она продолжится позже.";
-  }
-
   if (status === "failed") {
     return "Проверка остановлена и требует внимания преподавателя.";
   }

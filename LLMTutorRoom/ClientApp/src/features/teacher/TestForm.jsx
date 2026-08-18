@@ -6,6 +6,7 @@ import {
 
 export function TestForm({
   form,
+  isDisabled = false,
   isSubmitting,
   message,
   mode,
@@ -14,6 +15,7 @@ export function TestForm({
   onSubmit
 }) {
   const isEditing = mode === "edit";
+  const controlsDisabled = isDisabled || isSubmitting;
   const idPrefix = isEditing ? "edit-test" : "test";
   const modelOptions = getModelOptions(models, form.llmModelKey);
 
@@ -27,7 +29,7 @@ export function TestForm({
       <input
         id={`${idPrefix}-title`}
         value={form.title}
-        disabled={isSubmitting}
+        disabled={controlsDisabled}
         onChange={event => updateForm("title", event.target.value)}
         required
       />
@@ -40,7 +42,7 @@ export function TestForm({
       <input
         id={`${idPrefix}-subject`}
         value={form.subject}
-        disabled={isSubmitting}
+        disabled={controlsDisabled}
         onChange={event => updateForm("subject", event.target.value)}
         required
       />
@@ -77,31 +79,17 @@ export function TestForm({
         </>
       )}
 
-      <div className="form-row">
-        <div className="field">
-          <label htmlFor={`${idPrefix}-time-limit`}>Время, мин</label>
-          <input
-            id={`${idPrefix}-time-limit`}
-            min="1"
-            type="number"
-            value={form.timeLimitMinutes}
-            disabled={isSubmitting}
-            onChange={event => updateForm("timeLimitMinutes", event.target.value)}
-            required
-          />
-        </div>
-        <div className="field">
-          <label htmlFor={`${idPrefix}-status`}>Статус</label>
-          <select
-            id={`${idPrefix}-status`}
-            value={form.status}
-            disabled={isSubmitting}
-            onChange={event => updateForm("status", event.target.value)}
-          >
-            <option value="draft">Черновик</option>
-            <option value="published">Опубликован</option>
-          </select>
-        </div>
+      <div className="field">
+        <label htmlFor={`${idPrefix}-time-limit`}>Время, мин</label>
+        <input
+          id={`${idPrefix}-time-limit`}
+          min="1"
+          type="number"
+          value={form.timeLimitMinutes}
+          disabled={controlsDisabled}
+          onChange={event => updateForm("timeLimitMinutes", event.target.value)}
+          required
+        />
       </div>
 
       <div className="field">
@@ -110,7 +98,7 @@ export function TestForm({
           id={`${idPrefix}-deadline`}
           type="date"
           value={form.deadline}
-          disabled={isSubmitting}
+          disabled={controlsDisabled}
           onChange={event => updateForm("deadline", event.target.value)}
           required
         />
@@ -121,7 +109,7 @@ export function TestForm({
         <select
           id={`${idPrefix}-llm-model`}
           value={form.llmModelKey}
-          disabled={isSubmitting}
+          disabled={controlsDisabled}
           onChange={event => updateForm("llmModelKey", event.target.value)}
         >
           <option value="">Без LLM-модели</option>
@@ -139,14 +127,16 @@ export function TestForm({
           id={`${idPrefix}-summary`}
           className="compact-textarea"
           value={form.summary}
-          disabled={isSubmitting}
+          disabled={controlsDisabled}
           onChange={event => updateForm("summary", event.target.value)}
         />
       </div>
 
-      {message && <p className="form-note">{message}</p>}
+      <div role="status" aria-atomic="true" aria-live="polite">
+        {message && <p className="form-note">{message}</p>}
+      </div>
 
-      <button type="submit" className="button primary" disabled={isSubmitting}>
+      <button type="submit" className="button primary" disabled={controlsDisabled}>
         {isSubmitting
           ? <Loader2 className="spin" size={16} aria-hidden="true" />
           : isEditing

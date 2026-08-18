@@ -1,11 +1,11 @@
 export const statusText = {
   published: "Опубликован",
   draft: "Черновик",
+  superseded: "Предыдущая версия",
   checked: "Проверено",
   queued: "В очереди",
   processing: "Проверяется",
   "retry-scheduled": "Повторная проверка",
-  paused: "Пауза",
   "manual-review": "Ручная проверка",
   failed: "Ошибка",
   available: "Доступна",

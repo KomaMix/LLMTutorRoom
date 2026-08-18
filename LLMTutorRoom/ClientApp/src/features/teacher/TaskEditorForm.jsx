@@ -34,12 +34,14 @@ export function TaskEditorForm({
   submitLabel,
   submittingLabel,
   message,
+  isDisabled = false,
   isSubmitting,
   hasLlmModel,
   onChange,
   onSubmit
 }) {
   const isChoiceTask = form.type !== "free-text";
+  const controlsDisabled = isDisabled || isSubmitting;
   const optionKeyPrefix = useId();
   const optionKeySequence = useRef(form.options.length);
   const optionKeys = useRef(form.options.map((_, index) => `${optionKeyPrefix}-${index + 1}`));
@@ -133,7 +135,7 @@ export function TaskEditorForm({
             <button
               key={type.value}
               type="button"
-              disabled={isSubmitting}
+              disabled={controlsDisabled}
               className={form.type === type.value ? "active" : ""}
               onClick={() => changeTaskType(type.value)}
             >
@@ -150,7 +152,7 @@ export function TaskEditorForm({
           <input
             id={`${formId}-title`}
             value={form.title}
-            disabled={isSubmitting}
+            disabled={controlsDisabled}
             onChange={event => updateForm("title", event.target.value)}
             required
           />
@@ -163,7 +165,7 @@ export function TaskEditorForm({
             step="0.5"
             type="number"
             value={form.maxPoints}
-            disabled={isSubmitting}
+            disabled={controlsDisabled}
             onChange={event => updateForm("maxPoints", event.target.value)}
             required
           />
@@ -179,7 +181,7 @@ export function TaskEditorForm({
             step="0.1"
             type="number"
             value={form.wrongAnswerPenalty}
-            disabled={isSubmitting}
+            disabled={controlsDisabled}
             onChange={event => updateForm("wrongAnswerPenalty", event.target.value)}
           />
         </div>
@@ -190,7 +192,7 @@ export function TaskEditorForm({
         <textarea
           id={`${formId}-prompt`}
           value={form.prompt}
-          disabled={isSubmitting}
+          disabled={controlsDisabled}
           onChange={event => updateForm("prompt", event.target.value)}
           required
         />
@@ -207,7 +209,7 @@ export function TaskEditorForm({
                 <button
                   key={mode.value}
                   type="button"
-                  disabled={isSubmitting || isUnavailable}
+                  disabled={controlsDisabled || isUnavailable}
                   className={form.checkMode === mode.value && !isUnavailable ? "active" : ""}
                   onClick={() => updateForm("checkMode", mode.value)}
                 >
@@ -227,7 +229,7 @@ export function TaskEditorForm({
               <span className="eyebrow">Ответы</span>
               <h3>Варианты</h3>
             </div>
-            <button type="button" className="button secondary" onClick={addOption} disabled={isSubmitting}>
+            <button type="button" className="button secondary" onClick={addOption} disabled={controlsDisabled}>
               <Plus size={16} aria-hidden="true" />
               Добавить
             </button>
@@ -242,13 +244,13 @@ export function TaskEditorForm({
                   className="option-control"
                   name={`${formId}-correct-option`}
                   type={form.type === "single-choice" ? "radio" : "checkbox"}
-                  disabled={isSubmitting}
+                  disabled={controlsDisabled}
                   onChange={event => toggleCorrectOption(index, event.target.checked)}
                 />
                 <input
                   aria-label={`Вариант ${index + 1}`}
                   value={option}
-                  disabled={isSubmitting}
+                  disabled={controlsDisabled}
                   onChange={event => updateOption(index, event.target.value)}
                   placeholder={`Вариант ${index + 1}`}
                 />
@@ -256,7 +258,7 @@ export function TaskEditorForm({
                   type="button"
                   className="icon-button"
                   title="Удалить вариант"
-                  disabled={isSubmitting || form.options.length <= 2}
+                  disabled={controlsDisabled || form.options.length <= 2}
                   onClick={() => removeOption(index)}
                 >
                   <X size={16} aria-hidden="true" />
@@ -267,9 +269,11 @@ export function TaskEditorForm({
         </div>
       )}
 
-      {message && <p className="form-note">{message}</p>}
+      <div role="status" aria-atomic="true" aria-live="polite">
+        {message && <p className="form-note">{message}</p>}
+      </div>
 
-      <button type="submit" className="button primary" disabled={isSubmitting}>
+      <button type="submit" className="button primary" disabled={controlsDisabled}>
         {isSubmitting ? <Loader2 className="spin" size={16} aria-hidden="true" /> : <Save size={16} aria-hidden="true" />}
         {isSubmitting ? submittingLabel : submitLabel}
       </button>

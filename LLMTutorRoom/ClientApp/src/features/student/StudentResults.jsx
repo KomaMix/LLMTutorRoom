@@ -1,16 +1,37 @@
-import { useEffect, useState } from "react";
-import { CheckCircle2 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { CheckCircle2, Loader2 } from "lucide-react";
+import { getReviewHistory } from "../../api/classroomApi.js";
 import { StatusBadge } from "../../shared/ui/StatusBadge.jsx";
 import { formatDate } from "../../shared/lib/dates.js";
+import { parseReviewHistoryPage } from "../../shared/lib/overview.js";
+import { isTerminalReview, mergeReviews } from "../../shared/lib/reviews.js";
 import {
   getEffectiveAttemptStatus,
   getReviewStatusMessage
 } from "./attemptUtils.js";
 
-export function StudentResults({ attempts, reviews, tests }) {
+export function StudentResults({ attempts, reviews, tests, terminalReviewsNextCursor }) {
   const [currentTime, setCurrentTime] = useState(Date.now());
+  const [terminalReviews, setTerminalReviews] = useState(() =>
+    reviews.filter(isTerminalReview));
+  const [nextCursor, setNextCursor] = useState(terminalReviewsNextCursor ?? null);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [historyError, setHistoryError] = useState("");
+  const loadedAdditionalHistoryRef = useRef(false);
   const completedAttempts = attempts.filter(attempt =>
     attempt.status !== "in-progress" || new Date(attempt.endsAt).getTime() <= currentTime);
+  const visibleReviews = mergeReviews(
+    reviews.filter(review => !isTerminalReview(review)),
+    terminalReviews);
+
+  useEffect(() => {
+    setTerminalReviews(current => mergeReviews(
+      current,
+      reviews.filter(isTerminalReview)));
+    if (!loadedAdditionalHistoryRef.current) {
+      setNextCursor(terminalReviewsNextCursor ?? null);
+    }
+  }, [reviews, terminalReviewsNextCursor]);
 
   useEffect(() => {
     const nextDeadline = attempts
@@ -31,7 +52,28 @@ export function StudentResults({ attempts, reviews, tests }) {
     return () => window.clearTimeout(timer);
   }, [attempts, currentTime]);
 
-  if (completedAttempts.length === 0 && reviews.length === 0) {
+  async function handleLoadMore() {
+    if (!nextCursor || isLoadingHistory) {
+      return;
+    }
+
+    setIsLoadingHistory(true);
+    setHistoryError("");
+    try {
+      const page = parseReviewHistoryPage(await getReviewHistory({ cursor: nextCursor }));
+      loadedAdditionalHistoryRef.current = true;
+      setTerminalReviews(current => mergeReviews(current, page.reviews));
+      setNextCursor(page.nextCursor ?? null);
+    } catch (error) {
+      if (error?.name !== "AbortError") {
+        setHistoryError("Не удалось загрузить историю проверок.");
+      }
+    } finally {
+      setIsLoadingHistory(false);
+    }
+  }
+
+  if (completedAttempts.length === 0 && visibleReviews.length === 0) {
     return (
       <section className="panel empty-state">
         <CheckCircle2 size={28} aria-hidden="true" />
@@ -76,11 +118,11 @@ export function StudentResults({ attempts, reviews, tests }) {
         </div>
       )}
 
-      {reviews.length > 0 && (
+      {visibleReviews.length > 0 && (
         <>
           <h3>Проверки</h3>
           <div className="result-list">
-            {reviews.map(review => (
+            {visibleReviews.map(review => (
               <article className="result-card" key={review.id}>
                 <div>
                   <strong>{review.testTitle}</strong>
@@ -105,6 +147,18 @@ export function StudentResults({ attempts, reviews, tests }) {
           </div>
         </>
       )}
+      {nextCursor && (
+        <button
+          type="button"
+          className="button secondary"
+          disabled={isLoadingHistory}
+          onClick={handleLoadMore}
+        >
+          {isLoadingHistory && <Loader2 className="spin" size={16} aria-hidden="true" />}
+          {isLoadingHistory ? "Загрузка..." : "Загрузить ещё проверки"}
+        </button>
+      )}
+      {historyError && <p className="form-note error" role="alert">{historyError}</p>}
     </section>
   );
 }

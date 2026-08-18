@@ -10,6 +10,7 @@ export function TaskPanel({
   editMessage,
   editingTaskId,
   hasLlmModel,
+  isDisabled = false,
   isCreating,
   isSaving,
   mode,
@@ -21,10 +22,12 @@ export function TaskPanel({
   onModeChange,
   onToggleVisibility,
   onUpdate,
+  readOnly = false,
   tasks
 }) {
   const isEditorSubmitting = (mode === "create" && isCreating)
     || (mode === "edit" && isSaving);
+  const controlsDisabled = isDisabled || isEditorSubmitting;
 
   return (
     <div className="panel-section">
@@ -37,38 +40,46 @@ export function TaskPanel({
           <button
             type="button"
             className={mode === "list" ? "active" : ""}
-            disabled={isEditorSubmitting}
+            disabled={controlsDisabled}
             onClick={() => onModeChange("list")}
           >
             <ListChecks size={16} aria-hidden="true" />
             Список
           </button>
-          <button
-            type="button"
-            className={mode === "create" ? "active" : ""}
-            disabled={isEditorSubmitting}
-            onClick={() => onModeChange("create")}
-          >
-            <Plus size={16} aria-hidden="true" />
-            Новое
-          </button>
+          {!readOnly && (
+            <button
+              type="button"
+              className={mode === "create" ? "active" : ""}
+              disabled={controlsDisabled}
+              onClick={() => onModeChange("create")}
+            >
+              <Plus size={16} aria-hidden="true" />
+              Новое
+            </button>
+          )}
         </div>
       </div>
 
-      {mode === "list" && createMessage && <p className="form-note">{createMessage}</p>}
+      {mode === "list" && (
+        <div role="status" aria-atomic="true" aria-live="polite">
+          {createMessage && <p className="form-note">{createMessage}</p>}
+        </div>
+      )}
 
       {mode === "list" && (
         <TaskList
           tasks={tasks}
           busyTaskId={busyTaskId}
+          disabled={isDisabled}
           onCreate={() => onModeChange("create")}
           onDelete={onDelete}
           onEdit={onEdit}
           onToggleVisibility={onToggleVisibility}
+          readOnly={readOnly}
         />
       )}
 
-      {mode === "create" && (
+      {!readOnly && mode === "create" && (
         <TaskEditorForm
           key="new-task"
           form={createForm}
@@ -77,6 +88,7 @@ export function TaskPanel({
           submitLabel="Добавить задание"
           submittingLabel="Добавление..."
           message={createMessage}
+          isDisabled={isDisabled}
           isSubmitting={isCreating}
           hasLlmModel={hasLlmModel}
           onChange={onCreateFormChange}
@@ -84,7 +96,7 @@ export function TaskPanel({
         />
       )}
 
-      {mode === "edit" && (
+      {!readOnly && mode === "edit" && (
         <div className="task-edit-panel">
           <TaskEditorForm
             key={editingTaskId}
@@ -94,6 +106,7 @@ export function TaskPanel({
             submitLabel="Сохранить задание"
             submittingLabel="Сохранение..."
             message={editMessage}
+            isDisabled={isDisabled}
             isSubmitting={isSaving}
             hasLlmModel={hasLlmModel}
             onChange={onEditFormChange}
@@ -102,7 +115,7 @@ export function TaskPanel({
           <button
             type="button"
             className="button secondary"
-            disabled={isSaving}
+            disabled={isDisabled || isSaving}
             onClick={() => onModeChange("list")}
           >
             Вернуться к списку

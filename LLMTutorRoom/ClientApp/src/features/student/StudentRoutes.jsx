@@ -19,9 +19,33 @@ function hasPendingResults(overview) {
       .map(review => review.attemptId)
       .filter(attemptId => attemptId != null));
 
-  return overview.reviews.some(review => !completedReviewStatuses.has(review.status))
-    || overview.attempts.some(attempt =>
-      attempt.status === "submitted" && !reviewedAttemptIds.has(attempt.id));
+  if (overview.reviews.some(review => !completedReviewStatuses.has(review.status))) {
+    return true;
+  }
+
+  const terminalReviews = overview.reviews.filter(review =>
+    completedReviewStatuses.has(review.status));
+  const oldestLoadedTerminalTime = terminalReviews.length === 0
+    ? null
+    : Math.min(...terminalReviews.map(review => new Date(review.submittedAt).getTime()));
+  const hasMoreTerminalHistory = Boolean(overview.terminalReviewsNextCursor);
+  const recentSubmissionThreshold = Date.now() - 2 * 60 * 1000;
+
+  return overview.attempts.some(attempt => {
+    if (attempt.status !== "submitted" || reviewedAttemptIds.has(attempt.id)) {
+      return false;
+    }
+
+    const submittedAt = new Date(attempt.submittedAt).getTime();
+    if (!hasMoreTerminalHistory || oldestLoadedTerminalTime == null) {
+      return true;
+    }
+
+    // A missing old review may simply live behind the terminal cursor. Newly
+    // submitted attempts still receive a short delivery grace window.
+    return submittedAt > oldestLoadedTerminalTime
+      || submittedAt >= recentSubmissionThreshold;
+  });
 }
 
 function getNextAttemptDeadline(attempts) {
@@ -48,6 +72,7 @@ function StudentTestsRoute({ overview, refresh, updateAttempt }) {
     selectedTest,
     selectedAttempt,
     updateAttempt,
+    onAttemptVersionConflict: refresh,
     onSubmitted: () => {
       if (refresh) {
         Promise.resolve(refresh()).catch(() => undefined);
@@ -249,6 +274,7 @@ function StudentResultsRoute({ overview, refresh }) {
       attempts={overview.attempts}
       reviews={overview.reviews}
       tests={overview.tests}
+      terminalReviewsNextCursor={overview.terminalReviewsNextCursor}
     />
   );
 }

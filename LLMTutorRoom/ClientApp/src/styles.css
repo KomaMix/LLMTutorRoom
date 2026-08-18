@@ -496,6 +496,59 @@ button {
   margin-top: 16px;
 }
 
+.version-panel {
+  margin-top: 18px;
+  padding: 16px;
+  border: 1px solid #dbe3e4;
+  border-radius: 8px;
+  background: #f7faf9;
+}
+
+.version-panel h3 {
+  margin: 0;
+}
+
+.version-heading-status,
+.version-actions,
+.version-list {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.version-heading-status {
+  justify-content: flex-end;
+}
+
+.version-list {
+  margin-bottom: 14px;
+}
+
+.version-list button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 38px;
+  padding: 4px 8px 4px 12px;
+  border: 1px solid #d7e2e0;
+  border-radius: 999px;
+  color: #3f5154;
+  background: #ffffff;
+  font-weight: 800;
+}
+
+.version-list button.active,
+.version-list button:not(:disabled):hover {
+  border-color: #256f6d;
+  box-shadow: 0 0 0 2px rgba(37, 111, 109, 0.12);
+}
+
+.version-readonly-note {
+  margin-top: 12px;
+  margin-bottom: 0;
+}
+
 .task-subline {
   display: flex;
   align-items: center;
@@ -935,6 +988,33 @@ textarea:disabled {
   gap: 12px;
 }
 
+.manual-review-context {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid #e0e7e7;
+  border-radius: 8px;
+  background: #f7faf9;
+}
+
+.manual-review-context div {
+  display: grid;
+  gap: 4px;
+}
+
+.manual-review-context span {
+  color: #66787b;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.manual-review-context p {
+  margin: 0;
+  color: #263638;
+  white-space: pre-wrap;
+}
+
 .manual-review-form .button {
   justify-self: start;
 }
@@ -993,13 +1073,17 @@ textarea:disabled {
 .status.in-progress,
 .status.queued,
 .status.processing,
-.status.retry-scheduled,
-.status.paused {
+.status.retry-scheduled {
   color: #6c5410;
   background: #f8edc7;
 }
 
 .status.hidden {
+  color: #526367;
+  background: #e8eeee;
+}
+
+.status.superseded {
   color: #526367;
   background: #e8eeee;
 }
@@ -1151,6 +1235,11 @@ textarea:disabled {
   background: #fff4ee;
 }
 
+.confirm-dialog.primary .confirm-dialog-icon {
+  color: #205f5d;
+  background: #e9f4f2;
+}
+
 .confirm-dialog h2 {
   margin: 0;
   font-size: 19px;
@@ -1272,7 +1361,9 @@ textarea:disabled {
 
   .task-panel-actions,
   .attempt-actions,
-  .confirm-dialog-actions {
+  .confirm-dialog-actions,
+  .version-actions,
+  .version-heading-status {
     width: 100%;
     flex-wrap: wrap;
   }
