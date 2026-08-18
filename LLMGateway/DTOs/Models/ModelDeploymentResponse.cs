@@ -8,6 +8,6 @@ namespace LLMGateway.DTOs.Models
         public bool IsEnabled { get; set; }
         public int Priority { get; set; }
         public int? MaxConcurrentRequests { get; set; }
-        public IReadOnlyCollection<RateLimitRuleResponse> RateLimitRules { get; set; } = Array.Empty<RateLimitRuleResponse>();
+        public List<RateLimitRuleResponse> RateLimitRules { get; set; } = new();
     }
 }

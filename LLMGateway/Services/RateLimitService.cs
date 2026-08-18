@@ -12,7 +12,7 @@ namespace LLMGateway.Services
         public LimitCheckResult TryAcquire(
             int deploymentId,
             int? maxConcurrentRequests,
-            IReadOnlyCollection<ModelRateLimitRule> rules)
+            List<ModelRateLimitRule> rules)
         {
             var now = DateTimeOffset.UtcNow;
             var concurrencyLimit = maxConcurrentRequests.GetValueOrDefault();

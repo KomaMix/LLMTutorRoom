@@ -18,7 +18,7 @@ namespace LLMGateway.Controllers
         }
 
         [HttpGet]
-        public async Task<ActionResult<IReadOnlyCollection<string>>> GetModels(CancellationToken cancellationToken)
+        public async Task<ActionResult<List<string>>> GetModels(CancellationToken cancellationToken)
         {
             var models = await _dbContext.Models
                 .AsNoTracking()
@@ -31,7 +31,7 @@ namespace LLMGateway.Controllers
         }
 
         [HttpGet("catalog")]
-        public async Task<ActionResult<IReadOnlyCollection<ModelResponse>>> GetModelCatalog(
+        public async Task<ActionResult<List<ModelResponse>>> GetModelCatalog(
             CancellationToken cancellationToken)
         {
             var models = await _dbContext.Models

@@ -187,7 +187,7 @@ namespace LLMGateway.Tests
                 MaxConcurrentRequests = maxConcurrentRequests
             };
 
-            deployment.RateLimitRules = (rateLimitRules ?? Array.Empty<ModelRateLimitRule>()).ToList();
+            deployment.RateLimitRules = rateLimitRules?.ToList() ?? new List<ModelRateLimitRule>();
             return deployment;
         }
 
@@ -195,7 +195,7 @@ namespace LLMGateway.Tests
         {
             return new ChatRequest
             {
-                Messages = new[]
+                Messages = new List<ChatMessageRequest>
                 {
                     new ChatMessageRequest
                     {

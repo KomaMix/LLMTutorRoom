@@ -18,7 +18,7 @@ namespace Shared.Auth
             string userId,
             string userName,
             string displayName,
-            IReadOnlyCollection<string> roles)
+            List<string> roles)
         {
             var claims = new List<Claim>
             {
