@@ -11,13 +11,23 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LLMTutorRoom", "LLMTutorRoo
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{463A75AB-1534-4D13-9130-EF1CF9064D95}"
 	ProjectSection(SolutionItems) = preProject
+		.dockerignore = .dockerignore
+		docker-compose.infra.yml = docker-compose.infra.yml
+		docker-compose.yml = docker-compose.yml
 		README.md = README.md
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "docs", "docs", "{955A505C-D79A-4E4A-BD40-722C561EF34D}"
 	ProjectSection(SolutionItems) = preProject
+		docs\architecture.md = docs\architecture.md
+		docs\auth-service.md = docs\auth-service.md
 		docs\images\llmtutorroom-student-attempt.png = docs\images\llmtutorroom-student-attempt.png
 		docs\images\llmtutorroom-teacher-tests.png = docs\images\llmtutorroom-teacher-tests.png
+		docs\llm-gateway.md = docs\llm-gateway.md
+		docs\llm-tutor-room.md = docs\llm-tutor-room.md
+		docs\README.md = docs\README.md
+		docs\review-service.md = docs\review-service.md
+		docs\teaching-service.md = docs\teaching-service.md
 	EndProjectSection
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LLMTutorRoom.Tests", "LLMTutorRoom.Tests\LLMTutorRoom.Tests.csproj", "{E54A4B3E-3B11-45E2-AD27-38003E4446D3}"
@@ -28,6 +38,7 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AuthService", "AuthService\
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "infra", "infra", "{0F0327BC-9B28-4C93-9617-4BC975B0F6EA}"
 	ProjectSection(SolutionItems) = preProject
+		infra\nginx\nginx.compose.conf = infra\nginx\nginx.compose.conf
 		infra\nginx\nginx.local.conf = infra\nginx\nginx.local.conf
 		infra\nginx\nginx.docker.conf = infra\nginx\nginx.docker.conf
 		infra\nginx\README.md = infra\nginx\README.md
