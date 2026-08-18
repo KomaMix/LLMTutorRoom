@@ -4,79 +4,36 @@ namespace LLMTutorRoom.Data
 {
     public sealed class TutorRoomDbContext : DbContext
     {
-        public DbSet<SubmissionReview> SubmissionReviews { get; set; } = null!;
-        public DbSet<TaskReviewResult> TaskReviewResults { get; set; } = null!;
         public DbSet<TestAttempt> TestAttempts { get; set; } = null!;
-        public DbSet<TeacherModelAccess> TeacherModelAccesses { get; set; } = null!;
-        public DbSet<TeacherModelUsage> TeacherModelUsages { get; set; } = null!;
-        public DbSet<TestLlmPause> TestLlmPauses { get; set; } = null!;
+        public DbSet<AttemptSubmissionOutboxMessage> AttemptSubmissionOutboxMessages { get; set; } = null!;
 
         public TutorRoomDbContext(DbContextOptions<TutorRoomDbContext> options) : base(options) { }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
-            modelBuilder.Entity<SubmissionReview>(entity =>
-            {
-                entity.Property(review => review.Status).HasConversion<string>();
-                entity.HasIndex(review => review.TeacherUserId);
-                entity.HasIndex(review => review.AttemptId)
-                    .IsUnique();
-                entity.HasOne(review => review.Attempt)
-                    .WithMany()
-                    .HasForeignKey(review => review.AttemptId)
-                    .OnDelete(DeleteBehavior.Cascade);
-                entity.HasMany(review => review.TaskResults)
-                    .WithOne()
-                    .HasForeignKey(result => result.SubmissionReviewId)
-                    .OnDelete(DeleteBehavior.Cascade);
-            });
-
-            modelBuilder.Entity<TaskReviewResult>(entity =>
-            {
-                entity.Property(result => result.CheckMode).HasConversion<string>();
-                entity.Property(result => result.Status).HasConversion<string>();
-                entity.Property(result => result.FindingsJson)
-                    .HasColumnName("Findings")
-                    .HasColumnType("jsonb");
-                entity.HasIndex(result => new { result.SubmissionReviewId, result.TaskId })
-                    .IsUnique();
-            });
-
             modelBuilder.Entity<TestAttempt>(entity =>
             {
                 entity.Property(attempt => attempt.Status).HasConversion<string>();
                 entity.Property(attempt => attempt.AnswersJson)
                     .HasColumnName("Answers")
                     .HasColumnType("jsonb");
+                entity.Property(attempt => attempt.AllowedTaskIdsJson)
+                    .HasColumnName("AllowedTaskIds")
+                    .HasColumnType("jsonb");
+                entity.Property(attempt => attempt.StateRevision)
+                    .IsConcurrencyToken();
                 entity.HasIndex(attempt => new { attempt.TestId, attempt.StudentUserId })
                     .IsUnique();
             });
 
-            modelBuilder.Entity<TeacherModelAccess>(entity =>
+            modelBuilder.Entity<AttemptSubmissionOutboxMessage>(entity =>
             {
-                entity.HasIndex(access => new { access.TeacherUserId, access.ModelKey })
+                entity.Property(message => message.PayloadJson)
+                    .HasColumnName("Payload")
+                    .HasColumnType("jsonb");
+                entity.HasIndex(message => message.AttemptId)
                     .IsUnique();
-                entity.HasIndex(access => access.TeacherUserId);
-            });
-
-            modelBuilder.Entity<TeacherModelUsage>(entity =>
-            {
-                entity.HasIndex(usage => new
-                    {
-                        usage.TeacherUserId,
-                        usage.ModelKey,
-                        usage.PeriodStart,
-                        usage.PeriodSeconds
-                    })
-                    .IsUnique();
-                entity.HasIndex(usage => usage.TeacherUserId);
-            });
-
-            modelBuilder.Entity<TestLlmPause>(entity =>
-            {
-                entity.HasIndex(pause => new { pause.TestId, pause.ModelKey })
-                    .IsUnique();
-                entity.HasIndex(pause => pause.PausedUntil);
+                entity.HasIndex(message => new { message.PublishedAt, message.NextPublishAt });
             });
         }
     }

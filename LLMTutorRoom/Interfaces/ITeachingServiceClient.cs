@@ -1,6 +1,6 @@
 using TeachingService.Contracts.Models;
 
-namespace LLMTutorRoom.Services.Teaching
+namespace LLMTutorRoom.Interfaces
 {
     public interface ITeachingServiceClient
     {
@@ -12,6 +12,7 @@ namespace LLMTutorRoom.Services.Teaching
         Task<CourseTestDto?> GetTestAsync(
             string testId,
             bool includeHidden,
+            int? versionNumber,
             CancellationToken cancellationToken);
     }
 }

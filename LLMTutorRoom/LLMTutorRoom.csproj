@@ -26,6 +26,7 @@
 
     <ItemGroup>
         <ProjectReference Include="..\Shared.Auth\Shared.Auth.csproj" />
+        <ProjectReference Include="..\ReviewService.Contracts\ReviewService.Contracts.csproj" />
         <ProjectReference Include="..\TeachingService.Contracts\TeachingService.Contracts.csproj" />
     </ItemGroup>
 

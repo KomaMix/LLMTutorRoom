@@ -1,48 +1,23 @@
-using System.ComponentModel.DataAnnotations.Schema;
-using System.Text.Json;
 using System.Text.Json.Serialization;
-using TeachingService.Contracts.Enums;
+using LLMTutorRoom.Enums;
+using ReviewService.Contracts.Responses;
 using TeachingService.Contracts.Models;
 
 namespace LLMTutorRoom.Models
 {
-    public enum SubmissionReviewStatus
-    {
-        Checked,
-        Queued,
-        Processing,
-        RetryScheduled,
-        Paused,
-        ManualReview,
-        Failed
-    }
-
-    public enum TaskReviewResultStatus
-    {
-        Pending,
-        Processing,
-        Succeeded,
-        RetryScheduled,
-        Paused,
-        ManualReview,
-        Failed
-    }
-
-    public enum TestAttemptStatus
-    {
-        InProgress,
-        Submitted,
-        Expired
-    }
-
     public sealed class ClassroomOverview
     {
         public List<CourseTestDto> Tests { get; set; } = new();
         public List<LanguageModel> Models { get; set; } = new();
-        public List<SubmissionReview> Reviews { get; set; } = new();
+        public List<ReviewResponse> Reviews { get; set; } = new();
         public List<TestAttemptResponse> Attempts { get; set; } = new();
         public DashboardMetrics Metrics { get; set; } = new();
+        public string? TerminalReviewsNextCursor { get; set; }
     }
+
+    public sealed record ReviewHistoryPageResponse(
+        List<ReviewResponse> Reviews,
+        string? NextCursor);
 
     public sealed class DashboardMetrics
     {
@@ -67,75 +42,12 @@ namespace LLMTutorRoom.Models
         public DateTimeOffset? PeriodEndsAt { get; set; }
     }
 
-    public sealed class TeacherModelAccess
-    {
-        public int Id { get; set; }
-        public string TeacherUserId { get; set; } = string.Empty;
-        public string ModelKey { get; set; } = string.Empty;
-        public bool IsEnabled { get; set; } = true;
-        public int PeriodSeconds { get; set; } = 30 * 24 * 60 * 60;
-        public int MaxChecks { get; set; }
-        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
-        public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
-    }
-
-    public sealed class TeacherModelUsage
-    {
-        public int Id { get; set; }
-        public string TeacherUserId { get; set; } = string.Empty;
-        public string ModelKey { get; set; } = string.Empty;
-        public DateTimeOffset PeriodStart { get; set; }
-        public int PeriodSeconds { get; set; }
-        public int UsedChecks { get; set; }
-        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
-        public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
-    }
-
-    public sealed class TestLlmPause
-    {
-        public int Id { get; set; }
-        public string TestId { get; set; } = string.Empty;
-        public string ModelKey { get; set; } = string.Empty;
-        public DateTimeOffset PausedUntil { get; set; }
-        public string LastError { get; set; } = string.Empty;
-        public int FailureCount { get; set; }
-        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
-        public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
-    }
-
-    public sealed class SubmissionReview
-    {
-        public int Id { get; set; }
-        public int? AttemptId { get; set; }
-        public TestAttempt? Attempt { get; set; }
-        public string TestId { get; set; } = string.Empty;
-        public string TestTitle { get; set; } = string.Empty;
-        public string TeacherUserId { get; set; } = string.Empty;
-        public string StudentUserId { get; set; } = string.Empty;
-        public string? StudentName { get; set; }
-        public SubmissionReviewStatus Status { get; set; } = SubmissionReviewStatus.Checked;
-        public string ModelKey { get; set; } = string.Empty;
-        public DateTimeOffset SubmittedAt { get; set; }
-        public DateTimeOffset? QueuedAt { get; set; }
-        public DateTimeOffset? StartedAt { get; set; }
-        public DateTimeOffset? CompletedAt { get; set; }
-        public DateTimeOffset? NextRetryAt { get; set; }
-        public DateTimeOffset? ProcessingLeaseExpiresAt { get; set; }
-        public DateTimeOffset? LastEnqueuedAt { get; set; }
-        public DateTimeOffset? LlmQuotaReservedAt { get; set; }
-        public string LlmQuotaReservationError { get; set; } = string.Empty;
-        public int ProcessingAttempts { get; set; }
-        public string LastError { get; set; } = string.Empty;
-        public decimal Score { get; set; }
-        public decimal MaxScore { get; set; }
-        public string Summary { get; set; } = string.Empty;
-        public List<TaskReviewResult> TaskResults { get; set; } = new();
-    }
-
     public sealed class TestAttempt
     {
         public int Id { get; set; }
         public string TestId { get; set; } = string.Empty;
+
+        public int TestRevision { get; set; }
         public string StudentUserId { get; set; } = string.Empty;
         public TestAttemptStatus Status { get; set; } = TestAttemptStatus.InProgress;
         public DateTimeOffset StartedAt { get; set; }
@@ -144,12 +56,31 @@ namespace LLMTutorRoom.Models
 
         [JsonIgnore]
         public string AnswersJson { get; set; } = "{}";
+
+        [JsonIgnore]
+        public string AllowedTaskIdsJson { get; set; } = "[]";
+
+        [JsonIgnore]
+        public int StateRevision { get; set; }
+    }
+
+    public sealed class AttemptSubmissionOutboxMessage
+    {
+        public Guid Id { get; set; }
+        public int AttemptId { get; set; }
+        public DateTimeOffset OccurredAt { get; set; }
+        public string PayloadJson { get; set; } = string.Empty;
+        public int PublishAttempts { get; set; }
+        public DateTimeOffset? NextPublishAt { get; set; }
+        public DateTimeOffset? PublishedAt { get; set; }
+        public string LastError { get; set; } = string.Empty;
     }
 
     public sealed class TestAttemptResponse
     {
         public int Id { get; set; }
         public string TestId { get; set; } = string.Empty;
+        public int TestRevision { get; set; }
         public TestAttemptStatus Status { get; set; }
         public DateTimeOffset StartedAt { get; set; }
         public DateTimeOffset EndsAt { get; set; }
@@ -157,44 +88,7 @@ namespace LLMTutorRoom.Models
         public Dictionary<string, string> Answers { get; set; } = new();
     }
 
-    public sealed class TaskReviewResult
-    {
-        private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
-
-        public int Id { get; set; }
-        public int SubmissionReviewId { get; set; }
-        public string TaskId { get; set; } = string.Empty;
-        public string TaskTitle { get; set; } = string.Empty;
-        public string TaskPrompt { get; set; } = string.Empty;
-        public TestTaskCheckMode CheckMode { get; set; } = TestTaskCheckMode.Auto;
-        public TaskReviewResultStatus Status { get; set; } = TaskReviewResultStatus.Pending;
-        public int Attempts { get; set; }
-        public DateTimeOffset? NextRetryAt { get; set; }
-        public DateTimeOffset? CompletedAt { get; set; }
-        public string LastError { get; set; } = string.Empty;
-        public decimal Score { get; set; }
-        public decimal MaxScore { get; set; }
-        public string Feedback { get; set; } = string.Empty;
-
-        [JsonIgnore]
-        public string FindingsJson { get; set; } = "[]";
-
-        [NotMapped]
-        public List<string> Findings
-        {
-            get
-            {
-                if (string.IsNullOrWhiteSpace(FindingsJson))
-                    return new List<string>();
-
-                return JsonSerializer.Deserialize<List<string>>(FindingsJson, JsonOptions)
-                    ?? new List<string>();
-            }
-            set
-            {
-                FindingsJson = JsonSerializer.Serialize(value ?? new List<string>(), JsonOptions);
-            }
-        }
-    }
-
+    public sealed record StartAttemptResult(
+        StartAttemptOutcome Outcome,
+        TestAttemptResponse? Attempt = null);
 }

@@ -1,6 +1,8 @@
+using System.Globalization;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using LLMTutorRoom.Interfaces;
 using TeachingService.Contracts.Models;
 
 namespace LLMTutorRoom.Services.Teaching
@@ -43,11 +45,20 @@ namespace LLMTutorRoom.Services.Teaching
         public async Task<CourseTestDto?> GetTestAsync(
             string testId,
             bool includeHidden,
+            int? versionNumber,
             CancellationToken cancellationToken)
         {
+            var requestUri =
+                $"/internal/teaching/tests/{Uri.EscapeDataString(testId)}?includeHidden={ToQueryValue(includeHidden)}";
+            if (versionNumber.HasValue)
+            {
+                requestUri +=
+                    $"&versionNumber={versionNumber.Value.ToString(CultureInfo.InvariantCulture)}";
+            }
+
             using var request = new HttpRequestMessage(
                 HttpMethod.Get,
-                $"/internal/teaching/tests/{Uri.EscapeDataString(testId)}?includeHidden={ToQueryValue(includeHidden)}");
+                requestUri);
 
             using var response = await _httpClient.SendAsync(request, cancellationToken);
             if (response.StatusCode == System.Net.HttpStatusCode.NotFound)

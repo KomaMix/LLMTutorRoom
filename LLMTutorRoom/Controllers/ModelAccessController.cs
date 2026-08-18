@@ -1,8 +1,10 @@
 using System.Security.Claims;
-using LLMTutorRoom.DTOs;
-using LLMTutorRoom.Services.ReviewProcessing;
+using LLMTutorRoom.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using ReviewService.Contracts.Responses;
+using PublicUpsertTeacherModelAccessRequest = LLMTutorRoom.DTOs.UpsertTeacherModelAccessRequest;
+using ReviewUpsertTeacherModelAccessRequest = ReviewService.Contracts.Requests.UpsertTeacherModelAccessRequest;
 
 namespace LLMTutorRoom.Controllers
 {
@@ -11,27 +13,27 @@ namespace LLMTutorRoom.Controllers
     [Route("api/classroom/model-access")]
     public sealed class ModelAccessController : ControllerBase
     {
-        private readonly TeacherModelAccessService _modelAccessService;
+        private readonly IReviewServiceClient _reviewServiceClient;
 
-        public ModelAccessController(TeacherModelAccessService modelAccessService)
+        public ModelAccessController(IReviewServiceClient reviewServiceClient)
         {
-            _modelAccessService = modelAccessService;
+            _reviewServiceClient = reviewServiceClient;
         }
 
         [Authorize(Roles = "Admin")]
         [HttpGet("models")]
-        public async Task<ActionResult<IReadOnlyCollection<LlmModelCatalogItemResponse>>> GetModelCatalog(
+        public async Task<ActionResult<List<LlmModelCatalogItemResponse>>> GetModelCatalog(
             CancellationToken cancellationToken)
         {
-            return Ok(await _modelAccessService.GetModelCatalogAsync(cancellationToken));
+            return Ok(await _reviewServiceClient.GetModelCatalogAsync(cancellationToken));
         }
 
         [Authorize(Roles = "Teacher")]
         [HttpGet("me")]
-        public async Task<ActionResult<IReadOnlyCollection<TeacherModelAccessResponse>>> GetMyModelAccess(
+        public async Task<ActionResult<List<TeacherModelAccessResponse>>> GetMyModelAccess(
             CancellationToken cancellationToken)
         {
-            return Ok(await _modelAccessService.GetTeacherAccessAsync(
+            return Ok(await _reviewServiceClient.GetTeacherModelAccessAsync(
                 GetUserId(),
                 includeDisabled: false,
                 cancellationToken));
@@ -39,11 +41,11 @@ namespace LLMTutorRoom.Controllers
 
         [Authorize(Roles = "Admin")]
         [HttpGet("teachers/{teacherUserId}")]
-        public async Task<ActionResult<IReadOnlyCollection<TeacherModelAccessResponse>>> GetTeacherModelAccess(
+        public async Task<ActionResult<List<TeacherModelAccessResponse>>> GetTeacherModelAccess(
             [FromRoute] string teacherUserId,
             CancellationToken cancellationToken)
         {
-            return Ok(await _modelAccessService.GetTeacherAccessAsync(
+            return Ok(await _reviewServiceClient.GetTeacherModelAccessAsync(
                 teacherUserId,
                 includeDisabled: true,
                 cancellationToken));
@@ -54,18 +56,28 @@ namespace LLMTutorRoom.Controllers
         public async Task<ActionResult<TeacherModelAccessResponse>> UpsertTeacherModelAccess(
             [FromRoute] string modelKey,
             [FromRoute] string teacherUserId,
-            [FromBody] UpsertTeacherModelAccessRequest request,
+            [FromBody] PublicUpsertTeacherModelAccessRequest request,
             CancellationToken cancellationToken)
         {
-            var access = await _modelAccessService.UpsertTeacherAccessAsync(
+            var access = await _reviewServiceClient.UpsertTeacherModelAccessAsync(
                 teacherUserId,
                 modelKey,
-                request,
+                new ReviewUpsertTeacherModelAccessRequest
+                {
+                    IsEnabled = request.IsEnabled,
+                    PeriodSeconds = request.PeriodSeconds,
+                    MaxChecks = request.MaxChecks
+                },
                 cancellationToken);
 
-            return access is null
-                ? NotFound()
-                : Ok(access);
+            if (access.IsSuccess)
+            {
+                return access.Value is null
+                    ? StatusCode(StatusCodes.Status502BadGateway)
+                    : Ok(access.Value);
+            }
+
+            return StatusCode((int)access.StatusCode, access.Error);
         }
 
         [Authorize(Roles = "Admin")]
@@ -75,14 +87,15 @@ namespace LLMTutorRoom.Controllers
             [FromRoute] string teacherUserId,
             CancellationToken cancellationToken)
         {
-            var deleted = await _modelAccessService.DeleteTeacherAccessAsync(
+            var deleted = await _reviewServiceClient.DeleteTeacherModelAccessAsync(
                 teacherUserId,
                 modelKey,
                 cancellationToken);
 
-            return deleted
-                ? NoContent()
-                : NotFound();
+            if (deleted.IsSuccess)
+                return NoContent();
+
+            return StatusCode((int)deleted.StatusCode, deleted.Error);
         }
 
         private string GetUserId()
