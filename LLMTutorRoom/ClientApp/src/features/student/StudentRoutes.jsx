@@ -56,6 +56,25 @@ function getNextAttemptDeadline(attempts) {
     .sort((left, right) => left - right)[0] ?? null;
 }
 
+function isReviewPossiblyInHistory(overview, attempt) {
+  if (attempt?.status !== "submitted" || !overview.terminalReviewsNextCursor) {
+    return false;
+  }
+
+  const terminalReviewTimes = overview.reviews
+    .filter(review => completedReviewStatuses.has(review.status))
+    .map(review => new Date(review.submittedAt).getTime())
+    .filter(Number.isFinite);
+  if (terminalReviewTimes.length === 0) {
+    return false;
+  }
+
+  const submittedAt = new Date(attempt.submittedAt).getTime();
+  return Number.isFinite(submittedAt)
+    && submittedAt <= Math.min(...terminalReviewTimes)
+    && submittedAt < Date.now() - 2 * 60 * 1000;
+}
+
 function StudentTestsRoute({ overview, refresh, updateAttempt }) {
   const { testId = "" } = useParams();
   const navigate = useNavigate();
@@ -67,6 +86,9 @@ function StudentTestsRoute({ overview, refresh, updateAttempt }) {
     ?? null;
   const selectedAttempt = selectedTest
     ? overview.attempts.find(attempt => attempt.testId === selectedTest.id) ?? null
+    : null;
+  const selectedReview = selectedAttempt
+    ? overview.reviews.find(review => review.attemptId === selectedAttempt.id) ?? null
     : null;
   const attempt = useStudentAttempt({
     selectedTest,
@@ -173,6 +195,8 @@ function StudentTestsRoute({ overview, refresh, updateAttempt }) {
       selectedTest={selectedTest}
       selectedTestId={selectedTest.id}
       selectedAttempt={selectedAttempt}
+      selectedReview={selectedReview}
+      isReviewDeferred={isReviewPossiblyInHistory(overview, selectedAttempt)}
       remainingSeconds={attempt.remainingSeconds}
       answers={attempt.answers}
       message={attempt.message}

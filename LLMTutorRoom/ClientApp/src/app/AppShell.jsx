@@ -38,7 +38,6 @@ function AppShellContent({ currentUser, role, children }) {
           </div>
           <div className="sidebar-label">
             <strong>LLMTutorRoom</strong>
-            <span>умная проверка знаний</span>
           </div>
         </div>
 
@@ -72,10 +71,7 @@ function AppShellContent({ currentUser, role, children }) {
 
       <main className="workspace">
         <header className="topbar">
-          <div>
-            <span className="eyebrow">НИР prototype</span>
-            <h1>{getPageTitle(role)}</h1>
-          </div>
+          <h1>{getPageTitle(role)}</h1>
           <div className="topbar-actions">
             <StatusBadge status={role} />
             <button

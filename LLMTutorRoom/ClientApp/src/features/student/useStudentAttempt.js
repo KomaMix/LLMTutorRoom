@@ -646,7 +646,7 @@ export function useStudentAttempt({
           setDirty(false);
           setMessageState({
             generation: operationContext.generation,
-            value: "Ответы отправлены. Результаты станут доступны позже."
+            value: ""
           });
         }
       } catch (error) {
