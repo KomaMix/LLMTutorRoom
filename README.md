@@ -28,13 +28,16 @@ flowchart LR
     User["Браузер"] --> Nginx["nginx"]
     Nginx --> Auth["AuthService"]
     Nginx --> Teaching["TeachingService"]
+    Nginx --> Attempt["AttemptService"]
     Nginx --> Tutor["LLMTutorRoom + React"]
     Nginx --> Gateway["LLMGateway"]
 
     Tutor --> Teaching
+    Tutor -- "попытки для overview" --> Attempt
     Tutor --> Review["ReviewService"]
+    Attempt --> Teaching
     Teaching -- "TestReviewPolicyPublishedV1" --> Rabbit[(RabbitMQ)]
-    Tutor -- "AttemptSubmittedV1" --> Rabbit
+    Attempt -- "AttemptSubmittedV1" --> Rabbit
     Rabbit --> Review
     Review --> Gateway
 ```
@@ -43,7 +46,8 @@ flowchart LR
 | --- | --- | --- |
 | `AuthService` | Пользователи, роли, пароли и JWT | [Подробнее](docs/auth-service.md) |
 | `TeachingService` | Тесты, задания, версии и опубликованные правила проверки | [Подробнее](docs/teaching-service.md) |
-| `LLMTutorRoom` | Попытки, ответы, публичный API и React-приложение | [Подробнее](docs/llm-tutor-room.md) |
+| `AttemptService` | Попытки, ответы, серверный таймер и отправка работ | [Подробнее](docs/attempt-service.md) |
+| `LLMTutorRoom` | React-приложение и web-фасад для сборки overview | [Подробнее](docs/llm-tutor-room.md) |
 | `ReviewService` | Результаты, ручная и LLM-проверка, квоты и очередь обработки | [Подробнее](docs/review-service.md) |
 | `LLMGateway` | Каталог моделей, deployment-ы, лимиты и вызов provider-а | [Подробнее](docs/llm-gateway.md) |
 
@@ -54,7 +58,7 @@ flowchart LR
 
 1. `TeachingService` при публикации версии сохраняет неизменяемый снимок правил
    и публикует `TestReviewPolicyPublishedV1`.
-2. `LLMTutorRoom` при сдаче попытки атомарно сохраняет ответы и публикует
+2. `AttemptService` при сдаче попытки атомарно сохраняет ответы и публикует
    `AttemptSubmittedV1`.
 3. `ReviewService` сопоставляет события по `TestId + Revision`. Порядок их
    доставки не важен.
@@ -65,6 +69,8 @@ flowchart LR
 
 Важно: `TeachingService` не запускает проверку. Он публикует только правила.
 Фактом, после которого должна появиться проверка, является отправка попытки.
+Автоматическое истечение времени переводит попытку в `Expired`, но не публикует
+событие и не запускает проверку: для этого нужен явный submit ученика.
 
 ## Скриншоты
 
@@ -112,14 +118,14 @@ docker compose up --build
 | --- | --- |
 | Приложение через nginx | `http://localhost:8080` |
 | AuthService напрямую | `http://localhost:5210` |
-| LLMTutorRoom напрямую | `http://localhost:5206` |
 | LLMGateway напрямую | `http://localhost:5200` |
 | RabbitMQ Management | `http://localhost:15672` (`llm` / `llm-dev`) |
 | PostgreSQL | `localhost:5433` |
 
-`TeachingService` и `ReviewService` в полном Compose не публикуют host-порты.
-Они доступны только через разрешённые публичные маршруты nginx или из закрытой
-backend-сети. `/internal/*` через nginx всегда возвращает `404`.
+`TeachingService`, `AttemptService`, `ReviewService` и `LLMTutorRoom` в полном
+Compose не публикуют host-порты. Интерфейс и публичные маршруты доступны через
+nginx, а межсервисные endpoints — только из закрытой backend-сети.
+`/internal/*` через nginx всегда возвращает `404`.
 
 Остановить контейнеры:
 
@@ -166,22 +172,32 @@ dotnet test LLMGateway.sln --no-restore
 | --- | --- |
 | AuthService | `http://localhost:5210` |
 | TeachingService | `http://localhost:5212` |
+| AttemptService | `http://localhost:5216` |
 | LLMGateway | `http://localhost:5200` |
 | ReviewService | `http://127.0.0.1:5214` |
 | LLMTutorRoom | `http://localhost:5206` |
+
+При таком режиме пользовательский интерфейс также следует открывать через
+локальный nginx на `http://localhost:8080`: он объединяет API всех сервисов под
+одним origin. Порт `5206` нужен nginx для доступа к backend и React-файлам, но
+сам по себе не является полным gateway приложения.
 
 После запуска PostgreSQL и RabbitMQ сервисы можно поднять в отдельных терминалах:
 
 ```bash
 dotnet run --project AuthService/AuthService.csproj
 dotnet run --project TeachingService/TeachingService.csproj
+dotnet run --project AttemptService/AttemptService.csproj
 dotnet run --project LLMGateway/LLMGateway.csproj
 dotnet run --project ReviewService/ReviewService.csproj
 dotnet run --project LLMTutorRoom/LLMTutorRoom.csproj
 ```
 
-`ReviewService` имеет проверки состояния:
+`AttemptService` и `ReviewService` имеют проверки состояния:
 
+- `GET http://localhost:5216/health/live` — процесс `AttemptService` запущен;
+- `GET http://localhost:5216/health/ready` — доступны PostgreSQL и RabbitMQ
+  `AttemptService`;
 - `GET http://127.0.0.1:5214/health/live` — процесс запущен;
 - `GET http://127.0.0.1:5214/health/ready` — доступны его PostgreSQL и RabbitMQ.
 
@@ -194,7 +210,9 @@ dotnet run --project LLMTutorRoom/LLMTutorRoom.csproj
 AuthService/                 пользователи и JWT
 TeachingService/             тесты и версии
 TeachingService.Contracts/   DTO каталога
-LLMTutorRoom/                попытки, публичный API и React
+AttemptService/              попытки, таймер и отправка работ
+AttemptService.Contracts/    DTO публичного и internal API попыток
+LLMTutorRoom/                stateless web-фасад и React
 ReviewService/               проверки и model access
 ReviewService.Contracts/     события и internal DTO
 LLMGateway/                  модели и LLM execution

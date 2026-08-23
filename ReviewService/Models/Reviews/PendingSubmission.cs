@@ -3,7 +3,7 @@ namespace ReviewService.Models.Reviews;
 public sealed class PendingSubmission
 {
     public int Id { get; set; }
-    public int AttemptId { get; set; }
+    public Guid AttemptId { get; set; }
     public string TestId { get; set; } = string.Empty;
     public int TestRevision { get; set; }
     public string StudentUserId { get; set; } = string.Empty;

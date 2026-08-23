@@ -38,7 +38,13 @@ public sealed class ReviewJobProcessorTests
 
         var beforeProcess = DateTimeOffset.UtcNow;
         var outcome = await processor.ProcessAsync(
-            new ReviewQueueMessage(reviewId, review.AttemptId, "model", Now),
+            new ReviewQueueMessage
+            {
+                ReviewId = reviewId,
+                AttemptId = review.AttemptId,
+                ModelKey = "model",
+                RequestedAt = Now
+            },
             CancellationToken.None);
         var afterProcess = DateTimeOffset.UtcNow;
 
@@ -85,7 +91,13 @@ public sealed class ReviewJobProcessorTests
             retryDelaysSeconds: [30, 120]);
 
         var outcome = await processor.ProcessAsync(
-            new ReviewQueueMessage(reviewId, review.AttemptId, "model", Now),
+            new ReviewQueueMessage
+            {
+                ReviewId = reviewId,
+                AttemptId = review.AttemptId,
+                ModelKey = "model",
+                RequestedAt = Now
+            },
             CancellationToken.None);
         var afterProcess = DateTimeOffset.UtcNow;
 
@@ -134,7 +146,13 @@ public sealed class ReviewJobProcessorTests
             retryDelaysSeconds: [30]);
 
         var outcome = await processor.ProcessAsync(
-            new ReviewQueueMessage(reviewId, review.AttemptId, "model", Now),
+            new ReviewQueueMessage
+            {
+                ReviewId = reviewId,
+                AttemptId = review.AttemptId,
+                ModelKey = "model",
+                RequestedAt = Now
+            },
             CancellationToken.None);
 
         var storedReview = await dbContext.Reviews
@@ -164,7 +182,13 @@ public sealed class ReviewJobProcessorTests
             llmGatewayEnabled: false);
 
         var outcome = await processor.ProcessAsync(
-            new ReviewQueueMessage(reviewId, review.AttemptId, "model", Now),
+            new ReviewQueueMessage
+            {
+                ReviewId = reviewId,
+                AttemptId = review.AttemptId,
+                ModelKey = "model",
+                RequestedAt = Now
+            },
             CancellationToken.None);
 
         dbContext.ChangeTracker.Clear();
@@ -197,7 +221,13 @@ public sealed class ReviewJobProcessorTests
             retryDelaysSeconds: [30]);
 
         var outcome = await processor.ProcessAsync(
-            new ReviewQueueMessage(reviewId, review.AttemptId, "model", Now),
+            new ReviewQueueMessage
+            {
+                ReviewId = reviewId,
+                AttemptId = review.AttemptId,
+                ModelKey = "model",
+                RequestedAt = Now
+            },
             CancellationToken.None);
 
         dbContext.ChangeTracker.Clear();
@@ -241,7 +271,13 @@ public sealed class ReviewJobProcessorTests
 
         var beforeProcess = DateTimeOffset.UtcNow;
         var outcome = await processor.ProcessAsync(
-            new ReviewQueueMessage(reviewId, review.AttemptId, "model", Now),
+            new ReviewQueueMessage
+            {
+                ReviewId = reviewId,
+                AttemptId = review.AttemptId,
+                ModelKey = "model",
+                RequestedAt = Now
+            },
             CancellationToken.None);
         var afterProcess = DateTimeOffset.UtcNow;
 
@@ -277,7 +313,13 @@ public sealed class ReviewJobProcessorTests
 
         var beforeProcess = DateTimeOffset.UtcNow;
         var outcome = await processor.ProcessAsync(
-            new ReviewQueueMessage(reviewId, review.AttemptId, "model", Now),
+            new ReviewQueueMessage
+            {
+                ReviewId = reviewId,
+                AttemptId = review.AttemptId,
+                ModelKey = "model",
+                RequestedAt = Now
+            },
             CancellationToken.None);
         var afterProcess = DateTimeOffset.UtcNow;
 
@@ -342,7 +384,7 @@ public sealed class ReviewJobProcessorTests
     {
         return new Review
         {
-            AttemptId = 101,
+            AttemptId = Guid.NewGuid(),
             TestId = "test-1",
             TestRevision = 1,
             TestTitle = "Test",

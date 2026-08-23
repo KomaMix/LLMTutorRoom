@@ -39,7 +39,8 @@ function getConflictAttempt(error) {
     && typeof attempt.answers === "object"
     && !Array.isArray(attempt.answers);
 
-  return Number.isInteger(attempt?.id)
+  return typeof attempt?.id === "string"
+    && attempt.id.length > 0
     && typeof attempt.testId === "string"
     && typeof attempt.status === "string"
     && typeof attempt.startedAt === "string"

@@ -12,14 +12,14 @@
 
 Сервис не владеет пользователями, каталогом тестов, жизненным циклом попытки или
 deployment моделей. Пользователи принадлежат `AuthService`, версии тестов —
-`TeachingService`, попытки и ответы до отправки — `LLMTutorRoom`, каталог и вызов
+`TeachingService`, попытки и ответы до отправки — `AttemptService`, каталог и вызов
 провайдера — `LLMGateway`. `ReviewService` получает только достаточные снимки и
 после этого самостоятельно ведёт результат, не перечитывая изменившийся тест.
 
 ```mermaid
 flowchart LR
     Teaching[TeachingService] -->|policy v1| Integration[(review.integration)]
-    Room[LLMTutorRoom] -->|attempt v1| Integration
+    Attempt[AttemptService] -->|attempt v1| Integration
     Integration --> Consumer[Integration consumer]
     Consumer --> DB[(PostgreSQL ReviewService)]
     DB --> Work[(review.processing)]
@@ -39,6 +39,9 @@ flowchart LR
 [`AttemptSubmittedV1`](../ReviewService.Contracts/Events/AttemptSubmittedV1.cs)
 несёт точную `TestRevision`, ученика, ответы и время отправки. Проверка создаётся
 только для точной пары теста и ревизии: более новая policy не подменяет старую.
+Это событие публикуется только после явной отправки в `AttemptService`.
+Фоновый переход попытки в `Expired` сообщения не создаёт, поэтому сам по себе
+дедлайн не запускает проверку.
 
 Порядок событий не гарантируется. Если policy уже сохранена, событие попытки
 сразу создаёт `Review`. Если попытка пришла первой, она попадает в
@@ -50,7 +53,7 @@ flowchart LR
 ```mermaid
 sequenceDiagram
     participant T as TeachingService
-    participant R as LLMTutorRoom
+    participant A as AttemptService
     participant Q as RabbitMQ
     participant H as ReviewIntegrationEventHandler
     participant D as PostgreSQL
@@ -58,7 +61,7 @@ sequenceDiagram
     par независимые отправители
         T->>Q: TestReviewPolicyPublishedV1
     and
-        R->>Q: AttemptSubmittedV1
+        A->>Q: AttemptSubmittedV1
     end
     loop доставка в произвольном порядке
         Q->>H: одно событие

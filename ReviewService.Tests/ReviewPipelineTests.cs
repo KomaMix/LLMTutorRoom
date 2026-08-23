@@ -38,6 +38,7 @@ public sealed class ReviewPipelineTests
 
         var review = await dbContext.Reviews.Include(item => item.TaskResults).SingleAsync();
         Assert.Empty(dbContext.PendingSubmissions);
+        Assert.Equal(attempt.AttemptId, review.AttemptId);
         Assert.Equal(ReviewStatus.Checked, review.Status);
         Assert.Equal(2m, review.Score);
         Assert.Equal("a", review.TaskResults.Single().StudentAnswer);
@@ -56,7 +57,9 @@ public sealed class ReviewPipelineTests
         await handler.HandleAsync(policy, CancellationToken.None);
         await handler.HandleAsync(attempt, CancellationToken.None);
         await handler.HandleAsync(attempt, CancellationToken.None);
-        await handler.HandleAsync(attempt with { EventId = Guid.NewGuid() }, CancellationToken.None);
+        await handler.HandleAsync(
+            CreateAttempt(eventId: Guid.NewGuid(), attemptId: attempt.AttemptId),
+            CancellationToken.None);
 
         Assert.Single(dbContext.Reviews);
         Assert.Empty(dbContext.PendingSubmissions);
@@ -66,15 +69,17 @@ public sealed class ReviewPipelineTests
     [Fact]
     public void JsonHelper_UsesCamelCaseEnumNames()
     {
-        var policy = CreatePolicy(new ReviewTaskPolicySnapshot(
-            "essay",
-            ReviewTaskType.FreeText,
-            ReviewCheckMode.Llm,
-            "Essay",
-            "Explain.",
-            5m,
-            0,
-            []));
+        var policy = CreatePolicy(new ReviewTaskPolicySnapshot
+        {
+            Id = "essay",
+            Type = ReviewTaskType.FreeText,
+            CheckMode = ReviewCheckMode.Llm,
+            Title = "Essay",
+            Prompt = "Explain.",
+            MaxPoints = 5m,
+            WrongAnswerPenalty = 0,
+            Options = []
+        });
 
         var json = JsonSerializer.Serialize(policy, JsonHelper.Options);
         var deserialized = JsonSerializer.Deserialize<TestReviewPolicyPublishedV1>(
@@ -90,22 +95,72 @@ public sealed class ReviewPipelineTests
     }
 
     [Fact]
+    public void AttemptEventJson_PreservesGuidAttemptId()
+    {
+        var attempt = CreateAttempt();
+
+        var json = JsonSerializer.Serialize(attempt, JsonHelper.Options);
+        var deserialized = JsonSerializer.Deserialize<AttemptSubmittedV1>(
+            json,
+            JsonHelper.Options);
+
+        Assert.NotNull(deserialized);
+        Assert.Equal(attempt.EventId, deserialized.EventId);
+        Assert.Equal(attempt.AttemptId, deserialized.AttemptId);
+        Assert.Equal(attempt.Answers, deserialized.Answers);
+    }
+
+    [Fact]
+    public async Task EmptyAttemptId_IsRejectedBeforeInboxAcknowledgement()
+    {
+        await using var dbContext = CreateDbContext();
+        var handler = CreateEventHandler(dbContext, new FakeReviewQueuePublisher());
+
+        await Assert.ThrowsAsync<InvalidDataException>(() =>
+            handler.HandleAsync(
+                CreateAttempt(attemptId: Guid.Empty),
+                CancellationToken.None));
+
+        Assert.Empty(dbContext.InboxMessages);
+        Assert.Empty(dbContext.PendingSubmissions);
+        Assert.Empty(dbContext.Reviews);
+    }
+
+    [Fact]
     public void MultipleChoiceScoring_AppliesWrongAnswerPenalty()
     {
         var scoring = new ReviewScoringService();
-        var task = new ReviewTaskPolicySnapshot(
-            "multi",
-            ReviewTaskType.MultipleChoice,
-            ReviewCheckMode.Auto,
-            "Multiple",
-            "Choose all.",
-            4m,
-            1m,
+        var task = new ReviewTaskPolicySnapshot
+        {
+            Id = "multi",
+            Type = ReviewTaskType.MultipleChoice,
+            CheckMode = ReviewCheckMode.Auto,
+            Title = "Multiple",
+            Prompt = "Choose all.",
+            MaxPoints = 4m,
+            WrongAnswerPenalty = 1m,
+            Options =
             [
-                new ReviewAnswerOptionSnapshot("a", "A", true),
-                new ReviewAnswerOptionSnapshot("b", "B", true),
-                new ReviewAnswerOptionSnapshot("x", "X", false)
-            ]);
+                new ReviewAnswerOptionSnapshot
+                {
+                    Id = "a",
+                    Text = "A",
+                    IsCorrect = true
+                },
+                new ReviewAnswerOptionSnapshot
+                {
+                    Id = "b",
+                    Text = "B",
+                    IsCorrect = true
+                },
+                new ReviewAnswerOptionSnapshot
+                {
+                    Id = "x",
+                    Text = "X",
+                    IsCorrect = false
+                }
+            ]
+        };
 
         var result = scoring.CreateInitialResult(task, "a|x", Now);
 
@@ -120,7 +175,7 @@ public sealed class ReviewPipelineTests
         await using var dbContext = CreateDbContext();
         var review = new Review
         {
-            AttemptId = 10,
+            AttemptId = Guid.NewGuid(),
             TestId = "test-1",
             TestRevision = 1,
             TestTitle = "Test",
@@ -282,20 +337,22 @@ public sealed class ReviewPipelineTests
         var queue = new FakeReviewQueuePublisher();
         var handler = CreateEventHandler(dbContext, queue);
         var policy = CreatePolicy(
-            new ReviewTaskPolicySnapshot(
-                "llm",
-                ReviewTaskType.FreeText,
-                ReviewCheckMode.Llm,
-                "Essay",
-                "Explain.",
-                5m,
-                0,
-                []),
+            new ReviewTaskPolicySnapshot
+            {
+                Id = "llm",
+                Type = ReviewTaskType.FreeText,
+                CheckMode = ReviewCheckMode.Llm,
+                Title = "Essay",
+                Prompt = "Explain.",
+                MaxPoints = 5m,
+                WrongAnswerPenalty = 0,
+                Options = []
+            },
             modelKey: "model");
 
         await handler.HandleAsync(policy, CancellationToken.None);
         await handler.HandleAsync(
-            CreateAttempt() with { Answers = new Dictionary<string, string> { ["llm"] = "Answer" } },
+            CreateAttempt(answers: new Dictionary<string, string> { ["llm"] = "Answer" }),
             CancellationToken.None);
 
         var review = await dbContext.Reviews.Include(item => item.TaskResults).SingleAsync();
@@ -313,22 +370,21 @@ public sealed class ReviewPipelineTests
         var queue = new FakeReviewQueuePublisher();
         var handler = CreateEventHandler(dbContext, queue, llmGatewayEnabled: false);
         var policy = CreatePolicy(
-            new ReviewTaskPolicySnapshot(
-                "llm",
-                ReviewTaskType.FreeText,
-                ReviewCheckMode.Llm,
-                "Essay",
-                "Explain.",
-                5m,
-                0,
-                []));
+            new ReviewTaskPolicySnapshot
+            {
+                Id = "llm",
+                Type = ReviewTaskType.FreeText,
+                CheckMode = ReviewCheckMode.Llm,
+                Title = "Essay",
+                Prompt = "Explain.",
+                MaxPoints = 5m,
+                WrongAnswerPenalty = 0,
+                Options = []
+            });
 
         await handler.HandleAsync(policy, CancellationToken.None);
         await handler.HandleAsync(
-            CreateAttempt() with
-            {
-                Answers = new Dictionary<string, string> { ["llm"] = "Answer" }
-            },
+            CreateAttempt(answers: new Dictionary<string, string> { ["llm"] = "Answer" }),
             CancellationToken.None);
 
         var review = await dbContext.Reviews.Include(item => item.TaskResults).SingleAsync();
@@ -345,18 +401,31 @@ public sealed class ReviewPipelineTests
         await using var dbContext = CreateDbContext();
         var handler = CreateEventHandler(dbContext, new FakeReviewQueuePublisher());
         var invalidPolicy = CreatePolicy(
-            new ReviewTaskPolicySnapshot(
-                "choice",
-                ReviewTaskType.SingleChoice,
-                ReviewCheckMode.Auto,
-                "Choice",
-                "Choose.",
-                2m,
-                0,
+            new ReviewTaskPolicySnapshot
+            {
+                Id = "choice",
+                Type = ReviewTaskType.SingleChoice,
+                CheckMode = ReviewCheckMode.Auto,
+                Title = "Choice",
+                Prompt = "Choose.",
+                MaxPoints = 2m,
+                WrongAnswerPenalty = 0,
+                Options =
                 [
-                    new ReviewAnswerOptionSnapshot("a", "A", false),
-                    new ReviewAnswerOptionSnapshot("b", "B", false)
-                ]));
+                    new ReviewAnswerOptionSnapshot
+                    {
+                        Id = "a",
+                        Text = "A",
+                        IsCorrect = false
+                    },
+                    new ReviewAnswerOptionSnapshot
+                    {
+                        Id = "b",
+                        Text = "B",
+                        IsCorrect = false
+                    }
+                ]
+            });
 
         await Assert.ThrowsAsync<InvalidDataException>(() =>
             handler.HandleAsync(invalidPolicy, CancellationToken.None));
@@ -398,40 +467,60 @@ public sealed class ReviewPipelineTests
         ReviewTaskPolicySnapshot? task = null,
         string modelKey = "model")
     {
-        task ??= new ReviewTaskPolicySnapshot(
-            "choice",
-            ReviewTaskType.SingleChoice,
-            ReviewCheckMode.Auto,
-            "Choice",
-            "Choose.",
-            2m,
-            0,
+        task ??= new ReviewTaskPolicySnapshot
+        {
+            Id = "choice",
+            Type = ReviewTaskType.SingleChoice,
+            CheckMode = ReviewCheckMode.Auto,
+            Title = "Choice",
+            Prompt = "Choose.",
+            MaxPoints = 2m,
+            WrongAnswerPenalty = 0,
+            Options =
             [
-                new ReviewAnswerOptionSnapshot("a", "Correct", true),
-                new ReviewAnswerOptionSnapshot("b", "Wrong", false)
-            ]);
-        return new TestReviewPolicyPublishedV1(
-            Guid.NewGuid(),
-            "test-1",
-            1,
-            "teacher",
-            "Test",
-            modelKey,
-            [task],
-            Now.AddMinutes(-10));
+                new ReviewAnswerOptionSnapshot
+                {
+                    Id = "a",
+                    Text = "Correct",
+                    IsCorrect = true
+                },
+                new ReviewAnswerOptionSnapshot
+                {
+                    Id = "b",
+                    Text = "Wrong",
+                    IsCorrect = false
+                }
+            ]
+        };
+        return new TestReviewPolicyPublishedV1
+        {
+            EventId = Guid.NewGuid(),
+            TestId = "test-1",
+            Revision = 1,
+            TeacherUserId = "teacher",
+            TestTitle = "Test",
+            ModelKey = modelKey,
+            Tasks = [task],
+            PublishedAt = Now.AddMinutes(-10)
+        };
     }
 
-    private static AttemptSubmittedV1 CreateAttempt()
+    private static AttemptSubmittedV1 CreateAttempt(
+        Guid? eventId = null,
+        Guid? attemptId = null,
+        Dictionary<string, string>? answers = null)
     {
-        return new AttemptSubmittedV1(
-            Guid.NewGuid(),
-            42,
-            "test-1",
-            1,
-            "student",
-            "Student",
-            new Dictionary<string, string> { ["choice"] = "a" },
-            Now);
+        return new AttemptSubmittedV1
+        {
+            EventId = eventId ?? Guid.NewGuid(),
+            AttemptId = attemptId ?? Guid.NewGuid(),
+            TestId = "test-1",
+            TestRevision = 1,
+            StudentUserId = "student",
+            StudentName = "Student",
+            Answers = answers ?? new Dictionary<string, string> { ["choice"] = "a" },
+            SubmittedAt = Now
+        };
     }
 
     private sealed class FakeReviewQueuePublisher : IReviewQueuePublisher

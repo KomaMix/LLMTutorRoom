@@ -1,5 +1,4 @@
 using LLMTutorRoom.DTOs;
-using LLMTutorRoom.Enums;
 using LLMTutorRoom.Models;
 using LLMTutorRoom.Services;
 using LLMTutorRoom.Services.Reviews;
@@ -75,89 +74,6 @@ namespace LLMTutorRoom.Controllers
             return ToReviewHistoryProblem(result);
         }
 
-        [Authorize(Roles = "Student")]
-        [HttpPost("tests/{testId}/attempts/start")]
-        public async Task<ActionResult<TestAttemptResponse>> StartAttempt(
-            string testId,
-            [FromQuery] int? versionNumber,
-            CancellationToken cancellationToken)
-        {
-            var result = await _classroomService.StartAttemptAsync(
-                testId,
-                GetUserId(),
-                versionNumber,
-                cancellationToken);
-
-            return result.Outcome switch
-            {
-                StartAttemptOutcome.Success when result.Attempt is not null => Ok(result.Attempt),
-                StartAttemptOutcome.VersionConflict => Conflict(new ProblemDetails
-                {
-                    Status = StatusCodes.Status409Conflict,
-                    Title = "Test version changed",
-                    Detail = "The published test version changed. Refresh the catalog before starting."
-                }),
-                _ => NotFound()
-            };
-        }
-
-        [Authorize(Roles = "Student")]
-        [HttpPut("attempts/{attemptId:int}/answers")]
-        public async Task<ActionResult<TestAttemptResponse>> SaveAttemptAnswers(
-            int attemptId,
-            [FromBody] SaveAttemptAnswersRequest request,
-            CancellationToken cancellationToken)
-        {
-            TestAttemptResponse? attempt;
-            try
-            {
-                attempt = await _classroomService.SaveAttemptAnswersAsync(
-                    attemptId,
-                    GetUserId(),
-                    request.Answers,
-                    cancellationToken);
-            }
-            catch (AttemptWriteConflictException exception)
-            {
-                return Conflict(CreateAttemptConflictProblem(exception.Message));
-            }
-
-            if (attempt is null)
-                return NotFound();
-
-            return attempt.Status == TestAttemptStatus.InProgress
-                ? Ok(attempt)
-                : Conflict(attempt);
-        }
-
-        [Authorize(Roles = "Student")]
-        [HttpPost("attempts/{attemptId:int}/submit")]
-        public async Task<ActionResult<TestAttemptResponse>> SubmitAttempt(
-            int attemptId,
-            CancellationToken cancellationToken)
-        {
-            TestAttemptResponse? attempt;
-            try
-            {
-                attempt = await _classroomService.SubmitAttemptAsync(
-                    attemptId,
-                    GetUserId(),
-                    GetUserName(),
-                    cancellationToken);
-            }
-            catch (AttemptWriteConflictException exception)
-            {
-                return Conflict(CreateAttemptConflictProblem(exception.Message));
-            }
-
-            if (attempt is null)
-                return NotFound();
-
-            return attempt.Status == TestAttemptStatus.Submitted
-                ? Ok(attempt)
-                : Conflict(attempt);
-        }
-
         [Authorize(Roles = "Teacher")]
         [HttpPut("reviews/{reviewId:int}/tasks/{taskId}/manual")]
         public async Task<ActionResult<ReviewResponse>> UpdateManualTaskReview(
@@ -186,25 +102,10 @@ namespace LLMTutorRoom.Controllers
             return StatusCode((int)review.StatusCode, review.Error);
         }
 
-        private string GetUserName()
-        {
-            return User.FindFirstValue(ClaimTypes.Name) ?? "Студент";
-        }
-
         private string GetUserId()
         {
             return User.FindFirstValue(ClaimTypes.NameIdentifier)
                 ?? string.Empty;
-        }
-
-        private static ProblemDetails CreateAttemptConflictProblem(string detail)
-        {
-            return new ProblemDetails
-            {
-                Status = StatusCodes.Status409Conflict,
-                Title = "Attempt changed concurrently",
-                Detail = detail
-            };
         }
 
         private ActionResult<ReviewHistoryPageResponse> ToReviewHistoryProblem(

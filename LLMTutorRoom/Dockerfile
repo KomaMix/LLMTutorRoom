@@ -12,6 +12,7 @@ WORKDIR /src
 
 COPY ["LLMTutorRoom/LLMTutorRoom.csproj", "LLMTutorRoom/"]
 COPY ["Shared.Auth/Shared.Auth.csproj", "Shared.Auth/"]
+COPY ["AttemptService.Contracts/AttemptService.Contracts.csproj", "AttemptService.Contracts/"]
 COPY ["TeachingService.Contracts/TeachingService.Contracts.csproj", "TeachingService.Contracts/"]
 COPY ["ReviewService.Contracts/ReviewService.Contracts.csproj", "ReviewService.Contracts/"]
 RUN dotnet restore "LLMTutorRoom/LLMTutorRoom.csproj"

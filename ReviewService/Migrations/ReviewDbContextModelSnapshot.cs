@@ -22,6 +22,92 @@ namespace ReviewService.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("ReviewService.Models.ModelAccess.TeacherModelAccess", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("MaxChecks")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ModelKey")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<int>("PeriodSeconds")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("TeacherUserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("character varying(450)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TeacherUserId");
+
+                    b.HasIndex("TeacherUserId", "ModelKey")
+                        .IsUnique();
+
+                    b.ToTable("TeacherModelAccesses");
+                });
+
+            modelBuilder.Entity("ReviewService.Models.ModelAccess.TeacherModelUsage", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ModelKey")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<int>("PeriodSeconds")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("PeriodStart")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("TeacherUserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("character varying(450)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("UsedChecks")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TeacherUserId");
+
+                    b.HasIndex("TeacherUserId", "ModelKey", "PeriodStart", "PeriodSeconds")
+                        .IsUnique();
+
+                    b.ToTable("TeacherModelUsages");
+                });
+
             modelBuilder.Entity("ReviewService.Models.Reviews.InboxMessage", b =>
                 {
                     b.Property<Guid>("EventId")
@@ -56,8 +142,8 @@ namespace ReviewService.Migrations
                         .HasColumnType("jsonb")
                         .HasColumnName("Answers");
 
-                    b.Property<int>("AttemptId")
-                        .HasColumnType("integer");
+                    b.Property<Guid>("AttemptId")
+                        .HasColumnType("uuid");
 
                     b.Property<DateTimeOffset>("ReceivedAt")
                         .HasColumnType("timestamp with time zone");
@@ -103,8 +189,8 @@ namespace ReviewService.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
-                    b.Property<int>("AttemptId")
-                        .HasColumnType("integer");
+                    b.Property<Guid>("AttemptId")
+                        .HasColumnType("uuid");
 
                     b.Property<DateTimeOffset?>("CompletedAt")
                         .HasColumnType("timestamp with time zone");
@@ -302,92 +388,6 @@ namespace ReviewService.Migrations
                         .IsUnique();
 
                     b.ToTable("ReviewTasks");
-                });
-
-            modelBuilder.Entity("ReviewService.Models.ModelAccess.TeacherModelAccess", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<bool>("IsEnabled")
-                        .HasColumnType("boolean");
-
-                    b.Property<int>("MaxChecks")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("ModelKey")
-                        .IsRequired()
-                        .HasMaxLength(300)
-                        .HasColumnType("character varying(300)");
-
-                    b.Property<int>("PeriodSeconds")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("TeacherUserId")
-                        .IsRequired()
-                        .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
-
-                    b.Property<DateTimeOffset>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("TeacherUserId");
-
-                    b.HasIndex("TeacherUserId", "ModelKey")
-                        .IsUnique();
-
-                    b.ToTable("TeacherModelAccesses");
-                });
-
-            modelBuilder.Entity("ReviewService.Models.ModelAccess.TeacherModelUsage", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("ModelKey")
-                        .IsRequired()
-                        .HasMaxLength(300)
-                        .HasColumnType("character varying(300)");
-
-                    b.Property<int>("PeriodSeconds")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTimeOffset>("PeriodStart")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("TeacherUserId")
-                        .IsRequired()
-                        .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
-
-                    b.Property<DateTimeOffset>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("UsedChecks")
-                        .HasColumnType("integer");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("TeacherUserId");
-
-                    b.HasIndex("TeacherUserId", "ModelKey", "PeriodStart", "PeriodSeconds")
-                        .IsUnique();
-
-                    b.ToTable("TeacherModelUsages");
                 });
 
             modelBuilder.Entity("ReviewService.Models.Reviews.TestReviewPolicy", b =>

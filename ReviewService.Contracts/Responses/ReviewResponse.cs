@@ -4,7 +4,7 @@ namespace ReviewService.Contracts.Responses;
 
 public sealed record ReviewResponse(
     int Id,
-    int AttemptId,
+    Guid AttemptId,
     string TestId,
     int TestRevision,
     string TestTitle,

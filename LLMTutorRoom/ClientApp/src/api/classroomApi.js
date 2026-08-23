@@ -25,13 +25,13 @@ export function startAttempt(testId, versionNumber) {
   const query = Number.isInteger(versionNumber) && versionNumber > 0
     ? `?versionNumber=${encodeURIComponent(versionNumber)}`
     : "";
-  return apiRequest(`/api/classroom/tests/${encodeURIComponent(testId)}/attempts/start${query}`, {
+  return apiRequest(`/api/attempts/tests/${encodeURIComponent(testId)}/start${query}`, {
     method: "POST"
   });
 }
 
 export function saveAttemptAnswers(attemptId, answers, options = {}) {
-  return apiRequest(`/api/classroom/attempts/${attemptId}/answers`, {
+  return apiRequest(`/api/attempts/${attemptId}/answers`, {
     ...options,
     method: "PUT",
     body: { answers }
@@ -39,7 +39,7 @@ export function saveAttemptAnswers(attemptId, answers, options = {}) {
 }
 
 export function submitAttempt(attemptId) {
-  return apiRequest(`/api/classroom/attempts/${attemptId}/submit`, {
+  return apiRequest(`/api/attempts/${attemptId}/submit`, {
     method: "POST"
   });
 }

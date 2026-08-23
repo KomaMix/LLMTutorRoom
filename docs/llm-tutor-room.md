@@ -1,136 +1,67 @@
-# LLMTutorRoom
+# LLMTutorRoom: web-фасад и React-приложение
 
 ## Назначение
 
-`LLMTutorRoom` — публичный фасад учебной части системы и хост React-приложения.
-Он объединяет данные других сервисов в удобный для интерфейса overview, но сам
-владеет только попытками учеников и сохранёнными ответами.
+`LLMTutorRoom` — stateless web-фасад учебной части системы и хост
+React-приложения. Он проверяет JWT, объединяет ответы профильных сервисов в
+удобный для интерфейса overview и проксирует команды, которым нужен единый
+публичный API.
 
-Сервис отвечает за:
-
-- старт попытки и серверный дедлайн;
-- промежуточное сохранение ответов;
-- окончательную отправку попытки;
-- привязку попытки к точной версии теста;
-- выдачу общего экрана преподавателя или ученика;
-- проксирование результатов, ручной проверки и управления доступами к моделям;
-- раздачу собранного React-приложения.
-
-Каталог тестов принадлежит `TeachingService`, пользователи — `AuthService`, а
-результаты — `ReviewService`. `LLMTutorRoom` не должен копировать их бизнесовую
-логику в свою базу.
-
-## Данные сервиса
-
-В [`TutorRoomDbContext`](../LLMTutorRoom/Data/TutorRoomDbContext.cs) находятся
-две основные таблицы:
-
-- `TestAttempts` — состояние попытки, версия теста, время начала и окончания,
-  ответы и список допустимых заданий;
-- `AttemptSubmissionOutboxMessages` — события о сданных попытках, которые ещё
-  нужно доставить в RabbitMQ или сохранить на время retention.
-
-Пара `(TestId, StudentUserId)` уникальна. Поэтому у ученика сейчас одна попытка
-на логический тест, а публикация новой версии не выдаёт автоматическую пересдачу.
-
-`TestRevision` хранит номер опубликованной версии, выбранной при старте.
-`AllowedTaskIds` фиксирует состав этой версии и не позволяет записать ответ для
-задания, которого в попытке не было.
-
-## Жизненный цикл попытки
+Собственной бизнесовой базы у сервиса нет. Пользователи принадлежат
+`AuthService`, каталог и версии тестов — `TeachingService`, попытки и ответы —
+`AttemptService`, результаты и доступы к моделям — `ReviewService`.
 
 ```mermaid
-stateDiagram-v2
-    [*] --> InProgress: старт доступного теста
-    InProgress --> InProgress: сохранить ответы
-    InProgress --> Submitted: отправить до дедлайна
-    InProgress --> Expired: первое обращение после EndsAt
-    Submitted --> [*]
-    Expired --> [*]
+flowchart LR
+    Browser[React в браузере] --> Nginx[nginx]
+    Nginx --> Room[LLMTutorRoom]
+    Nginx --> Attempt[AttemptService]
+    Room --> Teaching[TeachingService]
+    Room -->|попытки для overview| Attempt
+    Room --> Review[ReviewService]
 ```
 
-При старте [`ClassroomService`](../LLMTutorRoom/Services/ClassroomService.cs):
-
-1. Запрашивает у `TeachingService` текущую опубликованную версию.
-2. Проверяет переданный клиентом `versionNumber`, статус и дедлайн.
-3. Сохраняет номер версии, допустимые task id и `EndsAt` — минимум из личного
-   лимита времени и общего дедлайна теста.
-4. При параллельных запросах возвращает уже созданную попытку, а не создаёт две.
-
-Сохранение ответов и отправка защищены `StateRevision` — optimistic concurrency
-token EF Core. Если две вкладки одновременно меняют попытку, операция перечитывает
-актуальное состояние и повторяется. Это не даёт позднему autosave вернуть
-`Submitted`-попытку в работу или отправить устаревший снимок ответов.
-
-`Expired` означает, что время вышло и ответы больше нельзя менять. Переход
-фиксируется лениво при следующем overview, старте, сохранении или отправке, а не
-отдельным таймером ровно в `EndsAt`. Такая попытка не публикуется как сданная и
-не создаёт проверку.
-
-## Отправка попытки
-
-Статус `Submitted` и `AttemptSubmittedV1` записываются одной транзакцией. Фоновый
-[`AttemptSubmissionOutboxPublisher`](../LLMTutorRoom/Services/ReviewIntegration/AttemptSubmissionOutboxPublisher.cs)
-доставляет событие в exchange `review.integration` с routing key
-`attempt.submitted.v1`.
-
-```mermaid
-sequenceDiagram
-    actor Student as Ученик
-    participant Api as ClassroomController
-    participant Db as TutorRoom DB
-    participant Outbox as Outbox publisher
-    participant Rabbit as RabbitMQ
-    participant Review as ReviewService
-
-    Student->>Api: POST /api/classroom/attempts/{id}/submit
-    Api->>Db: Submitted + AttemptSubmittedV1
-    Db-->>Api: commit
-    Api-->>Student: актуальная попытка
-    Outbox->>Db: читает недоставленные события
-    Outbox->>Rabbit: publish с подтверждением
-    Rabbit-->>Review: attempt.submitted.v1
-    Outbox->>Db: записывает PublishedAt
-```
-
-Событие содержит идентификаторы попытки, теста и версии, ученика, окончательный
-словарь ответов и время отправки. Оно сообщает факт сдачи, но не задаёт способ
-проверки. Решение между `Auto`, `Manual` и `Llm` принимает `ReviewService` по
-опубликованной policy.
-
-## Overview и версии
+## Overview
 
 `GET /api/classroom/overview` формирует разные ответы по роли:
 
-- преподавателю возвращаются его тесты, доступные модели, незавершённые проверки,
-  первая страница завершённых результатов и агрегированные метрики;
+- преподавателю возвращаются его тесты, доступные модели, незавершённые
+  проверки, первая страница истории и агрегированные метрики;
 - ученику — опубликованные тесты, его попытки, проверки и результаты.
 
-Если у ученика есть попытка старой версии, сервис запрашивает именно эту версию
-у `TeachingService` и подставляет её вместо текущей. Правильные варианты ответов
-при этом удаляются из student DTO. Если точную версию получить нельзя, сервис не
-показывает задания новой версии под видом старых.
+Для student overview фасад получает попытки из internal API `AttemptService`.
+Если попытка привязана к предыдущей версии, `LLMTutorRoom` запрашивает именно
+эту версию у `TeachingService` и не подставляет задания новой публикации.
+Правильные ответы перед возвратом ученику удаляются из DTO.
 
-Завершённая история читается через `GET /api/classroom/reviews/history` страницами.
-Курсор непрозрачен для клиента; его нужно передавать обратно без разбора.
+Завершённая история читается через
+`GET /api/classroom/reviews/history` страницами. Курсор непрозрачен для клиента
+и передаётся в `ReviewService` без разбора.
 
 ## Публичный API и зависимости
 
-HTTP-граница находится в
+HTTP-граница фасада находится в
 [`ClassroomController`](../LLMTutorRoom/Controllers/ClassroomController.cs) и
 [`ModelAccessController`](../LLMTutorRoom/Controllers/ModelAccessController.cs).
-Оба контроллера требуют JWT, а операции старта/ответов/отправки, ручной проверки
-и администрирования дополнительно ограничены ролями.
+Она требует JWT, а ручная проверка и управление доступами дополнительно
+ограничены ролями.
 
-Синхронные зависимости:
+Синхронные клиенты:
 
 - [`TeachingServiceClient`](../LLMTutorRoom/Services/Teaching/TeachingServiceClient.cs)
-  читает внутренний каталог и точные версии;
+  читает каталог и точные версии тестов;
+- [`AttemptServiceClient`](../LLMTutorRoom/Services/Attempts/AttemptServiceClient.cs)
+  читает попытки ученика для overview;
 - [`ReviewServiceClient`](../LLMTutorRoom/Services/Reviews/ReviewServiceClient.cs)
-  читает проверки, обновляет ручной результат и управляет доступами к моделям.
+  читает результаты, обновляет ручную проверку и управляет доступами к моделям.
 
-Недоступность этих сервисов может сделать overview временно недоступным, но не
-нарушает уже сохранённую попытку или outbox.
+Команды жизненного цикла попытки идут от браузера на `/api/attempts/*`, а nginx
+направляет запрос напрямую в
+`AttemptService`, который сам проверяет JWT и роль ученика.
+
+Internal API `AttemptService` и `ReviewService` не публикуются через nginx.
+Фасад передаёт им уже проверенный user ID, а доверие между сервисами в полном
+Compose обеспечивается закрытой сетью `backend`.
 
 ## React-приложение
 
@@ -144,32 +75,30 @@ HTTP-граница находится в
 - `/teacher/dashboard`, `/teacher/tests`, `/teacher/reviews`, `/teacher/models`;
 - `/student/tests` и `/student/results`.
 
-[`App.jsx`](../LLMTutorRoom/ClientApp/src/app/App.jsx) выбирает раздел по роли.
-Во время попытки клиент сохраняет ответы, восстанавливает таймер после перезагрузки
-и блокирует уход со страницы, пока не завершена обязательная запись.
+Во время попытки клиент сохраняет ответы напрямую в `AttemptService`,
+восстанавливает серверный таймер после перезагрузки и блокирует уход со страницы,
+пока обязательная запись не завершена.
 
 ## Конфигурация и запуск
 
-Основные секции [`appsettings.json`](../LLMTutorRoom/appsettings.json):
+Основные секции [`LLMTutorRoom/appsettings.json`](../LLMTutorRoom/appsettings.json):
 
-- `ConnectionStrings` — база попыток;
-- `TeachingService` и `ReviewService` — адреса внутренних API и timeout;
-- `RabbitMq` — соединение с broker-ом;
-- `AttemptSubmissionOutbox` — частота публикации, retry и очистка доставленных
-  сообщений;
-- `Auth:Jwt` — проверка токенов, общая с `AuthService`.
+- `TeachingService`, `AttemptService` и `ReviewService` — адреса internal API и
+  timeout;
+- `Auth:Jwt` — общие параметры проверки токенов.
 
-При старте применяются EF Core migrations, запускаются publisher и cleanup
-outbox, затем ASP.NET Core обслуживает API и React.
+Сервис не использует EF Core migrations, PostgreSQL, RabbitMQ или фоновые
+процессы outbox. Недоступность одного из downstream-сервисов может
+сделать соответствующую часть overview временно недоступной, но не изменяет
+сохранённые бизнесовые данные.
 
-## С чего начать чтение
+## С чего начать чтение кода
 
-1. [`Program.cs`](../LLMTutorRoom/Program.cs) — DI, middleware и hosted services.
-2. [`ClassroomService.cs`](../LLMTutorRoom/Services/ClassroomService.cs) — весь
-   жизненный цикл попытки и сборка overview.
-3. [`ClassroomModels.cs`](../LLMTutorRoom/Models/ClassroomModels.cs) — данные
-   попытки и ответ фасада.
-4. [`AttemptSubmissionOutboxPublisher.cs`](../LLMTutorRoom/Services/ReviewIntegration/AttemptSubmissionOutboxPublisher.cs)
-   — граница асинхронной передачи в `ReviewService`.
-5. [`ClientApp/src/app/App.jsx`](../LLMTutorRoom/ClientApp/src/app/App.jsx) —
-   ролевая маршрутизация frontend-а.
+1. [`Program.cs`](../LLMTutorRoom/Program.cs) — DI, HTTP clients, JWT и раздача
+   React.
+2. [`Controllers`](../LLMTutorRoom/Controllers) — публичная BFF-граница.
+3. [`ClassroomService`](../LLMTutorRoom/Services/ClassroomService.cs) — сборка overview.
+4. [`AttemptServiceClient`](../LLMTutorRoom/Services/Attempts/AttemptServiceClient.cs)
+   — чтение попыток.
+5. [`App.jsx`](../LLMTutorRoom/ClientApp/src/app/App.jsx) — ролевая маршрутизация
+   frontend-а.

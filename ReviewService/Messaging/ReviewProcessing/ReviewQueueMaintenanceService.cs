@@ -101,11 +101,13 @@ public sealed class ReviewQueueMaintenanceService(
             try
             {
                 await publisher.PublishAsync(
-                    new ReviewQueueMessage(
-                        review.Id,
-                        review.AttemptId,
-                        review.ModelKeySnapshot,
-                        now),
+                    new ReviewQueueMessage
+                    {
+                        ReviewId = review.Id,
+                        AttemptId = review.AttemptId,
+                        ModelKey = review.ModelKeySnapshot,
+                        RequestedAt = now
+                    },
                     retryDelaySeconds: null,
                     cancellationToken);
                 if (dbContext.Database.IsRelational())

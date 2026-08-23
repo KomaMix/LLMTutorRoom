@@ -103,7 +103,7 @@ public sealed class ReviewProcessingWorker(
             message = JsonSerializer.Deserialize<ReviewQueueMessage>(
                 Encoding.UTF8.GetString(args.Body.ToArray()),
                 JsonHelper.Options);
-            if (message is null || message.ReviewId <= 0 || message.AttemptId <= 0)
+            if (message is null || message.ReviewId <= 0 || message.AttemptId == Guid.Empty)
             {
                 await channel.BasicRejectAsync(args.DeliveryTag, requeue: false, cancellationToken);
                 return;

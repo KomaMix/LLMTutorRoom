@@ -65,8 +65,8 @@ export function parseOverview(data) {
   });
 
   data.attempts.forEach((attempt, attemptIndex) => {
-    if (typeof attempt.id !== "number") {
-      throw new Error(`attempts[${attemptIndex}].id must be a number.`);
+    if (typeof attempt.id !== "string" || attempt.id.length === 0) {
+      throw new Error(`attempts[${attemptIndex}].id must be a non-empty string.`);
     }
 
     if (typeof attempt.testId !== "string") {

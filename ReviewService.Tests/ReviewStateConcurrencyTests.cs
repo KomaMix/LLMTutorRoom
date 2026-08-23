@@ -101,7 +101,7 @@ public sealed class ReviewStateConcurrencyTests
     {
         return new Review
         {
-            AttemptId = 100,
+            AttemptId = Guid.NewGuid(),
             TestId = "test-1",
             TestRevision = 1,
             TestTitle = "Test",

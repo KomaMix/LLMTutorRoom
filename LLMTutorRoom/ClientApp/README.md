@@ -22,6 +22,7 @@ npm run build
 
 - `/api/auth` и `/api/users` → `AuthService` (`5210`);
 - `/api/teaching` → `TeachingService` (`5212`);
+- `/api/attempts` → `AttemptService` (`5216`);
 - `/api/classroom` → `LLMTutorRoom` (`5206`);
 - `/api/llm` → `LLMGateway` (`5200`).
 

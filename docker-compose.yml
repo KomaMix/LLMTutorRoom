@@ -74,6 +74,32 @@ services:
       - edge
       - backend
 
+  attempt-service:
+    build:
+      context: .
+      dockerfile: AttemptService/Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__DefaultConnection: Host=postgres;Database=llm_tutor_attempts;Username=postgres;Password=postgres;
+      RabbitMq__HostName: rabbitmq
+      RabbitMq__Port: 5672
+      RabbitMq__UserName: llm
+      RabbitMq__Password: llm-dev
+      TeachingService__BaseUrl: http://teaching-service:8080
+    expose:
+      - "8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      teaching-service:
+        condition: service_started
+    networks:
+      - edge
+      - backend
+
   llm-gateway:
     build:
       context: .
@@ -123,19 +149,13 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_URLS: http://+:8080
-      ConnectionStrings__DefaultConnection: Host=postgres;Database=llm_tutor_room;Username=postgres;Password=postgres;
-      RabbitMq__HostName: rabbitmq
-      RabbitMq__Port: 5672
-      RabbitMq__UserName: llm
-      RabbitMq__Password: llm-dev
+      AttemptService__BaseUrl: http://attempt-service:8080
       TeachingService__BaseUrl: http://teaching-service:8080
       ReviewService__BaseUrl: http://review-service:8080
-    ports:
-      - "5206:8080"
+    expose:
+      - "8080"
     depends_on:
-      postgres:
-        condition: service_healthy
-      rabbitmq:
+      attempt-service:
         condition: service_healthy
       teaching-service:
         condition: service_started
@@ -155,6 +175,8 @@ services:
       auth-service:
         condition: service_started
       tutor-room:
+        condition: service_started
+      attempt-service:
         condition: service_started
       teaching-service:
         condition: service_started

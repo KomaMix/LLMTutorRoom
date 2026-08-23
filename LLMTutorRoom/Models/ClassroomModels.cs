@@ -1,5 +1,4 @@
-using System.Text.Json.Serialization;
-using LLMTutorRoom.Enums;
+using AttemptService.Contracts.Responses;
 using ReviewService.Contracts.Responses;
 using TeachingService.Contracts.Models;
 
@@ -40,54 +39,4 @@ namespace LLMTutorRoom.Models
         public int RemainingChecks { get; set; }
         public DateTimeOffset? PeriodEndsAt { get; set; }
     }
-
-    public sealed class TestAttempt
-    {
-        public int Id { get; set; }
-        public string TestId { get; set; } = string.Empty;
-
-        public int TestRevision { get; set; }
-        public string StudentUserId { get; set; } = string.Empty;
-        public TestAttemptStatus Status { get; set; } = TestAttemptStatus.InProgress;
-        public DateTimeOffset StartedAt { get; set; }
-        public DateTimeOffset EndsAt { get; set; }
-        public DateTimeOffset? SubmittedAt { get; set; }
-
-        [JsonIgnore]
-        public string AnswersJson { get; set; } = "{}";
-
-        [JsonIgnore]
-        public string AllowedTaskIdsJson { get; set; } = "[]";
-
-        [JsonIgnore]
-        public int StateRevision { get; set; }
-    }
-
-    public sealed class AttemptSubmissionOutboxMessage
-    {
-        public Guid Id { get; set; }
-        public int AttemptId { get; set; }
-        public DateTimeOffset OccurredAt { get; set; }
-        public string PayloadJson { get; set; } = string.Empty;
-        public int PublishAttempts { get; set; }
-        public DateTimeOffset? NextPublishAt { get; set; }
-        public DateTimeOffset? PublishedAt { get; set; }
-        public string LastError { get; set; } = string.Empty;
-    }
-
-    public sealed class TestAttemptResponse
-    {
-        public int Id { get; set; }
-        public string TestId { get; set; } = string.Empty;
-        public int TestRevision { get; set; }
-        public TestAttemptStatus Status { get; set; }
-        public DateTimeOffset StartedAt { get; set; }
-        public DateTimeOffset EndsAt { get; set; }
-        public DateTimeOffset? SubmittedAt { get; set; }
-        public Dictionary<string, string> Answers { get; set; } = new();
-    }
-
-    public sealed record StartAttemptResult(
-        StartAttemptOutcome Outcome,
-        TestAttemptResponse? Attempt = null);
 }

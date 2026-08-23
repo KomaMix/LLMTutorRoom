@@ -144,11 +144,13 @@ public sealed class ReviewIntegrationEventHandler(
             try
             {
                 await queuePublisher.PublishAsync(
-                    new ReviewQueueMessage(
-                        review.Id,
-                        review.AttemptId,
-                        review.ModelKeySnapshot,
-                        DateTimeOffset.UtcNow),
+                    new ReviewQueueMessage
+                    {
+                        ReviewId = review.Id,
+                        AttemptId = review.AttemptId,
+                        ModelKey = review.ModelKeySnapshot,
+                        RequestedAt = DateTimeOffset.UtcNow
+                    },
                     retryDelaySeconds: null,
                     cancellationToken);
                 var enqueuedAt = DateTimeOffset.UtcNow;
@@ -223,7 +225,7 @@ public sealed class ReviewIntegrationEventHandler(
     private static void Validate(AttemptSubmittedV1 message)
     {
         if (message.EventId == Guid.Empty
-            || message.AttemptId <= 0
+            || message.AttemptId == Guid.Empty
             || string.IsNullOrWhiteSpace(message.TestId)
             || message.TestRevision <= 0
             || string.IsNullOrWhiteSpace(message.StudentUserId)

@@ -12,6 +12,7 @@ infra-only Compose file):
 - AuthService: `http://localhost:5210`
 - LLMTutorRoom: `http://localhost:5206`
 - TeachingService: `http://localhost:5212`
+- AttemptService: `http://localhost:5216`
 - LLMGateway: `http://localhost:5200`
 - ReviewService: `http://127.0.0.1:5214` (internal, loopback only)
 - Nginx gateway: `http://localhost:8080`
@@ -22,11 +23,14 @@ Routes:
 - `/api/users/*` -> AuthService
 - `/api/classroom/*` -> LLMTutorRoom
 - `/api/teaching/*` -> TeachingService
+- `/api/attempts` and `/api/attempts/*` -> AttemptService
 - `/api/llm/*` -> LLMGateway, with `/api/llm/chat/...` rewritten to `/api/chat/...`
 - `/` -> LLMTutorRoom frontend
 
 Nginx explicitly returns `404` for `/internal` and `/internal/*`; these paths
-are never passed to the frontend fallback or any backend service.
+are never passed to the frontend fallback or any backend service. The public
+AttemptService routes validate the student's JWT themselves; its internal
+student-overview endpoint remains reachable only through the backend network.
 
 `ReviewService` deliberately has no nginx route. Its `/internal/*` API is called
 by `LLMTutorRoom`, has no application-level authentication, and must be reachable
@@ -62,8 +66,9 @@ host:
 docker compose -f docker-compose.infra.yml up
 ```
 
-In this mode, start `ReviewService` separately on `127.0.0.1:5214`. Nginx does
-not proxy that port.
+In this mode, start `AttemptService` on `localhost:5216` and `ReviewService` on
+`127.0.0.1:5214`. Nginx proxies only the public AttemptService API and does not
+proxy ReviewService.
 
 Run the full Docker stack from the repository root:
 
@@ -71,9 +76,15 @@ Run the full Docker stack from the repository root:
 docker compose up --build
 ```
 
-In the full Compose stack, `ReviewService` is reachable only inside the Docker
-network as `http://review-service:8080`; Compose does not publish its port on
-the host.
+In the full Compose stack, `AttemptService` and `ReviewService` are reachable
+inside Docker as `http://attempt-service:8080` and
+`http://review-service:8080`; Compose does not publish their ports on the host.
+Nginx exposes only `/api/attempts` and `/api/attempts/*` from AttemptService;
+neither service's `/internal/*` API is exposed.
+
+`LLMTutorRoom` is likewise reached through nginx in the full stack and has no
+direct host port. Port `5206` above applies only when the .NET service is run
+locally for the infra-only nginx configuration.
 
 `TeachingService` is likewise not published on host port `5212` in the full
 Compose stack. Nginx reaches it as `http://teaching-service:8080` and exposes

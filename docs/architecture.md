@@ -5,6 +5,7 @@
 
 - [AuthService](auth-service.md)
 - [TeachingService](teaching-service.md)
+- [AttemptService](attempt-service.md)
 - [LLMTutorRoom](llm-tutor-room.md)
 - [ReviewService](review-service.md)
 - [LLMGateway](llm-gateway.md)
@@ -17,7 +18,8 @@
 | --- | --- | --- |
 | `AuthService` | Пользователи, роли, пароли и выдача JWT | Не хранит учебные данные |
 | `TeachingService` | Тесты, задания, версии тестов и опубликованные правила проверки | Не создаёт проверки и не хранит ответы учеников |
-| `LLMTutorRoom` | Попытки учеников, сохранённые ответы, таймер попытки и публичный web-фасад | Не выставляет баллы и не выбирает способ проверки |
+| `AttemptService` | Попытки учеников, ответы, серверный таймер и факт явной отправки | Не хранит каталог тестов и не проверяет ответы |
+| `LLMTutorRoom` | React-приложение, role-aware web-фасад и сборка overview | Не владеет бизнесовыми данными и собственной БД |
 | `ReviewService` | Проверки, результаты заданий, ручная проверка, LLM-очередь, доступы и квоты преподавателей | Не хранит редактируемый каталог тестов и не выполняет LLM-запрос напрямую к provider-у |
 | `LLMGateway` | Каталог моделей, deployment-ы, лимиты и вызов OpenAI-compatible provider-а | Не знает о тестах, учениках, попытках и баллах |
 
@@ -29,20 +31,23 @@ flowchart LR
     Browser["Браузер"] --> Nginx["nginx :8080"]
     Nginx --> Auth["AuthService"]
     Nginx --> Teaching["TeachingService"]
+    Nginx --> Attempt["AttemptService"]
     Nginx --> Tutor["LLMTutorRoom + React"]
     Nginx --> Gateway["LLMGateway"]
 
     Tutor -- "внутренний HTTP: тесты" --> Teaching
+    Tutor -- "внутренний HTTP: попытки для overview" --> Attempt
     Tutor -- "внутренний HTTP: результаты и доступы" --> Review["ReviewService"]
+    Attempt -- "внутренний HTTP: опубликованная версия" --> Teaching
     Review -- "HTTP: каталог и chat" --> Gateway
 
     Teaching -- "policy published" --> Rabbit[(RabbitMQ)]
-    Tutor -- "attempt submitted" --> Rabbit
+    Attempt -- "attempt submitted" --> Rabbit
     Rabbit --> Review
 
     Auth --> AuthDb[(auth DB)]
     Teaching --> TeachingDb[(teaching DB)]
-    Tutor --> TutorDb[(tutor DB)]
+    Attempt --> AttemptDb[(attempt DB)]
     Review --> ReviewDb[(review DB)]
     Gateway --> GatewayDb[(gateway DB)]
 ```
@@ -69,7 +74,7 @@ sequenceDiagram
     actor Teacher as Преподаватель
     actor Student as Ученик
     participant Teaching as TeachingService
-    participant Tutor as LLMTutorRoom
+    participant Attempt as AttemptService
     participant Rabbit as RabbitMQ
     participant Review as ReviewService
     participant Gateway as LLMGateway
@@ -79,9 +84,9 @@ sequenceDiagram
     Teaching-->>Rabbit: TestReviewPolicyPublishedV1
     Rabbit-->>Review: Снимок правил v4
 
-    Student->>Tutor: Отправляет попытку v4
-    Tutor->>Tutor: Сохраняет Submitted + outbox
-    Tutor-->>Rabbit: AttemptSubmittedV1
+    Student->>Attempt: Явно отправляет попытку v4
+    Attempt->>Attempt: Сохраняет Submitted + outbox
+    Attempt-->>Rabbit: AttemptSubmittedV1
     Rabbit-->>Review: Ответы ученика
     Review->>Review: Создаёт Review и выбирает Auto / Manual / Llm
     opt Есть LLM-задания
@@ -113,7 +118,7 @@ RabbitMQ используется только для фактов, которы
 - ученик окончательно отправил попытку;
 - внутри `ReviewService` нужно выполнить или повторить LLM-проверку.
 
-`TeachingService` и `LLMTutorRoom` записывают интеграционное событие в outbox в
+`TeachingService` и `AttemptService` записывают интеграционное событие в outbox в
 той же транзакции, что и бизнесовое изменение. Фоновый процесс доставляет outbox
 в RabbitMQ. `ReviewService` ведёт inbox по `EventId`, поэтому повторная доставка
 не создаёт вторую проверку. Это модель доставки **at least once**: дубль допустим
@@ -138,24 +143,29 @@ RabbitMQ используется только для фактов, которы
 - старые незавершённые проверки остаются видимыми;
 - завершённая история загружается отдельно и постранично.
 
+Фоновое наступление дедлайна переводит попытку в `Expired`, но не считается
+отправкой и не создаёт проверку. `AttemptSubmittedV1` возникает только после
+явного submit ученика, принятого до дедлайна.
+
 ## Сеть и доверие
 
 В полном Docker Compose рекомендуемой точкой входа в приложение является nginx
 на порту `8080`. Он маршрутизирует только публичные `/api/*` и интерфейс React.
 Любой путь `/internal/*` получает `404`.
 
-Development Compose дополнительно публикует на хост прямые порты `AuthService`,
-`LLMTutorRoom` и `LLMGateway` для отладки. Это не production security boundary:
+Development Compose дополнительно публикует на хост прямые порты `AuthService`
+и `LLMGateway` для отладки. `AttemptService` и `LLMTutorRoom` доступны снаружи
+только через разрешённые nginx-маршруты. Это не production security boundary:
 особенно важно помнить, что API `LLMGateway` сейчас не имеет собственной
 аутентификации. Во внешнем окружении прямые host-порты нужно закрыть и оставить
 контролируемый ingress.
 
-`ReviewService` подключён только к закрытой сети `backend` и не публикует порт
-на хост. Его internal API не имеет собственного JWT или API key: доверие
-обеспечивается сетевой границей. `LLMTutorRoom` проверяет JWT и роль пользователя,
-а затем обращается к internal API от имени публичного фасада. При другом способе
-развёртывания эту границу нужно сохранить сетевой политикой или добавить
-межсервисную аутентификацию.
+Публичные команды `AttemptService` самостоятельно проверяют JWT и роль ученика.
+Internal API `AttemptService` и `ReviewService` не имеют отдельного API key:
+доверие обеспечивается сетью `backend`, а nginx возвращает `404` для
+`/internal/*`. `LLMTutorRoom` обращается к этим API от имени публичного фасада.
+При другом способе развёртывания эту границу нужно сохранить сетевой политикой
+или добавить межсервисную аутентификацию.
 
 ## Где искать код
 
@@ -164,6 +174,7 @@ Development Compose дополнительно публикует на хост 
 - Бизнесовые сценарии — в `Services/`.
 - EF Core-модель и владение данными — в `Data/*DbContext.cs` и `Models/`.
 - Общие wire-контракты событий и internal API — в
+  [`AttemptService.Contracts`](../AttemptService.Contracts),
   [`TeachingService.Contracts`](../TeachingService.Contracts) и
   [`ReviewService.Contracts`](../ReviewService.Contracts).
 - Docker-топология — в [`docker-compose.yml`](../docker-compose.yml), публичная

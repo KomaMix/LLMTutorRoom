@@ -30,7 +30,7 @@ public sealed class ReviewJobProcessor(
         var storedAttemptId = await dbContext.Reviews
             .AsNoTracking()
             .Where(item => item.Id == message.ReviewId)
-            .Select(item => (int?)item.AttemptId)
+            .Select(item => (Guid?)item.AttemptId)
             .SingleOrDefaultAsync(cancellationToken);
         if (!storedAttemptId.HasValue)
         {

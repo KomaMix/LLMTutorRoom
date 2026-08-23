@@ -44,20 +44,22 @@ namespace TeachingService.Services.IntegrationEvents
             var eventId = Guid.NewGuid();
             var publishedAt = version.PublishedAt ?? DateTimeOffset.UtcNow;
 
-            var integrationEvent = new TestReviewPolicyPublishedV1(
-                eventId,
-                test.Id.ToString(),
-                revision,
-                test.TeacherUserId,
-                version.Title,
-                version.LlmModelKey,
-                version.Tasks
+            var integrationEvent = new TestReviewPolicyPublishedV1
+            {
+                EventId = eventId,
+                TestId = test.Id.ToString(),
+                Revision = revision,
+                TeacherUserId = test.TeacherUserId,
+                TestTitle = version.Title,
+                ModelKey = version.LlmModelKey,
+                Tasks = version.Tasks
                     .Where(task => !task.IsHidden)
                     .OrderBy(task => task.CreatedAt)
                     .ThenBy(task => task.Id)
                     .Select(ToSnapshot)
                     .ToList(),
-                publishedAt);
+                PublishedAt = publishedAt
+            };
             var payload = JsonSerializer.Serialize(integrationEvent, JsonOptions);
 
             _dbContext.TestReviewPolicyRevisions.Add(new TestReviewPolicyRevision
@@ -78,21 +80,25 @@ namespace TeachingService.Services.IntegrationEvents
 
         private static ReviewTaskPolicySnapshot ToSnapshot(TestTask task)
         {
-            return new ReviewTaskPolicySnapshot(
-                task.Id.ToString(),
-                ToReviewTaskType(task.Type),
-                ToReviewCheckMode(task.CheckMode),
-                task.Title,
-                task.Prompt,
-                task.MaxPoints,
-                task.WrongAnswerPenalty,
-                task.Options
+            return new ReviewTaskPolicySnapshot
+            {
+                Id = task.Id.ToString(),
+                Type = ToReviewTaskType(task.Type),
+                CheckMode = ToReviewCheckMode(task.CheckMode),
+                Title = task.Title,
+                Prompt = task.Prompt,
+                MaxPoints = task.MaxPoints,
+                WrongAnswerPenalty = task.WrongAnswerPenalty,
+                Options = task.Options
                     .OrderBy(option => option.Id)
-                    .Select(option => new ReviewAnswerOptionSnapshot(
-                        option.Id.ToString(),
-                        option.Text,
-                        option.IsCorrect))
-                    .ToList());
+                    .Select(option => new ReviewAnswerOptionSnapshot
+                    {
+                        Id = option.Id.ToString(),
+                        Text = option.Text,
+                        IsCorrect = option.IsCorrect
+                    })
+                    .ToList()
+            };
         }
 
         private static ReviewTaskType ToReviewTaskType(TeachingTaskType taskType)

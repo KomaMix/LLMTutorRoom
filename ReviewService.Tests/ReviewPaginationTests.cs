@@ -22,11 +22,11 @@ public sealed class ReviewPaginationTests
             CreatePolicy(revision: 1),
             CreatePolicy(revision: 2));
         dbContext.Reviews.AddRange(
-            CreateReview(1, ReviewStatus.ManualReview, score: 0, maxScore: 2, attemptId: 1),
-            CreateReview(1, ReviewStatus.Queued, score: 0, maxScore: 2, attemptId: 2),
-            CreateReview(1, ReviewStatus.Failed, score: 0, maxScore: 2, attemptId: 3),
-            CreateReview(2, ReviewStatus.Checked, score: 1, maxScore: 2, attemptId: 4),
-            CreateReview(2, ReviewStatus.Checked, score: 4, maxScore: 4, attemptId: 5));
+            CreateReview(1, ReviewStatus.ManualReview, score: 0, maxScore: 2, attemptId: CreateAttemptId(1)),
+            CreateReview(1, ReviewStatus.Queued, score: 0, maxScore: 2, attemptId: CreateAttemptId(2)),
+            CreateReview(1, ReviewStatus.Failed, score: 0, maxScore: 2, attemptId: CreateAttemptId(3)),
+            CreateReview(2, ReviewStatus.Checked, score: 1, maxScore: 2, attemptId: CreateAttemptId(4)),
+            CreateReview(2, ReviewStatus.Checked, score: 4, maxScore: 4, attemptId: CreateAttemptId(5)));
         await dbContext.SaveChangesAsync();
         var service = CreateService(dbContext);
 
@@ -86,7 +86,7 @@ public sealed class ReviewPaginationTests
                 ReviewStatus.Checked,
                 score: index,
                 maxScore: 101,
-                attemptId: index)));
+                attemptId: CreateAttemptId(index))));
         await dbContext.SaveChangesAsync();
         var service = CreateService(dbContext);
 
@@ -215,7 +215,7 @@ public sealed class ReviewPaginationTests
         ReviewStatus status,
         decimal score,
         decimal maxScore,
-        int attemptId)
+        Guid attemptId)
     {
         return new Review
         {
@@ -230,5 +230,10 @@ public sealed class ReviewPaginationTests
             Score = score,
             MaxScore = maxScore
         };
+    }
+
+    private static Guid CreateAttemptId(int value)
+    {
+        return new Guid(value, 0, 0, new byte[8]);
     }
 }

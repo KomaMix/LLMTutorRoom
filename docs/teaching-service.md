@@ -9,7 +9,7 @@
 [`TestTask`](../TeachingService/Models/TestTask.cs). `TeacherUserId` берётся из JWT,
 но сам пользователь принадлежит `AuthService`; внешнего ключа на auth-базу нет.
 
-Сервис не хранит попытки и ответы учеников — это зона `LLMTutorRoom` — и не
+Сервис не хранит попытки и ответы учеников — это зона `AttemptService` — и не
 создаёт результаты, не расходует квоты и не вызывает LLM: этим владеет
 `ReviewService`. Межсервисные DTO и enum каталога находятся в
 [`TeachingService.Contracts`](../TeachingService.Contracts/TeachingService.Contracts.csproj),
@@ -20,6 +20,7 @@
 flowchart LR
     UI[Преподаватель / LLMTutorRoom] -->|JWT, публичные команды| API[TeachingController]
     Room[LLMTutorRoom backend] -->|внутреннее чтение| Internal[InternalTeachingController]
+    Attempt[AttemptService] -->|версия при старте попытки| Internal
     API --> Catalog[TeachingCatalogService]
     Internal --> Catalog
     Catalog --> DB[(PostgreSQL: каталог + outbox)]
@@ -114,6 +115,8 @@ confirmations. После сбоя запись остаётся в БД и по
 этом случае работа начинается из-за уже отправленной попытки, а не из-за самого
 факта публикации. Сопоставление видно в
 [`ReviewIntegrationEventHandler`](../ReviewService/Services/ReviewIntegrationEventHandler.cs).
+Переход незавершённой попытки в `Expired` события не создаёт: проверка появляется
+только после явного submit ученика.
 
 ## Данные, конфигурация и зависимости
 

@@ -6,7 +6,7 @@ public interface IReviewCreationService
 {
     Task<Review> CreateAsync(
         TestReviewPolicy policy,
-        int attemptId,
+        Guid attemptId,
         string studentUserId,
         string studentName,
         Dictionary<string, string> answers,

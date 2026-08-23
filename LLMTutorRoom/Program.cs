@@ -1,19 +1,15 @@
-using LLMTutorRoom.Data;
 using LLMTutorRoom.Interfaces;
+using LLMTutorRoom.Options;
 using LLMTutorRoom.Services;
-using LLMTutorRoom.Services.ReviewIntegration;
+using LLMTutorRoom.Services.Attempts;
 using LLMTutorRoom.Services.Reviews;
 using LLMTutorRoom.Services.Teaching;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.StaticFiles;
 using Shared.Auth;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
-var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
-    ?? throw new InvalidOperationException("ConnectionStrings:DefaultConnection is required.");
-
 builder.Services.AddControllers()
     .AddJsonOptions(options =>
     {
@@ -22,27 +18,12 @@ builder.Services.AddControllers()
     });
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
-builder.Services.AddDbContext<TutorRoomDbContext>(options =>
-    options.UseNpgsql(connectionString));
-builder.Services.AddOptions<RabbitMqOptions>()
-    .Bind(builder.Configuration.GetSection(RabbitMqOptions.SectionName))
-    .Validate(options => !options.Enabled
-        || (!string.IsNullOrWhiteSpace(options.HostName)
-            && options.Port > 0
-            && !string.IsNullOrWhiteSpace(options.UserName)),
-        "RabbitMq contains invalid connection settings.")
-    .ValidateOnStart();
-builder.Services.AddOptions<AttemptSubmissionOutboxOptions>()
-    .Bind(builder.Configuration.GetSection(AttemptSubmissionOutboxOptions.SectionName))
-    .Validate(options => options.PollIntervalSeconds > 0, "Outbox poll interval must be positive.")
-    .Validate(options => options.RetryDelaySeconds > 0, "Outbox retry delay must be positive.")
-    .Validate(options => options.BatchSize > 0, "Outbox batch size must be positive.")
-    .Validate(options => options.PublishedMessageRetentionDays > 0,
-        "Outbox retention must be positive.")
-    .Validate(options => options.CleanupIntervalMinutes > 0,
-        "Outbox cleanup interval must be positive.")
-    .Validate(options => options.CleanupBatchSize > 0,
-        "Outbox cleanup batch size must be positive.")
+builder.Services.AddOptions<AttemptServiceOptions>()
+    .Bind(builder.Configuration.GetSection(AttemptServiceOptions.SectionName))
+    .Validate(options => Uri.TryCreate(options.BaseUrl, UriKind.Absolute, out _),
+        "AttemptService:BaseUrl must be an absolute URL.")
+    .Validate(options => options.RequestTimeoutSeconds > 0,
+        "AttemptService request timeout must be positive.")
     .ValidateOnStart();
 builder.Services.AddOptions<TeachingServiceOptions>()
     .Bind(builder.Configuration.GetSection(TeachingServiceOptions.SectionName))
@@ -59,7 +40,15 @@ builder.Services.AddOptions<ReviewServiceOptions>()
         "ReviewService request timeout must be positive.")
     .ValidateOnStart();
 builder.Services.AddScoped<ClassroomService>();
-builder.Services.AddSingleton<RabbitMqConnectionProvider>();
+builder.Services.AddHttpClient<IAttemptServiceClient, AttemptServiceClient>((serviceProvider, client) =>
+{
+    var options = serviceProvider
+        .GetRequiredService<Microsoft.Extensions.Options.IOptions<AttemptServiceOptions>>()
+        .Value;
+
+    client.BaseAddress = new Uri(options.BaseUrl);
+    client.Timeout = TimeSpan.FromSeconds(options.RequestTimeoutSeconds);
+});
 builder.Services.AddHttpClient<ITeachingServiceClient, TeachingServiceClient>((serviceProvider, client) =>
 {
     var options = serviceProvider
@@ -78,17 +67,9 @@ builder.Services.AddHttpClient<IReviewServiceClient, ReviewServiceClient>((servi
     client.BaseAddress = new Uri(options.BaseUrl);
     client.Timeout = TimeSpan.FromSeconds(options.RequestTimeoutSeconds);
 });
-builder.Services.AddHostedService<AttemptSubmissionOutboxPublisher>();
-builder.Services.AddHostedService<AttemptSubmissionOutboxCleanupService>();
 builder.Services.AddJwtAuthentication(builder.Configuration);
 
 var app = builder.Build();
-
-using (var scope = app.Services.CreateScope())
-{
-    var dbContext = scope.ServiceProvider.GetRequiredService<TutorRoomDbContext>();
-    await dbContext.Database.MigrateAsync();
-}
 
 if (app.Environment.IsDevelopment())
 {
