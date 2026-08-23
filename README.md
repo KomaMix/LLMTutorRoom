@@ -100,11 +100,11 @@ docker compose up --build
 
 Тестовые пользователи из development-конфигурации:
 
-| Роль | Логин | Пароль |
-| --- | --- | --- |
-| Администратор | `admin` | `admin123` |
-| Преподаватель | `teacher` | `teacher123` |
-| Ученик | `student` | `student123` |
+| Роль | Имя пользователя | Email для входа | Пароль |
+| --- | --- | --- | --- |
+| Администратор | `admin` | `admin@llmtutor.test` | `admin123` |
+| Преподаватель | `teacher` | `teacher@llmtutor.test` | `teacher123` |
+| Ученик | `student` | `student@llmtutor.test` | `student123` |
 
 Основные адреса полного Compose-стека:
 

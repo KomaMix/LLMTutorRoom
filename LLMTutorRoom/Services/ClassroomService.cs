@@ -280,7 +280,7 @@ namespace LLMTutorRoom.Services
         public async Task<TestAttemptResponse?> SubmitAttemptAsync(
             int attemptId,
             string studentUserId,
-            string studentDisplayName,
+            string studentUserName,
             CancellationToken cancellationToken)
         {
             for (var mutationAttempt = 1;
@@ -309,7 +309,7 @@ namespace LLMTutorRoom.Services
                 var outboxAdded = submittedNow
                     && await EnsureAttemptSubmittedOutboxAsync(
                         attempt,
-                        studentDisplayName,
+                        studentUserName,
                         cancellationToken);
 
                 if (!statusChanged && !outboxAdded)
@@ -369,7 +369,7 @@ namespace LLMTutorRoom.Services
 
         private async Task<bool> EnsureAttemptSubmittedOutboxAsync(
             TestAttempt attempt,
-            string studentDisplayName,
+            string studentUserName,
             CancellationToken cancellationToken)
         {
             var existingOutbox = await _dbContext.AttemptSubmissionOutboxMessages
@@ -385,9 +385,9 @@ namespace LLMTutorRoom.Services
                 attempt.TestId,
                 attempt.TestRevision,
                 attempt.StudentUserId,
-                string.IsNullOrWhiteSpace(studentDisplayName)
+                string.IsNullOrWhiteSpace(studentUserName)
                     ? "Студент"
-                    : studentDisplayName.Trim(),
+                    : studentUserName.Trim(),
                 DeserializeAnswers(attempt.AnswersJson),
                 occurredAt);
 

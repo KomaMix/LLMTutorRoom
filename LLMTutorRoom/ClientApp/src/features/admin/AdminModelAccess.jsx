@@ -1,5 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Loader2, Pencil, Save, Server, ShieldCheck, Trash2 } from "lucide-react";
+import {
+  Bot,
+  CalendarClock,
+  Gauge,
+  Loader2,
+  Pencil,
+  Save,
+  Server,
+  ShieldCheck,
+  Trash2,
+  UserRound,
+  X
+} from "lucide-react";
 import { getTeachers } from "../../api/usersApi.js";
 import {
   deleteTeacherModelAccess,
@@ -8,16 +20,50 @@ import {
   saveTeacherModelAccess
 } from "../../api/modelAccessApi.js";
 import { ConfirmDialog } from "../../shared/ui/ConfirmDialog.jsx";
-import { StatusBadge } from "../../shared/ui/StatusBadge.jsx";
-import { formatPeriod } from "../../shared/lib/dates.js";
+import { formatDate, formatPeriod } from "../../shared/lib/dates.js";
+import { useUnsavedChangesGuard } from "../../shared/hooks/useUnsavedChangesGuard.js";
 import { getRequestErrorMessage } from "./requestError.js";
 
 const initialAccessForm = {
   modelKey: "",
   isEnabled: true,
-  periodSeconds: 30 * 24 * 60 * 60,
+  periodValue: 30,
+  periodUnit: "days",
   maxChecks: 100
 };
+
+const periodUnitSeconds = {
+  days: 24 * 60 * 60,
+  hours: 60 * 60,
+  minutes: 60,
+  seconds: 1
+};
+
+const unsavedAccessPrompt = "Есть несохранённые настройки доступа. Потерять изменения?";
+
+function createPeriodForm(seconds) {
+  const safeSeconds = Math.max(1, Number(seconds) || 1);
+  const matchingUnit = Object.entries(periodUnitSeconds)
+    .find(([, multiplier]) => Number.isInteger(safeSeconds / multiplier));
+
+  return {
+    periodValue: safeSeconds / (matchingUnit?.[1] ?? 1),
+    periodUnit: matchingUnit?.[0] ?? "seconds"
+  };
+}
+
+function getPeriodSeconds(form) {
+  return Number(form.periodValue) * (periodUnitSeconds[form.periodUnit] ?? 1);
+}
+
+function serializeAccessForm(form) {
+  return JSON.stringify({
+    modelKey: form.modelKey,
+    isEnabled: form.isEnabled,
+    periodSeconds: getPeriodSeconds(form),
+    maxChecks: Number(form.maxChecks)
+  });
+}
 
 export function AdminModelAccess() {
   const [teachers, setTeachers] = useState([]);
@@ -26,6 +72,7 @@ export function AdminModelAccess() {
   const [selectedTeacherId, setSelectedTeacherId] = useState("");
   const [loadedTeacherId, setLoadedTeacherId] = useState("");
   const [form, setForm] = useState(initialAccessForm);
+  const [editingModelKey, setEditingModelKey] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isAccessLoading, setIsAccessLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -38,8 +85,34 @@ export function AdminModelAccess() {
   const [accessLoadVersion, setAccessLoadVersion] = useState(0);
   const selectedTeacherIdRef = useRef("");
   const accessRequestVersionRef = useRef(0);
+  const editorRef = useRef(null);
+  const actionBannerRef = useRef(null);
+  const focusActionBannerAfterDeleteRef = useRef(false);
+  const formRef = useRef(form);
+  const formBaselineRef = useRef(form);
+  formRef.current = form;
+  const hasUnsavedAccessChanges = serializeAccessForm(form)
+    !== serializeAccessForm(formBaselineRef.current);
+  const hasUnsavedAccessChangesRef = useRef(hasUnsavedAccessChanges);
+  hasUnsavedAccessChangesRef.current = hasUnsavedAccessChanges;
+  useUnsavedChangesGuard(hasUnsavedAccessChanges, unsavedAccessPrompt);
+
+  useEffect(() => {
+    if (pendingDeleteAccess || !actionMessage || !focusActionBannerAfterDeleteRef.current) {
+      return;
+    }
+
+    focusActionBannerAfterDeleteRef.current = false;
+    actionBannerRef.current?.focus();
+  }, [actionMessage, pendingDeleteAccess]);
 
   const selectTeacher = useCallback(teacherId => {
+    if (teacherId !== selectedTeacherIdRef.current
+      && hasUnsavedAccessChangesRef.current
+      && !window.confirm(unsavedAccessPrompt)) {
+      return;
+    }
+
     accessRequestVersionRef.current += 1;
     selectedTeacherIdRef.current = teacherId;
     setSelectedTeacherId(teacherId);
@@ -47,6 +120,13 @@ export function AdminModelAccess() {
     setAccessList([]);
     setAccessError("");
     setActionMessage(null);
+    setEditingModelKey("");
+    const nextForm = {
+      ...initialAccessForm,
+      modelKey: ""
+    };
+    formBaselineRef.current = nextForm;
+    setForm(nextForm);
     setIsAccessLoading(Boolean(teacherId));
   }, []);
   const cancelDelete = useCallback(() => setPendingDeleteAccess(null), []);
@@ -72,15 +152,21 @@ export function AdminModelAccess() {
           return;
         }
 
-        setTeachers(teachersData);
+        const sortedTeachers = [...teachersData]
+          .sort((left, right) => left.userName.localeCompare(right.userName, "ru"));
+        setTeachers(sortedTeachers);
         setModels(modelsData);
-        selectTeacher(teachersData[0]?.id ?? "");
-        setForm(current => ({
-          ...current,
-          modelKey: modelsData.some(model => model.key === current.modelKey)
-            ? current.modelKey
-            : modelsData[0]?.key ?? ""
-        }));
+        selectTeacher(sortedTeachers[0]?.id ?? "");
+        setForm(current => {
+          const nextForm = {
+            ...current,
+            modelKey: modelsData.some(model => model.key === current.modelKey)
+              ? current.modelKey
+              : ""
+          };
+          formBaselineRef.current = nextForm;
+          return nextForm;
+        });
       } catch (error) {
         if (!controller.signal.aborted) {
           setInitialError(getRequestErrorMessage(error, "Не удалось загрузить преподавателей и каталог моделей."));
@@ -123,6 +209,26 @@ export function AdminModelAccess() {
         if (isCurrentSelection(teacherId, requestVersion)) {
           setAccessList(data);
           setLoadedTeacherId(teacherId);
+          const selectedAccess = data.find(access => access.modelKey === formRef.current.modelKey);
+          if (selectedAccess) {
+            const nextForm = {
+              modelKey: selectedAccess.modelKey,
+              isEnabled: selectedAccess.isEnabled,
+              ...createPeriodForm(selectedAccess.periodSeconds),
+              maxChecks: selectedAccess.maxChecks
+            };
+            formBaselineRef.current = nextForm;
+            setForm(nextForm);
+            setEditingModelKey(selectedAccess.modelKey);
+          } else {
+            const nextForm = {
+              ...initialAccessForm,
+              modelKey: ""
+            };
+            formBaselineRef.current = nextForm;
+            setForm(nextForm);
+            setEditingModelKey("");
+          }
         }
       } catch (error) {
         if (!controller.signal.aborted && isCurrentSelection(teacherId, requestVersion)) {
@@ -170,9 +276,10 @@ export function AdminModelAccess() {
       return;
     }
 
-    const periodSeconds = Number(form.periodSeconds);
+    const periodSeconds = getPeriodSeconds(form);
     const maxChecks = Number(form.maxChecks);
     if (!Number.isInteger(periodSeconds) || periodSeconds < 1
+      || periodSeconds > 2147483647
       || !Number.isInteger(maxChecks) || maxChecks < 1) {
       setActionMessage({
         type: "error",
@@ -197,7 +304,16 @@ export function AdminModelAccess() {
           access,
           ...current.filter(item => item.modelKey !== access.modelKey)
         ].sort((left, right) => left.modelKey.localeCompare(right.modelKey)));
-        setActionMessage({ type: "success", text: "Доступ сохранен." });
+        const savedForm = {
+          modelKey: access.modelKey,
+          isEnabled: access.isEnabled,
+          ...createPeriodForm(access.periodSeconds),
+          maxChecks: access.maxChecks
+        };
+        formBaselineRef.current = savedForm;
+        setForm(savedForm);
+        setEditingModelKey(access.modelKey);
+        setActionMessage({ type: "success", text: "Доступ сохранён." });
       }
     } catch (error) {
       if (isCurrentSelection(teacherId, requestVersion)) {
@@ -235,7 +351,17 @@ export function AdminModelAccess() {
 
       if (isCurrentSelection(teacherId, requestVersion)) {
         setAccessList(current => current.filter(item => item.modelKey !== access.modelKey));
-        setActionMessage({ type: "success", text: "Доступ удален." });
+        if (editingModelKey === access.modelKey) {
+          const nextForm = {
+            ...initialAccessForm,
+            modelKey: ""
+          };
+          formBaselineRef.current = nextForm;
+          setEditingModelKey("");
+          setForm(nextForm);
+        }
+        focusActionBannerAfterDeleteRef.current = true;
+        setActionMessage({ type: "success", text: "Доступ удалён." });
       }
     } catch (error) {
       if (isCurrentSelection(teacherId, requestVersion)) {
@@ -252,6 +378,37 @@ export function AdminModelAccess() {
 
   function updateForm(field, value) {
     setForm(current => ({ ...current, [field]: value }));
+    setActionMessage(null);
+  }
+
+  function selectModel(modelKey) {
+    if (modelKey !== formRef.current.modelKey
+      && hasUnsavedAccessChangesRef.current
+      && !window.confirm(unsavedAccessPrompt)) {
+      return;
+    }
+
+    const existingAccess = accessList.find(access => access.modelKey === modelKey);
+    if (existingAccess) {
+      const nextForm = {
+        modelKey: existingAccess.modelKey,
+        isEnabled: existingAccess.isEnabled,
+        ...createPeriodForm(existingAccess.periodSeconds),
+        maxChecks: existingAccess.maxChecks
+      };
+      formBaselineRef.current = nextForm;
+      setForm(nextForm);
+      setEditingModelKey(existingAccess.modelKey);
+    } else {
+      const nextForm = {
+        ...initialAccessForm,
+        modelKey
+      };
+      formBaselineRef.current = nextForm;
+      setForm(nextForm);
+      setEditingModelKey("");
+    }
+    setActionMessage(null);
   }
 
   function editAccess(access) {
@@ -259,12 +416,38 @@ export function AdminModelAccess() {
       return;
     }
 
-    setForm({
+    if (access.modelKey !== formRef.current.modelKey
+      && hasUnsavedAccessChangesRef.current
+      && !window.confirm(unsavedAccessPrompt)) {
+      return;
+    }
+
+    const nextForm = {
       modelKey: access.modelKey,
       isEnabled: access.isEnabled,
-      periodSeconds: access.periodSeconds,
+      ...createPeriodForm(access.periodSeconds),
       maxChecks: access.maxChecks
+    };
+    formBaselineRef.current = nextForm;
+    setForm(nextForm);
+    setEditingModelKey(access.modelKey);
+    setActionMessage(null);
+    window.requestAnimationFrame(() => {
+      const editor = editorRef.current;
+      const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+      editor?.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "start" });
+      editor?.querySelector("#access-model")?.focus({ preventScroll: true });
     });
+  }
+
+  function cancelEdit() {
+    const nextForm = {
+      ...initialAccessForm,
+      modelKey: ""
+    };
+    formBaselineRef.current = nextForm;
+    setEditingModelKey("");
+    setForm(nextForm);
     setActionMessage(null);
   }
 
@@ -275,194 +458,391 @@ export function AdminModelAccess() {
   const isMutationLocked = isSaving
     || Boolean(busyModelKey)
     || Boolean(pendingDeleteAccess);
-  const isAccessPayloadDisabled = isMutationLocked || !isAccessCurrent;
+  const isModelSelectDisabled = isMutationLocked
+    || !isAccessCurrent
+    || models.length === 0;
+  const isAccessPayloadDisabled = isModelSelectDisabled || !form.modelKey;
   const canMutateAccess = isAccessCurrent
     && !isMutationLocked;
   const selectedTeacher = teachers.find(teacher => teacher.id === selectedTeacherId);
+  const selectedModel = models.find(model => model.key === form.modelKey);
 
   return (
     <>
-      <section className="admin-layout">
-        <div className="panel">
-          <div className="panel-header">
+      <section className="admin-page admin-model-access-page">
+        <header className="admin-page-heading">
+          <div className="admin-page-heading-copy">
+            <span className="admin-page-icon">
+              <Server size={21} aria-hidden="true" />
+            </span>
             <div>
-              <h2>Лимит модели</h2>
+              <h2>Доступ и квоты</h2>
+              <p>Назначайте преподавателям модели и ограничивайте количество автоматических проверок.</p>
             </div>
-            <Server size={18} aria-hidden="true" />
           </div>
+          <div className="admin-page-summary-group">
+            <div className="admin-page-summary">
+              <strong>{isLoading ? "—" : teachers.length}</strong>
+              <span>преподавателей</span>
+            </div>
+            <div className="admin-page-summary">
+              <strong>{isLoading ? "—" : models.length}</strong>
+              <span>моделей</span>
+            </div>
+          </div>
+        </header>
 
-          {isLoading ? (
-            <p className="muted">Загрузка моделей.</p>
-          ) : initialError ? (
-            <div className="stack">
+        {isLoading ? (
+          <div className="panel admin-panel admin-state admin-page-state" role="status">
+            <Loader2 className="spin" size={23} aria-hidden="true" />
+            <strong>Загружаем каталог и преподавателей</strong>
+            <span>Подготавливаем данные для настройки доступов.</span>
+          </div>
+        ) : initialError ? (
+          <div className="panel admin-panel admin-state admin-page-state error">
+            <Server size={23} aria-hidden="true" />
+            <strong>Данные не загрузились</strong>
+            <div>
               <p className="form-error" role="alert">{initialError}</p>
               <button type="button" className="button secondary" onClick={retryInitialLoad}>
                 Повторить загрузку
               </button>
             </div>
-          ) : (
-            <form className="login-form" onSubmit={handleSaveAccess}>
-              <div className="field">
-                <label htmlFor="access-teacher">Преподаватель</label>
+          </div>
+        ) : (
+          <>
+            <section className="panel admin-panel admin-teacher-picker">
+              <div className="admin-teacher-picker-copy">
+                <span className="admin-section-icon">
+                  <UserRound size={19} aria-hidden="true" />
+                </span>
+                <div>
+                  <h2>Преподаватель</h2>
+                  <p>
+                    {selectedTeacher
+                      ? `${selectedTeacher.userName} · ${selectedTeacher.email}`
+                      : "Сначала создайте учётную запись преподавателя."}
+                  </p>
+                </div>
+              </div>
+              <div className="field admin-teacher-select">
+                <label htmlFor="access-teacher">Выбрать преподавателя</label>
                 <select
                   id="access-teacher"
                   value={selectedTeacherId}
                   onChange={event => selectTeacher(event.target.value)}
                   disabled={teachers.length === 0 || isMutationLocked}
                 >
+                  {teachers.length === 0 && <option value="">Нет преподавателей</option>}
                   {teachers.map(teacher => (
                     <option key={teacher.id} value={teacher.id}>
-                      {teacher.displayName}
+                      {teacher.userName} · {teacher.email}
                     </option>
                   ))}
                 </select>
               </div>
-              <div className="field">
-                <label htmlFor="access-model">Модель</label>
-                <select
-                  id="access-model"
-                  value={form.modelKey}
-                  onChange={event => updateForm("modelKey", event.target.value)}
-                  disabled={models.length === 0 || isAccessPayloadDisabled}
-                >
-                  {models.map(model => (
-                    <option key={model.key} value={model.key}>
-                      {model.displayName || model.key}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="form-row">
-                <div className="field">
-                  <label htmlFor="access-period">Период, секунд</label>
-                  <input
-                    id="access-period"
-                    min="1"
-                    step="1"
-                    type="number"
-                    value={form.periodSeconds}
-                    onChange={event => updateForm("periodSeconds", event.target.value)}
-                    disabled={isAccessPayloadDisabled}
-                    required
-                  />
-                </div>
-                <div className="field">
-                  <label htmlFor="access-limit">Проверок</label>
-                  <input
-                    id="access-limit"
-                    min="1"
-                    step="1"
-                    type="number"
-                    value={form.maxChecks}
-                    onChange={event => updateForm("maxChecks", event.target.value)}
-                    disabled={isAccessPayloadDisabled}
-                    required
-                  />
-                </div>
-              </div>
-              <label className="inline-toggle">
-                <input
-                  type="checkbox"
-                  checked={form.isEnabled}
-                  onChange={event => updateForm("isEnabled", event.target.checked)}
-                  disabled={isAccessPayloadDisabled}
-                />
-                Доступ включен
-              </label>
+            </section>
 
-              {teachers.length === 0 && (
-                <p className="form-note">Сначала добавьте преподавателя.</p>
-              )}
-              {models.length === 0 && (
-                <p className="form-note">Каталог моделей пуст.</p>
-              )}
-              {actionMessage && (
+            {actionMessage && (
+              <div
+                ref={actionBannerRef}
+                className={`admin-action-banner ${actionMessage.type}`}
+                role={actionMessage.type === "error" ? "alert" : "status"}
+                tabIndex={-1}
+              >
+                <ShieldCheck size={18} aria-hidden="true" />
                 <p
                   className={actionMessage.type === "error" ? "form-error" : "form-note"}
-                  role={actionMessage.type === "error" ? "alert" : "status"}
                 >
                   {actionMessage.text}
                 </p>
-              )}
+              </div>
+            )}
 
-              <button
-                type="submit"
-                className="button primary"
-                disabled={!canMutateAccess || !form.modelKey}
-              >
-                {isSaving ? <Loader2 className="spin" size={16} aria-hidden="true" /> : <Save size={16} aria-hidden="true" />}
-                {isSaving ? "Сохранение..." : isAccessLoading ? "Загрузка лимитов..." : "Сохранить лимит"}
-              </button>
-            </form>
-          )}
-        </div>
-
-        <div className="panel">
-          <div className="panel-header">
-            <div>
-              <span className="eyebrow">{selectedTeacher?.userName ?? "teacher"}</span>
-              <h2>Выданный доступ</h2>
-            </div>
-            <ShieldCheck size={18} aria-hidden="true" />
-          </div>
-
-          {!selectedTeacherId ? (
-            <p className="muted">Выберите преподавателя.</p>
-          ) : isAccessLoading ? (
-            <p className="muted">Загрузка лимитов преподавателя.</p>
-          ) : accessError ? (
-            <div className="stack">
-              <p className="form-error" role="alert">{accessError}</p>
-              <button type="button" className="button secondary" onClick={retryAccessLoad}>
-                Повторить загрузку
-              </button>
-            </div>
-          ) : accessList.length === 0 ? (
-            <p className="muted">Доступ к моделям пока не выдан.</p>
-          ) : (
-            <div className="review-table">
-              {accessList.map(access => (
-                <article className="review-row" key={access.modelKey}>
+            <div className="admin-model-access-layout">
+              <section className="panel admin-panel admin-access-directory" aria-busy={isAccessLoading}>
+                <header className="admin-section-header admin-access-list-header">
                   <div>
-                    <strong>{access.displayName || access.modelKey}</strong>
-                    <span>{access.remainingChecks} из {access.maxChecks} проверок, период {formatPeriod(access.periodSeconds)}</span>
+                    <h2>Выданные модели</h2>
+                    <p>
+                      {selectedTeacher
+                        ? `Текущие доступы для ${selectedTeacher.userName}.`
+                        : "Выберите преподавателя, чтобы увидеть доступы."}
+                    </p>
                   </div>
-                  <div className="row-actions">
-                    <StatusBadge
-                      status={access.isEnabled && access.hasEnabledDeployment ? "available" : "standby"}
+                  {isAccessCurrent && <span className="admin-count">{accessList.length}</span>}
+                </header>
+
+                {!selectedTeacherId ? (
+                  <div className="admin-state empty">
+                    <UserRound size={23} aria-hidden="true" />
+                    <strong>Преподаватель не выбран</strong>
+                    <span>После создания преподавателя здесь можно будет назначить модели.</span>
+                  </div>
+                ) : isAccessLoading ? (
+                  <div className="admin-state" role="status">
+                    <Loader2 className="spin" size={22} aria-hidden="true" />
+                    <strong>Загружаем доступы</strong>
+                    <span>Получаем актуальные квоты преподавателя.</span>
+                  </div>
+                ) : accessError ? (
+                  <div className="admin-state error">
+                    <ShieldCheck size={22} aria-hidden="true" />
+                    <strong>Доступы не загрузились</strong>
+                    <p className="form-error" role="alert">{accessError}</p>
+                    <button type="button" className="button secondary" onClick={retryAccessLoad}>
+                      Повторить загрузку
+                    </button>
+                  </div>
+                ) : accessList.length === 0 ? (
+                  <div className="admin-state empty">
+                    <Bot size={24} aria-hidden="true" />
+                    <strong>Модели ещё не назначены</strong>
+                    <span>Настройте первый доступ в панели настройки.</span>
+                  </div>
+                ) : (
+                  <div className="admin-access-list">
+                    {accessList.map(access => {
+                      const maxChecks = Math.max(0, Number(access.maxChecks) || 0);
+                      const remainingChecks = Math.max(0, Number(access.remainingChecks) || 0);
+                      const usedChecks = Math.max(0, Number(access.usedChecks) || 0);
+                      const accessState = access.isEnabled
+                        ? { className: "active", label: "Доступ включён" }
+                        : { className: "disabled", label: "Доступ выключен" };
+
+                      return (
+                        <article
+                          className={`admin-access-card${editingModelKey === access.modelKey ? " editing" : ""}`}
+                          key={access.modelKey}
+                        >
+                          <header className="admin-access-card-header">
+                            <div className="admin-model-identity">
+                              <span className="admin-model-icon">
+                                <Bot size={18} aria-hidden="true" />
+                              </span>
+                              <div>
+                                <strong>{access.displayName || access.modelKey}</strong>
+                                <span>{access.modelKey}</span>
+                              </div>
+                            </div>
+                            <div className="admin-access-state-group">
+                              <span className={`admin-access-state ${accessState.className}`}>
+                                {accessState.label}
+                              </span>
+                              {!access.hasEnabledDeployment && (
+                                <span className="admin-access-state warning">Модель недоступна</span>
+                              )}
+                            </div>
+                          </header>
+
+                          <section className="admin-access-quota">
+                            <div>
+                              <span><Gauge size={15} aria-hidden="true" />Осталось проверок</span>
+                              <strong>{remainingChecks} из {maxChecks}</strong>
+                            </div>
+                            <progress
+                              aria-label={`Осталось проверок: ${remainingChecks} из ${maxChecks}`}
+                              max={Math.max(1, maxChecks)}
+                              value={Math.min(maxChecks, remainingChecks)}
+                            />
+                          </section>
+
+                          <dl className="admin-access-meta">
+                            <div>
+                              <dt>Использовано</dt>
+                              <dd>{usedChecks}</dd>
+                            </div>
+                            <div>
+                              <dt>Период</dt>
+                              <dd>{formatPeriod(access.periodSeconds)}</dd>
+                            </div>
+                            <div>
+                              <dt><CalendarClock size={14} aria-hidden="true" />Обновится</dt>
+                              <dd>{formatDate(access.periodEndsAt)}</dd>
+                            </div>
+                          </dl>
+
+                          <footer className="admin-access-actions">
+                            <button
+                              type="button"
+                              className="button secondary"
+                              aria-label={`Изменить доступ к модели ${access.displayName || access.modelKey}`}
+                              disabled={!canMutateAccess}
+                              onClick={() => editAccess(access)}
+                            >
+                              <Pencil size={15} aria-hidden="true" />
+                              Изменить
+                            </button>
+                            <button
+                              type="button"
+                              className="icon-button danger"
+                              title="Удалить доступ"
+                              aria-label={`Удалить доступ к модели ${access.displayName || access.modelKey}`}
+                              disabled={!canMutateAccess || busyModelKey === access.modelKey}
+                              onClick={() => requestRemoveAccess(access)}
+                            >
+                              {busyModelKey === access.modelKey
+                                ? <Loader2 className="spin" size={16} aria-hidden="true" />
+                                : <Trash2 size={16} aria-hidden="true" />}
+                            </button>
+                          </footer>
+                        </article>
+                      );
+                    })}
+                  </div>
+                )}
+              </section>
+
+              <aside ref={editorRef} className="panel admin-panel admin-access-editor">
+                <header className="admin-section-header">
+                  <span className="admin-section-icon">
+                    <ShieldCheck size={19} aria-hidden="true" />
+                  </span>
+                  <div>
+                    <h2>{editingModelKey ? "Изменить доступ" : "Настроить доступ"}</h2>
+                    <p>
+                      {editingModelKey
+                        ? "Параметры выбранной модели загружены в форму."
+                        : "Выберите модель и задайте квоту проверок."}
+                    </p>
+                  </div>
+                  {editingModelKey && (
+                    <button
+                      type="button"
+                      className="icon-button admin-editor-close"
+                      title="Отменить редактирование"
+                      aria-label="Отменить редактирование"
+                      disabled={isMutationLocked}
+                      onClick={cancelEdit}
+                    >
+                      <X size={16} aria-hidden="true" />
+                    </button>
+                  )}
+                </header>
+
+                <form className="admin-form" onSubmit={handleSaveAccess}>
+                  <div className="field">
+                    <label htmlFor="access-model">Модель</label>
+                    <select
+                      id="access-model"
+                      value={form.modelKey}
+                      onChange={event => selectModel(event.target.value)}
+                      disabled={isModelSelectDisabled}
+                    >
+                      <option value="">
+                        {models.length === 0 ? "Каталог моделей пуст" : "Выберите модель"}
+                      </option>
+                      {models.map(model => (
+                        <option key={model.key} value={model.key}>
+                          {model.displayName || model.key}
+                          {model.hasEnabledDeployment ? "" : " — недоступна"}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="field">
+                    <label htmlFor="access-period">Период квоты</label>
+                    <div className="admin-period-field">
+                      <input
+                        id="access-period"
+                        min="1"
+                        step="1"
+                        type="number"
+                        value={form.periodValue}
+                        onChange={event => updateForm("periodValue", event.target.value)}
+                        disabled={isAccessPayloadDisabled}
+                        required
+                      />
+                      <select
+                        aria-label="Единица периода квоты"
+                        value={form.periodUnit}
+                        onChange={event => updateForm("periodUnit", event.target.value)}
+                        disabled={isAccessPayloadDisabled}
+                      >
+                        <option value="days">дн.</option>
+                        <option value="hours">ч.</option>
+                        <option value="minutes">мин.</option>
+                        <option value="seconds">сек.</option>
+                      </select>
+                    </div>
+                    <small>Итого: {formatPeriod(getPeriodSeconds(form))}.</small>
+                  </div>
+                  <div className="field">
+                    <label htmlFor="access-limit">Проверок за период</label>
+                    <input
+                      id="access-limit"
+                      min="1"
+                      step="1"
+                      type="number"
+                      value={form.maxChecks}
+                      onChange={event => updateForm("maxChecks", event.target.value)}
+                      disabled={isAccessPayloadDisabled}
+                      required
                     />
-                    <button
-                      type="button"
-                      className="icon-button"
-                      title="Редактировать"
-                      disabled={!canMutateAccess}
-                      onClick={() => editAccess(access)}
-                    >
-                      <Pencil size={16} aria-hidden="true" />
-                    </button>
-                    <button
-                      type="button"
-                      className="icon-button danger"
-                      title="Удалить доступ"
-                      disabled={!canMutateAccess || busyModelKey === access.modelKey}
-                      onClick={() => requestRemoveAccess(access)}
-                    >
-                      {busyModelKey === access.modelKey
-                        ? <Loader2 className="spin" size={16} aria-hidden="true" />
-                        : <Trash2 size={16} aria-hidden="true" />}
-                    </button>
                   </div>
-                </article>
-              ))}
+
+                  <label className="admin-switch">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(form.modelKey) && form.isEnabled}
+                      onChange={event => updateForm("isEnabled", event.target.checked)}
+                      disabled={isAccessPayloadDisabled}
+                    />
+                    <span aria-hidden="true" />
+                    <div>
+                      <strong>
+                        {!form.modelKey
+                          ? "Состояние доступа"
+                          : form.isEnabled
+                            ? "Доступ включён"
+                            : "Доступ выключен"}
+                      </strong>
+                      <small>
+                        {!form.modelKey
+                          ? "Сначала выберите модель."
+                          : !form.isEnabled
+                          ? "Модель будет скрыта в кабинете преподавателя."
+                          : selectedModel?.hasEnabledDeployment
+                            ? "Преподаватель сможет выбрать модель в тесте."
+                            : "Доступ сохранится, но модель появится после её подключения."}
+                      </small>
+                    </div>
+                  </label>
+
+                  {teachers.length === 0 && (
+                    <p className="form-note">Сначала добавьте преподавателя.</p>
+                  )}
+                  {models.length === 0 && (
+                    <p className="form-note">Каталог моделей пуст.</p>
+                  )}
+
+                  <button
+                    type="submit"
+                    className="button primary admin-submit"
+                    disabled={!canMutateAccess || !form.modelKey}
+                  >
+                    {isSaving
+                      ? <Loader2 className="spin" size={16} aria-hidden="true" />
+                      : <Save size={16} aria-hidden="true" />}
+                    {isSaving
+                      ? "Сохранение..."
+                      : isAccessLoading
+                        ? "Загрузка доступов..."
+                        : editingModelKey
+                          ? "Сохранить изменения"
+                          : "Выдать доступ"}
+                  </button>
+                </form>
+              </aside>
             </div>
-          )}
-        </div>
+          </>
+        )}
       </section>
 
       {pendingDeleteAccess && (
         <ConfirmDialog
           title="Удалить доступ к модели?"
-          description={`Доступ «${pendingDeleteAccess.displayName || pendingDeleteAccess.modelKey}» для ${selectedTeacher?.displayName ?? "преподавателя"} будет удален.`}
+          description={`Доступ «${pendingDeleteAccess.displayName || pendingDeleteAccess.modelKey}» для ${selectedTeacher?.userName ?? "преподавателя"} будет удалён.`}
           confirmLabel="Удалить доступ"
           isBusy={busyModelKey === pendingDeleteAccess.modelKey}
           onCancel={cancelDelete}

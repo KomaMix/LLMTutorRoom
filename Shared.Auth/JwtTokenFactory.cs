@@ -17,7 +17,7 @@ namespace Shared.Auth
         public string CreateAccessToken(
             string userId,
             string userName,
-            string displayName,
+            string email,
             List<string> roles)
         {
             var claims = new List<Claim>
@@ -25,7 +25,8 @@ namespace Shared.Auth
                 new(JwtRegisteredClaimNames.Sub, userId),
                 new(ClaimTypes.NameIdentifier, userId),
                 new("preferred_username", userName),
-                new(ClaimTypes.Name, displayName)
+                new(ClaimTypes.Name, userName),
+                new(ClaimTypes.Email, email)
             };
             claims.AddRange(roles.Select(role => new Claim(ClaimTypes.Role, role)));
 

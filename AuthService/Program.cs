@@ -30,10 +30,12 @@ builder.Services
         options.Password.RequireLowercase = false;
         options.Password.RequireNonAlphanumeric = false;
         options.Password.RequireUppercase = false;
-        options.User.RequireUniqueEmail = false;
+        options.User.AllowedUserNameCharacters = null!;
+        options.User.RequireUniqueEmail = true;
     })
     .AddRoles<IdentityRole>()
     .AddEntityFrameworkStores<AuthDbContext>()
+    .AddUserValidator<ApplicationUserValidator>()
     .AddDefaultTokenProviders();
 builder.Services.AddJwtAuthentication(builder.Configuration);
 builder.Services.AddJwtTokenFactory(builder.Configuration);

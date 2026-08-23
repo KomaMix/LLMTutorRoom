@@ -36,7 +36,7 @@ export function LoginScreen() {
   const location = useLocation();
   const { clearError, error, isSigningIn, login } = useAuth();
   const [selectedRole, setSelectedRole] = useState(() => getInitialRole(location.state));
-  const [userName, setUserName] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
   function selectRole(role) {
@@ -66,7 +66,7 @@ export function LoginScreen() {
           className="login-form"
           onSubmit={event => {
             event.preventDefault();
-            login({ userName, password }, selectedRole);
+            login({ email: email.trim(), password }, selectedRole);
           }}
         >
           <fieldset className="login-role-selector">
@@ -100,13 +100,19 @@ export function LoginScreen() {
           </fieldset>
 
           <div className="field">
-            <label htmlFor="login-user-name">Логин</label>
+            <label htmlFor="login-email">Email</label>
             <input
-              id="login-user-name"
+              id="login-email"
+              type="email"
               autoComplete="username"
-              value={userName}
+              inputMode="email"
+              autoCapitalize="none"
+              spellCheck={false}
+              maxLength={256}
+              placeholder="name@example.com"
+              value={email}
               onChange={event => {
-                setUserName(event.target.value);
+                setEmail(event.target.value);
                 if (error) {
                   clearError();
                 }

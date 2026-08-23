@@ -45,17 +45,10 @@ namespace AuthService.Controllers
             [FromBody] CreateTeacherRequest request,
             CancellationToken cancellationToken)
         {
-            if (string.IsNullOrWhiteSpace(request.UserName)
-                || string.IsNullOrWhiteSpace(request.Password)
-                || string.IsNullOrWhiteSpace(request.DisplayName))
-            {
-                return BadRequest();
-            }
-
             var teacher = await _userAccountService.CreateTeacherAsync(
                 request.UserName,
+                request.Email,
                 request.Password,
-                request.DisplayName,
                 cancellationToken);
 
             return teacher is null

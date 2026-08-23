@@ -13,7 +13,7 @@ namespace AuthService.Mappers
             {
                 Id = user.Id,
                 UserName = user.UserName ?? string.Empty,
-                DisplayName = user.DisplayName,
+                Email = user.Email ?? string.Empty,
                 Role = roles.FirstOrDefault() ?? string.Empty
             };
         }

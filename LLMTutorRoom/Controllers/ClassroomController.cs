@@ -142,7 +142,7 @@ namespace LLMTutorRoom.Controllers
                 attempt = await _classroomService.SubmitAttemptAsync(
                     attemptId,
                     GetUserId(),
-                    GetDisplayName(),
+                    GetUserName(),
                     cancellationToken);
             }
             catch (AttemptWriteConflictException exception)
@@ -186,7 +186,7 @@ namespace LLMTutorRoom.Controllers
             return StatusCode((int)review.StatusCode, review.Error);
         }
 
-        private string GetDisplayName()
+        private string GetUserName()
         {
             return User.FindFirstValue(ClaimTypes.Name) ?? "Студент";
         }

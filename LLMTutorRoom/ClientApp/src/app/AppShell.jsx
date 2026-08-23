@@ -24,24 +24,31 @@ const roleIcons = {
   student: GraduationCap
 };
 
-const teacherPageTitles = {
-  "/teacher/dashboard": "Обзор",
-  "/teacher/tests": "Тесты",
-  "/teacher/reviews": "Проверки учеников",
-  "/teacher/models": "Модели проверки"
+const rolePageTitles = {
+  admin: {
+    "/admin/teachers": "Преподаватели",
+    "/admin/model-access": "Доступ к моделям"
+  },
+  teacher: {
+    "/teacher/dashboard": "Обзор",
+    "/teacher/tests": "Тесты",
+    "/teacher/reviews": "Проверки учеников",
+    "/teacher/models": "Модели проверки"
+  }
 };
 
 function AppShellContent({ currentUser, role, children }) {
   const { isPreparingLogout, requestLogout } = useNavigationGuard();
   const { pathname } = useLocation();
+  const hasResponsiveSidebar = role === "teacher" || role === "admin";
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => (
-    role === "teacher"
+    hasResponsiveSidebar
       && typeof window !== "undefined"
       && typeof window.matchMedia === "function"
       && window.matchMedia("(max-width: 1120px)").matches
   ));
-  const [isTeacherNarrow, setIsTeacherNarrow] = useState(() => (
-    role === "teacher"
+  const [isSidebarNarrow, setIsSidebarNarrow] = useState(() => (
+    hasResponsiveSidebar
       && typeof window !== "undefined"
       && typeof window.matchMedia === "function"
       && window.matchMedia("(max-width: 1120px)").matches
@@ -52,41 +59,45 @@ function AppShellContent({ currentUser, role, children }) {
   const RoleIcon = roleIcons[role];
   const activeNavigation = navigation[role] ?? [];
   const shellClassName = `app-shell role-${role}${isSidebarCollapsed ? " sidebar-collapsed" : ""}`;
-  const teacherPagePath = Object.keys(teacherPageTitles)
+  const currentPageTitles = rolePageTitles[role] ?? {};
+  const rolePagePath = Object.keys(currentPageTitles)
     .find(path => pathname.startsWith(path));
-  const pageTitle = role === "teacher" && teacherPagePath
-    ? teacherPageTitles[teacherPagePath]
+  const pageTitle = rolePagePath
+    ? currentPageTitles[rolePagePath]
     : getPageTitle(role);
+  const isSidebarDrawerOpen = hasResponsiveSidebar
+    && isSidebarNarrow
+    && !isSidebarCollapsed;
 
   useEffect(() => {
-    if (role === "teacher") {
+    if (hasResponsiveSidebar) {
       window.scrollTo({ top: 0, left: 0 });
     }
-  }, [pathname, role]);
+  }, [hasResponsiveSidebar, pathname]);
 
   useEffect(() => {
-    if (role !== "teacher" || typeof window.matchMedia !== "function") {
+    if (!hasResponsiveSidebar || typeof window.matchMedia !== "function") {
       return;
     }
 
     const mediaQuery = window.matchMedia("(max-width: 1120px)");
     function handleBreakpointChange(event) {
-      setIsTeacherNarrow(event.matches);
+      setIsSidebarNarrow(event.matches);
       if (event.matches) {
         setIsSidebarCollapsed(true);
       }
     }
 
-    setIsTeacherNarrow(mediaQuery.matches);
+    setIsSidebarNarrow(mediaQuery.matches);
     mediaQuery.addEventListener("change", handleBreakpointChange);
     return () => mediaQuery.removeEventListener("change", handleBreakpointChange);
-  }, [role]);
+  }, [hasResponsiveSidebar]);
 
   useEffect(() => {
     if (
-      role !== "teacher"
+      !hasResponsiveSidebar
       || isSidebarCollapsed
-      || !isTeacherNarrow
+      || !isSidebarNarrow
     ) {
       return;
     }
@@ -132,12 +143,24 @@ function AppShellContent({ currentUser, role, children }) {
       document.removeEventListener("keydown", handleDrawerKeyDown);
       window.requestAnimationFrame(() => sidebarToggle?.focus());
     };
-  }, [isSidebarCollapsed, isTeacherNarrow, role]);
+  }, [hasResponsiveSidebar, isSidebarCollapsed, isSidebarNarrow]);
+
+  useEffect(() => {
+    if (!isSidebarDrawerOpen) {
+      return;
+    }
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [isSidebarDrawerOpen]);
 
   function handleNavigation() {
     if (
-      role === "teacher"
-      && isTeacherNarrow
+      hasResponsiveSidebar
+      && isSidebarNarrow
     ) {
       setIsSidebarCollapsed(true);
     }
@@ -172,11 +195,11 @@ function AppShellContent({ currentUser, role, children }) {
           <div className="sidebar-label">
             <strong>LLMTutorRoom</strong>
           </div>
-          {role === "teacher" && (
+          {hasResponsiveSidebar && (
             <button
               type="button"
               ref={sidebarCloseRef}
-              className="teacher-sidebar-close"
+              className="workspace-sidebar-close"
               aria-label="Закрыть меню"
               onClick={() => setIsSidebarCollapsed(true)}
             >
@@ -190,8 +213,8 @@ function AppShellContent({ currentUser, role, children }) {
             <RoleIcon size={18} aria-hidden="true" />
           </div>
           <div className="sidebar-label">
-            <strong>{currentUser.displayName}</strong>
-            <span>{currentUser.userName}</span>
+            <strong>{currentUser.userName}</strong>
+            <span>{currentUser.email}</span>
           </div>
         </div>
 
@@ -214,19 +237,19 @@ function AppShellContent({ currentUser, role, children }) {
         </nav>
       </aside>
 
-      {role === "teacher" && isTeacherNarrow && !isSidebarCollapsed && (
+      {isSidebarDrawerOpen && (
         <button
           type="button"
-          className="teacher-sidebar-backdrop"
+          className="workspace-sidebar-backdrop"
           aria-label="Закрыть меню"
           onClick={() => setIsSidebarCollapsed(true)}
         />
       )}
 
-      <main className="workspace">
+      <main className="workspace" inert={isSidebarDrawerOpen || undefined}>
         <header className="topbar">
           <div className="topbar-heading">
-            {role === "teacher" && sidebarToggle}
+            {hasResponsiveSidebar && sidebarToggle}
             <h1>{pageTitle}</h1>
           </div>
           <div className="topbar-actions">
@@ -240,7 +263,7 @@ function AppShellContent({ currentUser, role, children }) {
               <LogOut size={16} aria-hidden="true" />
               Выйти
             </button>
-            {role !== "teacher" && sidebarToggle}
+            {!hasResponsiveSidebar && sidebarToggle}
           </div>
         </header>
 

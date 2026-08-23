@@ -16,7 +16,16 @@ namespace AuthService.Data
             base.OnModelCreating(modelBuilder);
 
             modelBuilder.Entity<ApplicationUser>(entity =>
-                entity.Property(user => user.DisplayName).IsRequired());
+            {
+                entity.Property(user => user.UserName)
+                    .IsRequired()
+                    .HasMaxLength(64);
+                entity.Property(user => user.Email).IsRequired();
+                entity.Property(user => user.NormalizedEmail).IsRequired();
+                entity.HasIndex(user => user.NormalizedEmail)
+                    .IsUnique()
+                    .HasDatabaseName("EmailIndex");
+            });
         }
     }
 }

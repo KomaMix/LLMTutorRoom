@@ -26,20 +26,22 @@ namespace AuthService.Controllers
 
         [HttpPost("login")]
         public async Task<ActionResult<LoginResponse>> Login(
-            [FromBody] LoginRequest request)
+            [FromBody] LoginRequest request,
+            CancellationToken cancellationToken)
         {
-            var userName = request.UserName?.Trim() ?? string.Empty;
-            var password = request.Password ?? string.Empty;
-            var user = await _userManager.FindByNameAsync(userName);
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var email = request.Email.Trim();
+            var user = await _userManager.FindByEmailAsync(email);
 
             if (user is null)
                 return Unauthorized(new
                 {
-                    code = "user-not-found",
-                    message = "Пользователь не найден."
+                    code = "email-not-found",
+                    message = "Пользователь с таким email не найден."
                 });
 
-            if (!await _userManager.CheckPasswordAsync(user, password))
+            if (!await _userManager.CheckPasswordAsync(user, request.Password))
                 return Unauthorized(new
                 {
                     code = "invalid-password",
@@ -53,7 +55,7 @@ namespace AuthService.Controllers
                 AccessToken = _jwtTokenFactory.CreateAccessToken(
                     user.Id,
                     user.UserName ?? string.Empty,
-                    user.DisplayName,
+                    user.Email ?? string.Empty,
                     roles),
                 User = user.ToAuthUserResponse(roles)
             });
@@ -63,12 +65,24 @@ namespace AuthService.Controllers
         [HttpGet("me")]
         public ActionResult<AuthUserResponse> Me()
         {
+            var id = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
+            var userName = User.FindFirstValue(ClaimTypes.Name) ?? string.Empty;
+            var email = User.FindFirstValue(ClaimTypes.Email) ?? string.Empty;
+            var role = User.FindFirstValue(ClaimTypes.Role) ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(id)
+                || string.IsNullOrWhiteSpace(userName)
+                || string.IsNullOrWhiteSpace(email)
+                || string.IsNullOrWhiteSpace(role))
+            {
+                return Unauthorized();
+            }
+
             return Ok(new AuthUserResponse
             {
-                Id = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty,
-                UserName = User.FindFirstValue("preferred_username") ?? string.Empty,
-                DisplayName = User.FindFirstValue(ClaimTypes.Name) ?? string.Empty,
-                Role = User.FindFirstValue(ClaimTypes.Role) ?? string.Empty
+                Id = id,
+                UserName = userName,
+                Email = email,
+                Role = role
             });
         }
 

@@ -30,22 +30,36 @@ namespace AuthService.Services
 
             foreach (var configuredUser in configuredUsers)
             {
+                cancellationToken.ThrowIfCancellationRequested();
+
                 var userName = configuredUser.UserName?.Trim() ?? string.Empty;
+                var email = configuredUser.Email?.Trim() ?? string.Empty;
                 if (string.IsNullOrWhiteSpace(userName)
+                    || string.IsNullOrWhiteSpace(email)
                     || string.IsNullOrWhiteSpace(configuredUser.Password)
-                    || string.IsNullOrWhiteSpace(configuredUser.DisplayName))
+                    || userName.Any(char.IsWhiteSpace))
                 {
                     continue;
                 }
 
-                var existingUser = await _userManager.FindByNameAsync(userName);
+                var userWithName = await _userManager.FindByNameAsync(userName);
+                var userWithEmail = await _userManager.FindByEmailAsync(email);
+                if (userWithName is not null
+                    && userWithEmail is not null
+                    && userWithName.Id != userWithEmail.Id)
+                {
+                    throw new InvalidOperationException(
+                        $"Configured UserName '{userName}' and email '{email}' belong to different users.");
+                }
+
+                var existingUser = userWithName ?? userWithEmail;
 
                 if (existingUser is null)
                 {
                     var user = new ApplicationUser
                     {
                         UserName = userName,
-                        DisplayName = configuredUser.DisplayName.Trim()
+                        Email = email
                     };
 
                     var createResult = await _userManager.CreateAsync(
@@ -56,7 +70,8 @@ namespace AuthService.Services
                 }
                 else
                 {
-                    existingUser.DisplayName = configuredUser.DisplayName.Trim();
+                    existingUser.UserName = userName;
+                    existingUser.Email = email;
                     var updateResult = await _userManager.UpdateAsync(existingUser);
                     ThrowIfFailed(updateResult, "Update configured user");
 

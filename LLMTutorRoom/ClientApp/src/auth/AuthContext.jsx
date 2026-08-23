@@ -93,7 +93,7 @@ export function AuthProvider({ children }) {
       return true;
     } catch (requestError) {
       if (requestError instanceof ApiError && requestError.status === 401) {
-        setError("Неверный логин или пароль.");
+        setError("Неверный email или пароль.");
       } else {
         setError("Не удалось выполнить вход. Проверьте доступность AuthService.");
       }

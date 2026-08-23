@@ -9,8 +9,8 @@ namespace AuthService.Interfaces
 
         Task<ApplicationUser?> CreateTeacherAsync(
             string userName,
+            string email,
             string password,
-            string displayName,
             CancellationToken cancellationToken);
     }
 }

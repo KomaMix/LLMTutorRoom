@@ -20,29 +20,36 @@ namespace AuthService.Services
             var teachers = await _userManager.GetUsersInRoleAsync(UserRole.Teacher.ToString());
 
             return teachers
-                .OrderBy(user => user.DisplayName)
+                .OrderBy(user => user.UserName)
                 .ToList();
         }
 
         public async Task<ApplicationUser?> CreateTeacherAsync(
             string userName,
+            string email,
             string password,
-            string displayName,
             CancellationToken cancellationToken)
         {
-            var normalizedUserName = userName?.Trim() ?? string.Empty;
-            var userExists = await _userManager.FindByNameAsync(normalizedUserName);
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var trimmedUserName = userName.Trim();
+            var trimmedEmail = email.Trim();
+            var userExists = await _userManager.FindByNameAsync(trimmedUserName)
+                ?? await _userManager.FindByEmailAsync(trimmedEmail);
 
             if (userExists is not null)
                 return null;
 
             var teacher = new ApplicationUser
             {
-                UserName = normalizedUserName,
-                DisplayName = displayName.Trim()
+                UserName = trimmedUserName,
+                Email = trimmedEmail
             };
 
             var createResult = await _userManager.CreateAsync(teacher, password);
+            if (IsDuplicateUser(createResult))
+                return null;
+
             ThrowIfFailed(createResult, "Create teacher");
             cancellationToken.ThrowIfCancellationRequested();
 
@@ -50,6 +57,12 @@ namespace AuthService.Services
             ThrowIfFailed(addRoleResult, "Add teacher role");
 
             return teacher;
+        }
+
+        private static bool IsDuplicateUser(IdentityResult result)
+        {
+            return result.Errors.Any(error =>
+                error.Code is "DuplicateUserName" or "DuplicateEmail");
         }
 
         private static void ThrowIfFailed(IdentityResult result, string operation)
