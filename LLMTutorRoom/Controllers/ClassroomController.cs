@@ -1,4 +1,3 @@
-using LLMTutorRoom.DTOs;
 using LLMTutorRoom.Models;
 using LLMTutorRoom.Services;
 using LLMTutorRoom.Services.Reviews;
@@ -72,34 +71,6 @@ namespace LLMTutorRoom.Controllers
             }
 
             return ToReviewHistoryProblem(result);
-        }
-
-        [Authorize(Roles = "Teacher")]
-        [HttpPut("reviews/{reviewId:int}/tasks/{taskId}/manual")]
-        public async Task<ActionResult<ReviewResponse>> UpdateManualTaskReview(
-            int reviewId,
-            string taskId,
-            [FromBody] ManualTaskReviewRequest request,
-            CancellationToken cancellationToken)
-        {
-            if (request.Score < 0)
-                return BadRequest("Score must not be negative.");
-
-            var review = await _classroomService.UpdateManualTaskReviewAsync(
-                reviewId,
-                taskId,
-                GetUserId(),
-                request,
-                cancellationToken);
-
-            if (review.IsSuccess)
-            {
-                return review.Value is null
-                    ? StatusCode(StatusCodes.Status502BadGateway)
-                    : Ok(review.Value);
-            }
-
-            return StatusCode((int)review.StatusCode, review.Error);
         }
 
         private string GetUserId()

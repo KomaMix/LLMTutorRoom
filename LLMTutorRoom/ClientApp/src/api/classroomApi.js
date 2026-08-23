@@ -43,13 +43,3 @@ export function submitAttempt(attemptId) {
     method: "POST"
   });
 }
-
-export function saveManualReview(reviewId, taskId, payload) {
-  return apiRequest(
-    `/api/classroom/reviews/${reviewId}/tasks/${encodeURIComponent(taskId)}/manual`,
-    {
-      method: "PUT",
-      body: payload
-    }
-  );
-}

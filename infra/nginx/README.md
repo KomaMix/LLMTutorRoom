@@ -14,7 +14,7 @@ infra-only Compose file):
 - TeachingService: `http://localhost:5212`
 - AttemptService: `http://localhost:5216`
 - LLMGateway: `http://localhost:5200`
-- ReviewService: `http://127.0.0.1:5214` (internal, loopback only)
+- ReviewService: `http://127.0.0.1:5214`
 - Nginx gateway: `http://localhost:8080`
 
 Routes:
@@ -24,18 +24,16 @@ Routes:
 - `/api/classroom/*` -> LLMTutorRoom
 - `/api/teaching/*` -> TeachingService
 - `/api/attempts` and `/api/attempts/*` -> AttemptService
+- `/api/reviews/*` -> ReviewService
+- `/api/model-access/*` -> ReviewService
 - `/api/llm/*` -> LLMGateway, with `/api/llm/chat/...` rewritten to `/api/chat/...`
 - `/` -> LLMTutorRoom frontend
 
 Nginx explicitly returns `404` for `/internal` and `/internal/*`; these paths
-are never passed to the frontend fallback or any backend service. The public
-AttemptService routes validate the student's JWT themselves; its internal
-student-overview endpoint remains reachable only through the backend network.
-
-`ReviewService` deliberately has no nginx route. Its `/internal/*` API is called
-by `LLMTutorRoom`, has no application-level authentication, and must be reachable
-only through the protected backend network. Health endpoints are also not routed
-through nginx.
+are never passed to the frontend fallback or any backend service. Public routes
+of `AttemptService` and `ReviewService` validate JWT and roles themselves.
+Their internal overview/history endpoints remain reachable only by backend
+services, while health endpoints are not routed through nginx.
 
 Run with local nginx:
 
@@ -67,8 +65,8 @@ docker compose -f docker-compose.infra.yml up
 ```
 
 In this mode, start `AttemptService` on `localhost:5216` and `ReviewService` on
-`127.0.0.1:5214`. Nginx proxies only the public AttemptService API and does not
-proxy ReviewService.
+`127.0.0.1:5214`. Nginx proxies their public API routes and continues to reject
+every `/internal/*` request.
 
 Run the full Docker stack from the repository root:
 
@@ -80,7 +78,8 @@ In the full Compose stack, `AttemptService` and `ReviewService` are reachable
 inside Docker as `http://attempt-service:8080` and
 `http://review-service:8080`; Compose does not publish their ports on the host.
 Nginx exposes only `/api/attempts` and `/api/attempts/*` from AttemptService;
-neither service's `/internal/*` API is exposed.
+from ReviewService it exposes `/api/reviews/*` and `/api/model-access/*`.
+Neither service's `/internal/*` API is exposed.
 
 `LLMTutorRoom` is likewise reached through nginx in the full stack and has no
 direct host port. Port `5206` above applies only when the .NET service is run

@@ -2,13 +2,13 @@ using System.ComponentModel.DataAnnotations;
 
 namespace ReviewService.Contracts.Requests;
 
-public sealed record UpsertTeacherModelAccessRequest
+public sealed class UpsertTeacherModelAccessRequest
 {
-    public required bool IsEnabled { get; init; }
+    public required bool IsEnabled { get; set; }
 
     [Range(1, int.MaxValue)]
-    public required int PeriodSeconds { get; init; }
+    public required int PeriodSeconds { get; set; }
 
-    [Range(0, int.MaxValue)]
-    public required int MaxChecks { get; init; }
+    [Range(1, int.MaxValue)]
+    public required int MaxChecks { get; set; }
 }

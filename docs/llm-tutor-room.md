@@ -4,8 +4,7 @@
 
 `LLMTutorRoom` — stateless web-фасад учебной части системы и хост
 React-приложения. Он проверяет JWT, объединяет ответы профильных сервисов в
-удобный для интерфейса overview и проксирует команды, которым нужен единый
-публичный API.
+удобный для интерфейса overview и отдаёт собранный frontend.
 
 Собственной бизнесовой базы у сервиса нет. Пользователи принадлежат
 `AuthService`, каталог и версии тестов — `TeachingService`, попытки и ответы —
@@ -16,9 +15,10 @@ flowchart LR
     Browser[React в браузере] --> Nginx[nginx]
     Nginx --> Room[LLMTutorRoom]
     Nginx --> Attempt[AttemptService]
+    Nginx -->|ручная проверка и доступы| Review[ReviewService]
     Room --> Teaching[TeachingService]
     Room -->|попытки для overview| Attempt
-    Room --> Review[ReviewService]
+    Room -->|результаты для overview и истории| Review
 ```
 
 ## Overview
@@ -41,10 +41,9 @@ flowchart LR
 ## Публичный API и зависимости
 
 HTTP-граница фасада находится в
-[`ClassroomController`](../LLMTutorRoom/Controllers/ClassroomController.cs) и
-[`ModelAccessController`](../LLMTutorRoom/Controllers/ModelAccessController.cs).
-Она требует JWT, а ручная проверка и управление доступами дополнительно
-ограничены ролями.
+[`ClassroomController`](../LLMTutorRoom/Controllers/ClassroomController.cs).
+Она проверяет JWT и предоставляет собранные overview и историю результатов,
+но не принимает команды, принадлежащие профильным сервисам.
 
 Синхронные клиенты:
 
@@ -53,15 +52,18 @@ HTTP-граница фасада находится в
 - [`AttemptServiceClient`](../LLMTutorRoom/Services/Attempts/AttemptServiceClient.cs)
   читает попытки ученика для overview;
 - [`ReviewServiceClient`](../LLMTutorRoom/Services/Reviews/ReviewServiceClient.cs)
-  читает результаты, обновляет ручную проверку и управляет доступами к моделям.
+  читает результаты и доступы к моделям для overview и истории.
 
 Команды жизненного цикла попытки идут от браузера на `/api/attempts/*`, а nginx
 направляет запрос напрямую в
 `AttemptService`, который сам проверяет JWT и роль ученика.
+Аналогично, ручная оценка идёт на `/api/reviews/*`, а управление доступами — на
+`/api/model-access/*`: эти команды принимает и авторизует сам `ReviewService`.
 
-Internal API `AttemptService` и `ReviewService` не публикуются через nginx.
-Фасад передаёт им уже проверенный user ID, а доверие между сервисами в полном
-Compose обеспечивается закрытой сетью `backend`.
+Internal API `AttemptService` и `ReviewService` по-прежнему не публикуются через
+nginx. Фасад передаёт им уже проверенный user ID для чтения агрегируемых данных,
+а доступ в полном Compose ограничен межсервисными Docker-сетями и правилами
+ingress.
 
 ## React-приложение
 

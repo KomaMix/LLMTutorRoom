@@ -1,11 +1,9 @@
 using AttemptService.Contracts.Responses;
-using LLMTutorRoom.DTOs;
 using LLMTutorRoom.Interfaces;
 using LLMTutorRoom.Models;
 using LLMTutorRoom.Services.Reviews;
 using ReviewService.Contracts.Responses;
 using TeachingService.Contracts.Models;
-using ReviewManualTaskRequest = ReviewService.Contracts.Requests.UpdateManualTaskReviewRequest;
 using ReviewTeacherModelAccessResponse = ReviewService.Contracts.Responses.TeacherModelAccessResponse;
 
 namespace LLMTutorRoom.Services
@@ -122,26 +120,6 @@ namespace LLMTutorRoom.Services
                 result.StatusCode,
                 page,
                 result.Error);
-        }
-
-        public Task<ReviewServiceResult<ReviewResponse>> UpdateManualTaskReviewAsync(
-            int reviewId,
-            string taskId,
-            string teacherUserId,
-            ManualTaskReviewRequest request,
-            CancellationToken cancellationToken)
-        {
-            return _reviewServiceClient.UpdateManualTaskReviewAsync(
-                reviewId,
-                taskId,
-                teacherUserId,
-                new ReviewManualTaskRequest
-                {
-                    Score = request.Score,
-                    Feedback = request.Feedback,
-                    Findings = request.Findings
-                },
-                cancellationToken);
         }
 
         private async Task<List<CourseTestDto>> BindTestsToAttemptVersionsAsync(

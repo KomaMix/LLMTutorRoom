@@ -140,6 +140,7 @@ services:
       llm-gateway:
         condition: service_started
     networks:
+      - edge
       - backend
 
   tutor-room:
@@ -182,6 +183,8 @@ services:
         condition: service_started
       llm-gateway:
         condition: service_started
+      review-service:
+        condition: service_healthy
     networks:
       - edge
 

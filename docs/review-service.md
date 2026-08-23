@@ -6,8 +6,8 @@
 неизменяемые снимки правил конкретных версий теста, проверки и результаты по
 заданиям, права преподавателей на LLM-модели, расход квот, inbox и временно
 несопоставленные отправки. Схема описана в
-[`ReviewDbContext`](../ReviewService/Data/ReviewDbContext.cs), а публичные между
-сервисами типы — в
+[`ReviewDbContext`](../ReviewService/Data/ReviewDbContext.cs), а контракты
+интеграционных событий и HTTP API — в
 [`ReviewService.Contracts`](../ReviewService.Contracts/ReviewService.Contracts.csproj).
 
 Сервис не владеет пользователями, каталогом тестов, жизненным циклом попытки или
@@ -25,7 +25,8 @@ flowchart LR
     DB --> Work[(review.processing)]
     Work --> Processor[Review worker]
     Processor --> Gateway[LLMGateway]
-    Room -->|внутренний HTTP| API[Review API]
+    Browser[Браузер через nginx] -->|JWT-команды| API[Review API]
+    Room[LLMTutorRoom] -->|internal-чтение| API
     API --> DB
 ```
 
@@ -184,37 +185,47 @@ Cleanup удаляет только старый inbox по retention. `PendingS
 не удаляется: после `PendingSubmissionWarningHours` сервис пишет ошибку оператору
 и ожидает восстановления точной policy из integration DLQ.
 
-## Internal API, сеть, health и конфигурация
+## Публичный и internal API, сеть, health и конфигурация
 
-[`ReviewsController`](../ReviewService/Controllers/ReviewsController.cs) даёт
-внутренние teacher/student overview и history endpoints, а также ручное
-оценивание. [`ModelAccessController`](../ReviewService/Controllers/ModelAccessController.cs)
-даёт catalog и GET/PUT/DELETE grant преподавателя. Конкретная HTTP-поверхность:
+[`ReviewsController`](../ReviewService/Controllers/ReviewsController.cs) и
+[`ModelAccessController`](../ReviewService/Controllers/ModelAccessController.cs)
+принимают публичные команды непосредственно в сервисе — без промежуточного
+проксирования через `LLMTutorRoom`:
 
-- `GET /internal/reviews/teachers/{teacherUserId}` и
-  `GET /internal/reviews/students/{studentUserId}`, плюс соответствующий
-  `/history` с `pageSize`, `cursor`, а для преподавателя —
-  `includeHistoricalVersions`;
-- `PUT /internal/reviews/{reviewId}/tasks/{taskId}/manual?teacherUserId=...`;
-- `GET /internal/model-access/catalog`, GET grant-ов преподавателя и PUT/DELETE
-  `/internal/model-access/teachers/{teacherUserId}/models/{modelKey}`.
+- `PUT /api/reviews/{reviewId}/tasks/{taskId}/manual` требует роль `Teacher`;
+  `teacherUserId` берётся из проверенного JWT, поэтому клиент не может подставить
+  владельца проверки;
+- `GET /api/model-access/me` требует роль `Teacher` и возвращает только активные
+  доступы текущего преподавателя;
+- `GET /api/model-access/models`,
+  `GET /api/model-access/teachers/{teacherUserId}` и PUT/DELETE
+  `/api/model-access/models/{modelKey}/teachers/{teacherUserId}` требуют роль
+  `Admin`.
 
-В самом сервисе нет JWT и
-`[Authorize]`: `teacherUserId` считается уже проверенным доверенным фасадом
-`LLMTutorRoom`. Поэтому `/internal/*` — именно сетевая граница безопасности.
-В [`docker-compose.yml`](../docker-compose.yml) порт только `expose`-нут во
-внутреннюю backend-сеть, а
-[`nginx.compose.conf`](../infra/nginx/nginx.compose.conf) явно возвращает `404`
-для `/internal/*`.
+Для сборки overview и истории остаются отдельные internal-контроллеры:
+[`InternalReviewsController`](../ReviewService/Controllers/InternalReviewsController.cs)
+отдаёт teacher/student выдачи и `/history`, а
+[`InternalModelAccessController`](../ReviewService/Controllers/InternalModelAccessController.cs)
+возвращает доступы указанного преподавателя. Эти endpoints не имеют отдельного
+API key; в полном Compose они доступны только внутри межсервисного
+Docker-контура.
 
-[`Program.cs`](../ReviewService/Program.cs) применяет миграции при старте и
-валидирует три секции [`appsettings.json`](../ReviewService/appsettings.json):
+Через nginx публикуются только `/api/reviews/*` и `/api/model-access/*`.
+`/internal/*` по-прежнему получает `404`. В
+[`docker-compose.yml`](../docker-compose.yml) `ReviewService` подключён к сетям
+`edge` и `backend`, но его порт не публикуется на host: внешний запрос всё равно
+проходит через nginx и затем проверяется middleware аутентификации сервиса.
+
+[`Program.cs`](../ReviewService/Program.cs) применяет миграции при старте,
+подключает общую JWT-проверку и валидирует секции
+[`appsettings.json`](../ReviewService/appsettings.json):
 `RabbitMq` описывает обе topology, retries, DLQ и prefetch; `ReviewProcessing` —
 URL/timeout gateway, lease, maintenance и enqueue throttle; `ReviewStorage` —
-retention inbox, batch cleanup и порог предупреждения pending. `/health/live`
+retention inbox, batch cleanup и порог предупреждения pending. `Auth:Jwt`
+содержит общие issuer, audience и signing key. `/health/live`
 проверяет только работающий процесс, `/health/ready` — PostgreSQL и RabbitMQ
 (при `RabbitMq:Enabled=false` broker считается здоровым). OpenAPI доступен только
-в Development, а upstream HTTP-сбои внутренних API преобразуются в `503`.
+в Development, а сбои исходящих HTTP-вызовов преобразуются в `503`.
 
 ## С чего начать чтение кода
 

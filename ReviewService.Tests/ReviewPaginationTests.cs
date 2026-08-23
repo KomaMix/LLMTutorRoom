@@ -158,7 +158,7 @@ public sealed class ReviewPaginationTests
     public async Task Controller_ReturnsProblemDetailsForInvalidPagingInputs()
     {
         await using var dbContext = CreateDbContext();
-        var controller = new ReviewsController(CreateService(dbContext));
+        var controller = new InternalReviewsController(CreateService(dbContext));
 
         var response = await controller.GetStudentReviews(
             "student",

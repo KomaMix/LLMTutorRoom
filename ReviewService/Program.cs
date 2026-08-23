@@ -11,6 +11,7 @@ using ReviewService.Messaging.IntegrationEvents;
 using ReviewService.Messaging.ReviewProcessing;
 using ReviewService.Options;
 using ReviewService.Services;
+using Shared.Auth;
 
 var builder = WebApplication.CreateBuilder(args);
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
@@ -103,6 +104,7 @@ builder.Services.AddHostedService<ReviewStorageCleanupService>();
 builder.Services.AddHealthChecks()
     .AddCheck<ReviewDatabaseHealthCheck>("review-database", tags: ["ready"])
     .AddCheck<ReviewRabbitMqHealthCheck>("review-rabbitmq", tags: ["ready"]);
+builder.Services.AddJwtAuthentication(builder.Configuration);
 
 var app = builder.Build();
 
@@ -126,6 +128,8 @@ app.MapHealthChecks("/health/ready", new HealthCheckOptions
 {
     Predicate = registration => registration.Tags.Contains("ready")
 });
+app.UseAuthentication();
+app.UseAuthorization();
 app.MapControllers();
 
 await app.RunAsync();

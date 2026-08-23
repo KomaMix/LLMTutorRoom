@@ -2,7 +2,6 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using LLMTutorRoom.Interfaces;
-using ReviewService.Contracts.Requests;
 using ReviewService.Contracts.Responses;
 
 namespace LLMTutorRoom.Services.Reviews;
@@ -64,32 +63,6 @@ public sealed class ReviewServiceClient : IReviewServiceClient
             cancellationToken);
     }
 
-    public async Task<ReviewServiceResult<ReviewResponse>> UpdateManualTaskReviewAsync(
-        int reviewId,
-        string taskId,
-        string teacherUserId,
-        UpdateManualTaskReviewRequest request,
-        CancellationToken cancellationToken)
-    {
-        var path = $"/internal/reviews/{reviewId}/tasks/{Uri.EscapeDataString(taskId)}/manual"
-            + $"?teacherUserId={Uri.EscapeDataString(teacherUserId)}";
-        using var response = await _httpClient.PutAsJsonAsync(
-            path,
-            request,
-            JsonOptions,
-            cancellationToken);
-
-        return await ReadResultAsync<ReviewResponse>(response, cancellationToken);
-    }
-
-    public Task<List<LlmModelCatalogItemResponse>> GetModelCatalogAsync(
-        CancellationToken cancellationToken)
-    {
-        return GetListAsync<LlmModelCatalogItemResponse>(
-            "/internal/model-access/catalog",
-            cancellationToken);
-    }
-
     public Task<List<TeacherModelAccessResponse>> GetTeacherModelAccessAsync(
         string teacherUserId,
         bool includeDisabled,
@@ -100,40 +73,6 @@ public sealed class ReviewServiceClient : IReviewServiceClient
             $"/internal/model-access/teachers/{Uri.EscapeDataString(teacherUserId)}"
             + $"?includeDisabled={includeDisabledValue}",
             cancellationToken);
-    }
-
-    public async Task<ReviewServiceResult<TeacherModelAccessResponse>> UpsertTeacherModelAccessAsync(
-        string teacherUserId,
-        string modelKey,
-        UpsertTeacherModelAccessRequest request,
-        CancellationToken cancellationToken)
-    {
-        var path = $"/internal/model-access/teachers/{Uri.EscapeDataString(teacherUserId)}"
-            + $"/models/{Uri.EscapeDataString(modelKey)}";
-        using var response = await _httpClient.PutAsJsonAsync(
-            path,
-            request,
-            JsonOptions,
-            cancellationToken);
-
-        return await ReadResultAsync<TeacherModelAccessResponse>(response, cancellationToken);
-    }
-
-    public async Task<ReviewServiceResult<object>> DeleteTeacherModelAccessAsync(
-        string teacherUserId,
-        string modelKey,
-        CancellationToken cancellationToken)
-    {
-        var path = $"/internal/model-access/teachers/{Uri.EscapeDataString(teacherUserId)}"
-            + $"/models/{Uri.EscapeDataString(modelKey)}";
-        using var response = await _httpClient.DeleteAsync(path, cancellationToken);
-
-        return response.IsSuccessStatusCode
-            ? new ReviewServiceResult<object>(response.StatusCode, null, string.Empty)
-            : new ReviewServiceResult<object>(
-                response.StatusCode,
-                null,
-                await response.Content.ReadAsStringAsync(cancellationToken));
     }
 
     private async Task<List<T>> GetListAsync<T>(

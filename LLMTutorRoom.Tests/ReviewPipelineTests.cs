@@ -5,11 +5,9 @@ using LLMTutorRoom.Interfaces;
 using LLMTutorRoom.Services;
 using LLMTutorRoom.Services.Reviews;
 using ReviewService.Contracts.Enums;
-using ReviewService.Contracts.Requests;
 using ReviewService.Contracts.Responses;
 using TeachingService.Contracts.Enums;
 using TeachingService.Contracts.Models;
-using ManualTaskReviewRequest = LLMTutorRoom.DTOs.ManualTaskReviewRequest;
 
 namespace LLMTutorRoom.Tests;
 
@@ -177,40 +175,6 @@ public sealed class ReviewPipelineTests
         Assert.Equal("next-page", overview.TerminalReviewsNextCursor);
         Assert.Equal(7, overview.Metrics.PendingReviews);
         Assert.Equal(83.4m, overview.Metrics.AverageScore);
-    }
-
-    [Fact]
-    public async Task UpdateManualTaskReview_ForwardsLoggedInTeacherId()
-    {
-        var test = CreateTest(versionNumber: 1);
-        var reviewClient = new FakeReviewServiceClient
-        {
-            ManualReviewResult = new ReviewServiceResult<ReviewResponse>(
-                HttpStatusCode.OK,
-                CreateReview(test),
-                string.Empty)
-        };
-        var service = CreateClassroomService(
-            reviewClient,
-            new FakeAttemptServiceClient(),
-            test);
-
-        var result = await service.UpdateManualTaskReviewAsync(
-            reviewId: 12,
-            taskId: "task-free",
-            teacherUserId: "teacher-owner",
-            new ManualTaskReviewRequest
-            {
-                Score = 2,
-                Feedback = "Хорошо",
-                Findings = ["Аргументировано"]
-            },
-            CancellationToken.None);
-
-        Assert.True(result.IsSuccess);
-        Assert.Equal("teacher-owner", reviewClient.LastManualTeacherUserId);
-        Assert.Equal(12, reviewClient.LastManualReviewId);
-        Assert.Equal("task-free", reviewClient.LastManualTaskId);
     }
 
     private static ClassroomService CreateClassroomService(params CourseTestDto[] tests)
@@ -403,12 +367,6 @@ public sealed class ReviewPipelineTests
         public ReviewPageResponse? StudentPage { get; init; }
         public List<ReviewResponse> TeacherReviews { get; init; } = [];
         public List<ReviewResponse> StudentReviews { get; init; } = [];
-        public ReviewServiceResult<ReviewResponse> ManualReviewResult { get; init; }
-            = new(HttpStatusCode.NotFound, null, string.Empty);
-
-        public int? LastManualReviewId { get; private set; }
-        public string? LastManualTaskId { get; private set; }
-        public string? LastManualTeacherUserId { get; private set; }
 
         public Task<ReviewPageResponse> GetTeacherReviewsAsync(
             string teacherUserId,
@@ -449,54 +407,12 @@ public sealed class ReviewPipelineTests
                 string.Empty));
         }
 
-        public Task<ReviewServiceResult<ReviewResponse>> UpdateManualTaskReviewAsync(
-            int reviewId,
-            string taskId,
-            string teacherUserId,
-            UpdateManualTaskReviewRequest request,
-            CancellationToken cancellationToken)
-        {
-            LastManualReviewId = reviewId;
-            LastManualTaskId = taskId;
-            LastManualTeacherUserId = teacherUserId;
-            return Task.FromResult(ManualReviewResult);
-        }
-
-        public Task<List<LlmModelCatalogItemResponse>> GetModelCatalogAsync(
-            CancellationToken cancellationToken)
-        {
-            return Task.FromResult<List<LlmModelCatalogItemResponse>>([]);
-        }
-
         public Task<List<TeacherModelAccessResponse>> GetTeacherModelAccessAsync(
             string teacherUserId,
             bool includeDisabled,
             CancellationToken cancellationToken)
         {
             return Task.FromResult<List<TeacherModelAccessResponse>>([]);
-        }
-
-        public Task<ReviewServiceResult<TeacherModelAccessResponse>> UpsertTeacherModelAccessAsync(
-            string teacherUserId,
-            string modelKey,
-            UpsertTeacherModelAccessRequest request,
-            CancellationToken cancellationToken)
-        {
-            return Task.FromResult(new ReviewServiceResult<TeacherModelAccessResponse>(
-                HttpStatusCode.NotFound,
-                null,
-                string.Empty));
-        }
-
-        public Task<ReviewServiceResult<object>> DeleteTeacherModelAccessAsync(
-            string teacherUserId,
-            string modelKey,
-            CancellationToken cancellationToken)
-        {
-            return Task.FromResult(new ReviewServiceResult<object>(
-                HttpStatusCode.NotFound,
-                null,
-                string.Empty));
         }
 
         private static ReviewPageResponse CreatePage(

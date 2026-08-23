@@ -1,3 +1,5 @@
+using System.Security.Claims;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ReviewService.Contracts.Requests;
 using ReviewService.Contracts.Responses;
@@ -6,38 +8,56 @@ using ReviewService.Interfaces;
 namespace ReviewService.Controllers;
 
 [ApiController]
-[Route("internal/model-access")]
+[Authorize]
+[Route("api/model-access")]
 public sealed class ModelAccessController(
     ITeacherModelAccessService modelAccessService) : ControllerBase
 {
-    [HttpGet("catalog")]
+    [Authorize(Roles = "Admin")]
+    [HttpGet("models")]
     public async Task<ActionResult<List<LlmModelCatalogItemResponse>>> GetCatalog(
         CancellationToken cancellationToken)
     {
         return Ok(await modelAccessService.GetModelCatalogAsync(cancellationToken));
     }
 
-    [HttpGet("teachers/{teacherUserId}")]
-    public async Task<ActionResult<List<TeacherModelAccessResponse>>> GetTeacherAccess(
-        [FromRoute] string teacherUserId,
-        [FromQuery] bool includeDisabled = false,
-        CancellationToken cancellationToken = default)
+    [Authorize(Roles = "Teacher")]
+    [HttpGet("me")]
+    public async Task<ActionResult<List<TeacherModelAccessResponse>>> GetMyAccess(
+        CancellationToken cancellationToken)
     {
+        var teacherUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrWhiteSpace(teacherUserId))
+            return Unauthorized();
+
         return Ok(await modelAccessService.GetTeacherAccessAsync(
             teacherUserId,
-            includeDisabled,
+            includeDisabled: false,
             cancellationToken));
     }
 
-    [HttpPut("teachers/{teacherUserId}/models/{modelKey}")]
+    [Authorize(Roles = "Admin")]
+    [HttpGet("teachers/{teacherId}")]
+    public async Task<ActionResult<List<TeacherModelAccessResponse>>> GetTeacherAccess(
+        [FromRoute] string teacherId,
+        CancellationToken cancellationToken)
+    {
+        return Ok(await modelAccessService.GetTeacherAccessAsync(
+            teacherId,
+            includeDisabled: true,
+            cancellationToken));
+    }
+
+    [Authorize(Roles = "Admin")]
+    [HttpPut("models/{modelKey}/teachers/{teacherId}")]
     public async Task<ActionResult<TeacherModelAccessResponse>> UpsertTeacherAccess(
-        [FromRoute] string teacherUserId,
         [FromRoute] string modelKey,
+        [FromRoute] string teacherId,
         [FromBody] UpsertTeacherModelAccessRequest request,
         CancellationToken cancellationToken)
     {
         var response = await modelAccessService.UpsertTeacherAccessAsync(
-            teacherUserId,
+            teacherId,
             modelKey,
             request,
             cancellationToken);
@@ -48,14 +68,15 @@ public sealed class ModelAccessController(
             : Ok(response);
     }
 
-    [HttpDelete("teachers/{teacherUserId}/models/{modelKey}")]
+    [Authorize(Roles = "Admin")]
+    [HttpDelete("models/{modelKey}/teachers/{teacherId}")]
     public async Task<IActionResult> DeleteTeacherAccess(
-        [FromRoute] string teacherUserId,
         [FromRoute] string modelKey,
+        [FromRoute] string teacherId,
         CancellationToken cancellationToken)
     {
         return await modelAccessService.DeleteTeacherAccessAsync(
-            teacherUserId,
+            teacherId,
             modelKey,
             cancellationToken)
             ? NoContent()

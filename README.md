@@ -30,11 +30,12 @@ flowchart LR
     Nginx --> Teaching["TeachingService"]
     Nginx --> Attempt["AttemptService"]
     Nginx --> Tutor["LLMTutorRoom + React"]
+    Nginx -- "ручная проверка и доступы" --> Review["ReviewService"]
     Nginx --> Gateway["LLMGateway"]
 
     Tutor --> Teaching
     Tutor -- "попытки для overview" --> Attempt
-    Tutor --> Review["ReviewService"]
+    Tutor -- "результаты для overview" --> Review
     Attempt --> Teaching
     Teaching -- "TestReviewPolicyPublishedV1" --> Rabbit[(RabbitMQ)]
     Attempt -- "AttemptSubmittedV1" --> Rabbit
@@ -124,8 +125,10 @@ docker compose up --build
 
 `TeachingService`, `AttemptService`, `ReviewService` и `LLMTutorRoom` в полном
 Compose не публикуют host-порты. Интерфейс и публичные маршруты доступны через
-nginx, а межсервисные endpoints — только из закрытой backend-сети.
-`/internal/*` через nginx всегда возвращает `404`.
+nginx, а межсервисные endpoints — только внутри Docker-сетей приложения.
+Ручная проверка и управление доступами к моделям направляются в `ReviewService`,
+который самостоятельно проверяет JWT и роль. `/internal/*` через nginx всегда
+возвращает `404`.
 
 Остановить контейнеры:
 
@@ -214,7 +217,7 @@ AttemptService/              попытки, таймер и отправка р
 AttemptService.Contracts/    DTO публичного и internal API попыток
 LLMTutorRoom/                stateless web-фасад и React
 ReviewService/               проверки и model access
-ReviewService.Contracts/     события и internal DTO
+ReviewService.Contracts/     события и API-контракты проверок
 LLMGateway/                  модели и LLM execution
 Shared.Auth/                 общая JWT-конфигурация
 docs/                        бизнесовая документация

@@ -61,7 +61,7 @@ sequenceDiagram
 - `GET /api/users/teachers` — список преподавателей для администратора;
 - `POST /api/users/teachers` — создание преподавателя администратором.
 
-Фронтенд использует первые два маршрута для восстановления сессии, а административные экраны — маршруты преподавателей. `LLMTutorRoom`, `TeachingService` и `AttemptService` подключают [`AddJwtAuthentication`](../Shared.Auth/JwtAuthenticationExtensions.cs) и должны иметь те же issuer, audience и signing key.
+Фронтенд использует первые два маршрута для восстановления сессии, а административные экраны — маршруты преподавателей. `LLMTutorRoom`, `TeachingService`, `AttemptService` и `ReviewService` подключают [`AddJwtAuthentication`](../Shared.Auth/JwtAuthenticationExtensions.cs) и должны иметь те же issuer, audience и signing key.
 
 ## Данные и конфигурация
 

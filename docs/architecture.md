@@ -33,11 +33,12 @@ flowchart LR
     Nginx --> Teaching["TeachingService"]
     Nginx --> Attempt["AttemptService"]
     Nginx --> Tutor["LLMTutorRoom + React"]
+    Nginx -- "JWT: ручная проверка и доступы" --> Review["ReviewService"]
     Nginx --> Gateway["LLMGateway"]
 
     Tutor -- "внутренний HTTP: тесты" --> Teaching
     Tutor -- "внутренний HTTP: попытки для overview" --> Attempt
-    Tutor -- "внутренний HTTP: результаты и доступы" --> Review["ReviewService"]
+    Tutor -- "внутренний HTTP: overview и история" --> Review
     Attempt -- "внутренний HTTP: опубликованная версия" --> Teaching
     Review -- "HTTP: каталог и chat" --> Gateway
 
@@ -108,8 +109,8 @@ sequenceDiagram
 - чтение и редактирование тестов;
 - старт и сохранение попытки;
 - чтение результатов и истории;
-- выставление ручного балла;
-- управление моделями и доступами.
+- выставление ручного балла напрямую в `ReviewService`;
+- управление доступами к моделям напрямую в `ReviewService`.
 
 RabbitMQ используется только для фактов, которые должны пережить временную
 недоступность другого сервиса:
@@ -154,18 +155,20 @@ RabbitMQ используется только для фактов, которы
 Любой путь `/internal/*` получает `404`.
 
 Development Compose дополнительно публикует на хост прямые порты `AuthService`
-и `LLMGateway` для отладки. `AttemptService` и `LLMTutorRoom` доступны снаружи
-только через разрешённые nginx-маршруты. Это не production security boundary:
-особенно важно помнить, что API `LLMGateway` сейчас не имеет собственной
-аутентификации. Во внешнем окружении прямые host-порты нужно закрыть и оставить
-контролируемый ingress.
+и `LLMGateway` для отладки. `TeachingService`, `AttemptService`, `ReviewService`
+и `LLMTutorRoom` доступны пользователю только через разрешённые nginx-маршруты.
+Это не production security boundary: особенно важно помнить, что API
+`LLMGateway` сейчас не имеет собственной аутентификации. Во внешнем окружении
+прямые host-порты нужно закрыть и оставить контролируемый ingress.
 
-Публичные команды `AttemptService` самостоятельно проверяют JWT и роль ученика.
-Internal API `AttemptService` и `ReviewService` не имеют отдельного API key:
-доверие обеспечивается сетью `backend`, а nginx возвращает `404` для
-`/internal/*`. `LLMTutorRoom` обращается к этим API от имени публичного фасада.
-При другом способе развёртывания эту границу нужно сохранить сетевой политикой
-или добавить межсервисную аутентификацию.
+Публичные команды `AttemptService` и `ReviewService` самостоятельно проверяют
+JWT и роль. `AttemptService` принимает команды ученика, а `ReviewService` —
+ручную проверку преподавателя и управление доступами администратора. Внутренние
+API обоих сервисов не имеют отдельного API key: они доступны в межсервисном
+Docker-контуре, а nginx возвращает `404` для `/internal/*`. `LLMTutorRoom`
+обращается к ним только для сборки overview и истории. При другом способе
+развёртывания эту границу нужно сохранить сетевой политикой или добавить
+межсервисную аутентификацию.
 
 ## Где искать код
 

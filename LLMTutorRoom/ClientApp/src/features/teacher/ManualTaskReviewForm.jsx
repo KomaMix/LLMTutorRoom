@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Loader2, Save } from "lucide-react";
-import { saveManualReview } from "../../api/classroomApi.js";
+import { saveManualReview } from "../../api/reviewApi.js";
 
 function createFormSnapshot(result) {
   return {
