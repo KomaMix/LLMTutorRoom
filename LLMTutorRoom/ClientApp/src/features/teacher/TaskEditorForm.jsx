@@ -119,7 +119,11 @@ export function TaskEditorForm({
   }
 
   return (
-    <form className="editor-form task-create-form" onSubmit={onSubmit} aria-busy={isSubmitting}>
+    <form
+      className="editor-form task-create-form teacher-task-editor"
+      onSubmit={onSubmit}
+      aria-busy={isSubmitting}
+    >
       <div className="panel-header">
         <div>
           <span className="eyebrow">Конструктор</span>
@@ -128,7 +132,7 @@ export function TaskEditorForm({
         <Save size={18} aria-hidden="true" />
       </div>
 
-      <div className="task-type-grid" aria-label="Тип задания">
+      <div className="task-type-grid" role="group" aria-label="Тип задания">
         {taskTypes.map(type => {
           const Icon = taskTypeIcons[type.value];
           return (
@@ -137,6 +141,7 @@ export function TaskEditorForm({
               type="button"
               disabled={controlsDisabled}
               className={form.type === type.value ? "active" : ""}
+              aria-pressed={form.type === type.value}
               onClick={() => changeTaskType(type.value)}
             >
               <Icon size={17} aria-hidden="true" />
@@ -201,7 +206,7 @@ export function TaskEditorForm({
       {form.type === "free-text" && (
         <div className="field">
           <label>Проверка</label>
-          <div className="task-type-grid check-mode-grid" aria-label="Режим проверки">
+          <div className="task-type-grid check-mode-grid" role="group" aria-label="Режим проверки">
             {taskCheckModes.map(mode => {
               const Icon = checkModeIcons[mode.value];
               const isUnavailable = mode.value === "llm" && !hasLlmModel;
@@ -211,6 +216,7 @@ export function TaskEditorForm({
                   type="button"
                   disabled={controlsDisabled || isUnavailable}
                   className={form.checkMode === mode.value && !isUnavailable ? "active" : ""}
+                  aria-pressed={form.checkMode === mode.value && !isUnavailable}
                   onClick={() => updateForm("checkMode", mode.value)}
                 >
                   <Icon size={17} aria-hidden="true" />
@@ -239,7 +245,7 @@ export function TaskEditorForm({
             {form.options.map((option, index) => (
               <div className="option-editor-row" key={optionKeys.current[index]}>
                 <input
-                  aria-label="Правильный ответ"
+                  aria-label={`Отметить вариант ${index + 1} правильным`}
                   checked={form.correctOptionIndexes.includes(index)}
                   className="option-control"
                   name={`${formId}-correct-option`}
@@ -248,7 +254,7 @@ export function TaskEditorForm({
                   onChange={event => toggleCorrectOption(index, event.target.checked)}
                 />
                 <input
-                  aria-label={`Вариант ${index + 1}`}
+                  aria-label={`Текст варианта ${index + 1}`}
                   value={option}
                   disabled={controlsDisabled}
                   onChange={event => updateOption(index, event.target.value)}
@@ -258,6 +264,7 @@ export function TaskEditorForm({
                   type="button"
                   className="icon-button"
                   title="Удалить вариант"
+                  aria-label={`Удалить вариант ${index + 1}`}
                   disabled={controlsDisabled || form.options.length <= 2}
                   onClick={() => removeOption(index)}
                 >

@@ -39,37 +39,38 @@ export function TestVersionPanel({
   }
 
   return (
-    <section className="version-panel" aria-busy={isBusy}>
-      <div className="panel-header">
+    <section className="version-panel teacher-version-panel" aria-busy={isBusy}>
+      <header className="teacher-section-header teacher-version-header">
         <div>
           <span className="eyebrow">Версии</span>
-          <h3>Версия {test.versionNumber}</h3>
+          <h3>История публикаций</h3>
         </div>
-        <div className="version-heading-status">
-          <StatusBadge status={test.status} />
+        <div className="teacher-version-context">
+          <History size={16} aria-hidden="true" />
+          <span>Открыта версия {test.versionNumber}</span>
           {test.publishedVersionNumber && test.publishedVersionNumber !== test.versionNumber && (
-            <span className="muted">Опубликована v{test.publishedVersionNumber}</span>
+            <span>· опубликована версия {test.publishedVersionNumber}</span>
           )}
         </div>
-      </div>
+      </header>
 
       <div className="version-list" aria-label="История версий теста">
         {versions.map(version => (
           <button
             type="button"
             className={version.versionNumber === test.versionNumber ? "active" : ""}
-            aria-current={version.versionNumber === test.versionNumber ? "true" : undefined}
+            aria-current={version.versionNumber === test.versionNumber ? "page" : undefined}
             disabled={isBusy}
             key={version.versionNumber}
             onClick={() => onSelectVersion(version.versionNumber)}
           >
-            <span>v{version.versionNumber}</span>
+            <span>Версия {version.versionNumber}</span>
             <StatusBadge status={version.status} />
           </button>
         ))}
       </div>
 
-      <div className="version-actions">
+      <div className="version-actions teacher-version-actions">
         {isDraft ? (
           <>
             <button
@@ -79,7 +80,7 @@ export function TestVersionPanel({
               onClick={() => setConfirmation("publish")}
             >
               <Rocket size={16} aria-hidden="true" />
-              Опубликовать v{test.versionNumber}
+              Опубликовать версию {test.versionNumber}
             </button>
             <button
               type="button"
@@ -99,7 +100,7 @@ export function TestVersionPanel({
             onClick={() => onSelectVersion(draft.versionNumber)}
           >
             <History size={16} aria-hidden="true" />
-            Открыть черновик v{draft.versionNumber}
+            Открыть черновик версии {draft.versionNumber}
           </button>
         ) : (
           <button
@@ -119,7 +120,7 @@ export function TestVersionPanel({
           Опубликованные и предыдущие версии доступны только для чтения.
         </p>
       )}
-      <div role="status" aria-atomic="true" aria-live="polite">
+      <div className="teacher-version-message" role="status" aria-atomic="true" aria-live="polite">
         {message && <p className="form-note">{message}</p>}
       </div>
 

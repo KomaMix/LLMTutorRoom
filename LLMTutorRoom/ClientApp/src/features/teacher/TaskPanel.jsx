@@ -30,35 +30,37 @@ export function TaskPanel({
   const controlsDisabled = isDisabled || isEditorSubmitting;
 
   return (
-    <div className="panel-section">
-      <div className="panel-header">
+    <section className="panel-section teacher-task-panel">
+      <header className="teacher-section-header teacher-task-panel-header">
         <div>
           <span className="eyebrow">Содержание</span>
-          <h3>Задания</h3>
+          <h3>Задания <span className="teacher-inline-count">{tasks.length}</span></h3>
         </div>
-        <div className="task-panel-actions" aria-label="Режим работы с заданиями">
-          <button
-            type="button"
-            className={mode === "list" ? "active" : ""}
-            disabled={controlsDisabled}
-            onClick={() => onModeChange("list")}
-          >
-            <ListChecks size={16} aria-hidden="true" />
-            Список
-          </button>
-          {!readOnly && (
+        {!readOnly && (
+          <div className="task-panel-actions" role="group" aria-label="Режим работы с заданиями">
+            <button
+              type="button"
+              className={mode === "list" ? "active" : ""}
+              aria-pressed={mode === "list"}
+              disabled={controlsDisabled}
+              onClick={() => onModeChange("list")}
+            >
+              <ListChecks size={16} aria-hidden="true" />
+              Список
+            </button>
             <button
               type="button"
               className={mode === "create" ? "active" : ""}
+              aria-pressed={mode === "create"}
               disabled={controlsDisabled}
               onClick={() => onModeChange("create")}
             >
               <Plus size={16} aria-hidden="true" />
               Новое
             </button>
-          )}
-        </div>
-      </div>
+          </div>
+        )}
+      </header>
 
       {mode === "list" && (
         <div role="status" aria-atomic="true" aria-live="polite">
@@ -80,20 +82,30 @@ export function TaskPanel({
       )}
 
       {!readOnly && mode === "create" && (
-        <TaskEditorForm
-          key="new-task"
-          form={createForm}
-          formId="new-task"
-          title="Новое задание"
-          submitLabel="Добавить задание"
-          submittingLabel="Добавление..."
-          message={createMessage}
-          isDisabled={isDisabled}
-          isSubmitting={isCreating}
-          hasLlmModel={hasLlmModel}
-          onChange={onCreateFormChange}
-          onSubmit={onCreate}
-        />
+        <div className="task-edit-panel">
+          <TaskEditorForm
+            key="new-task"
+            form={createForm}
+            formId="new-task"
+            title="Новое задание"
+            submitLabel="Добавить задание"
+            submittingLabel="Добавление..."
+            message={createMessage}
+            isDisabled={isDisabled}
+            isSubmitting={isCreating}
+            hasLlmModel={hasLlmModel}
+            onChange={onCreateFormChange}
+            onSubmit={onCreate}
+          />
+          <button
+            type="button"
+            className="button secondary teacher-editor-cancel"
+            disabled={isDisabled || isCreating}
+            onClick={() => onModeChange("list")}
+          >
+            Отменить создание
+          </button>
+        </div>
       )}
 
       {!readOnly && mode === "edit" && (
@@ -114,15 +126,15 @@ export function TaskPanel({
           />
           <button
             type="button"
-            className="button secondary"
+            className="button secondary teacher-editor-cancel"
             disabled={isDisabled || isSaving}
             onClick={() => onModeChange("list")}
           >
-            Вернуться к списку
+            Отменить редактирование
           </button>
         </div>
       )}
-    </div>
+    </section>
   );
 }
 

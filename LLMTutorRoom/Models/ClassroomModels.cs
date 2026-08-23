@@ -31,7 +31,6 @@ namespace LLMTutorRoom.Models
     {
         public string Key { get; set; } = string.Empty;
         public string DisplayName { get; set; } = string.Empty;
-        public string Provider { get; set; } = string.Empty;
         public string Status { get; set; } = string.Empty;
         public int Priority { get; set; }
         public int MaxConcurrentRequests { get; set; }

@@ -583,7 +583,6 @@ namespace LLMTutorRoom.Services
             {
                 Key = access.ModelKey,
                 DisplayName = access.DisplayName,
-                Provider = "LLMGateway",
                 Status = access.RemainingChecks > 0 ? "available" : "standby",
                 Priority = 0,
                 MaxConcurrentRequests = 0,

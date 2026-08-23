@@ -39,6 +39,7 @@ function TeacherDashboardRoute({ overview }) {
       selectedTest={selectedTest}
       activeReviews={activeReviews}
       onOpenTests={() => navigate(`/teacher/tests/${selectedTest.id}`)}
+      onOpenReviews={() => navigate("/teacher/reviews")}
     />
   );
 }
@@ -92,7 +93,10 @@ export function TeacherRoutes({ overview, refresh }) {
           />
         )}
       />
-      <Route path="/teacher/models" element={<ModelPanel models={overview.models} />} />
+      <Route
+        path="/teacher/models"
+        element={<ModelPanel models={overview.models} onRefresh={refresh} />}
+      />
       <Route path="*" element={<Navigate to="/teacher/dashboard" replace />} />
     </Routes>
   );

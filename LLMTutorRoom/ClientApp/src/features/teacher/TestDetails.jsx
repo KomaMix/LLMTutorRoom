@@ -45,10 +45,10 @@ export function TestDetails({
 }) {
   if (!selectedTest) {
     return (
-      <div className="detail-panel">
-        <section className="empty-state">
+      <div className="detail-panel teacher-test-details">
+        <section className="empty-state teacher-test-empty-state">
           <FileText size={28} aria-hidden="true" />
-          <h2>Создай первый тест</h2>
+          <h2>Создайте первый тест</h2>
         </section>
       </div>
     );
@@ -57,16 +57,21 @@ export function TestDetails({
   const isDraft = selectedTest.status === "draft";
 
   return (
-    <div className="detail-panel">
-      <div className="panel-header">
+    <article className="detail-panel teacher-test-details">
+      <header className="teacher-test-details-header">
         <div>
           <span className="eyebrow">{selectedTest.subject}</span>
           <h2>{selectedTest.title}</h2>
         </div>
-        <StatusBadge status={selectedTest.status} />
-      </div>
+        <div className="teacher-test-heading-status">
+          <span className="teacher-version-number">Версия {selectedTest.versionNumber}</span>
+          <StatusBadge status={selectedTest.status} />
+        </div>
+      </header>
 
-      <p className="muted">{selectedTest.summary || "Описание пока не добавлено."}</p>
+      <p className="muted teacher-test-description">
+        {selectedTest.summary || "Описание пока не добавлено."}
+      </p>
 
       <TestVersionPanel
         isBusy={isVersionBusy}
@@ -78,7 +83,7 @@ export function TestDetails({
         test={selectedTest}
       />
 
-      <div className="compact-grid test-meta-grid">
+      <div className="compact-grid test-meta-grid teacher-test-meta-grid">
         <InfoTile label="Время" value={`${selectedTest.timeLimitMinutes} мин`} />
         <InfoTile label="Задания" value={createTaskCountSummary(selectedTest)} />
         <InfoTile label="Баллы" value={selectedTest.totalPoints} />
@@ -87,16 +92,18 @@ export function TestDetails({
       </div>
 
       {isDraft && (
-        <TestForm
-          form={testEditForm}
-          isDisabled={areDraftControlsDisabled}
-          isSubmitting={isSavingTest}
-          message={testEditMessage}
-          mode="edit"
-          models={models}
-          onChange={onTestFormChange}
-          onSubmit={onUpdateTest}
-        />
+        <section className="teacher-editor-surface">
+          <TestForm
+            form={testEditForm}
+            isDisabled={areDraftControlsDisabled}
+            isSubmitting={isSavingTest}
+            message={testEditMessage}
+            mode="edit"
+            models={models}
+            onChange={onTestFormChange}
+            onSubmit={onUpdateTest}
+          />
+        </section>
       )}
 
       <TaskPanel
@@ -133,7 +140,7 @@ export function TestDetails({
           onConfirm={() => onDeleteTask(deleteTaskCandidate)}
         />
       )}
-    </div>
+    </article>
   );
 }
 

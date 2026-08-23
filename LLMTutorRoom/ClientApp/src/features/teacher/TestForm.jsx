@@ -51,7 +51,9 @@ export function TestForm({
 
   return (
     <form
-      className={isEditing ? "editor-form test-edit-form" : "editor-form test-create-form"}
+      className={isEditing
+        ? "editor-form test-edit-form teacher-test-form"
+        : "editor-form test-create-form teacher-test-form"}
       onSubmit={onSubmit}
       aria-busy={isSubmitting}
     >
@@ -79,46 +81,48 @@ export function TestForm({
         </>
       )}
 
-      <div className="field">
-        <label htmlFor={`${idPrefix}-time-limit`}>Время, мин</label>
-        <input
-          id={`${idPrefix}-time-limit`}
-          min="1"
-          type="number"
-          value={form.timeLimitMinutes}
-          disabled={controlsDisabled}
-          onChange={event => updateForm("timeLimitMinutes", event.target.value)}
-          required
-        />
-      </div>
+      <div className="teacher-test-config-grid">
+        <div className="field">
+          <label htmlFor={`${idPrefix}-time-limit`}>Время, мин</label>
+          <input
+            id={`${idPrefix}-time-limit`}
+            min="1"
+            type="number"
+            value={form.timeLimitMinutes}
+            disabled={controlsDisabled}
+            onChange={event => updateForm("timeLimitMinutes", event.target.value)}
+            required
+          />
+        </div>
 
-      <div className="field">
-        <label htmlFor={`${idPrefix}-deadline`}>Дедлайн</label>
-        <input
-          id={`${idPrefix}-deadline`}
-          type="date"
-          value={form.deadline}
-          disabled={controlsDisabled}
-          onChange={event => updateForm("deadline", event.target.value)}
-          required
-        />
-      </div>
+        <div className="field">
+          <label htmlFor={`${idPrefix}-deadline`}>Дедлайн</label>
+          <input
+            id={`${idPrefix}-deadline`}
+            type="date"
+            value={form.deadline}
+            disabled={controlsDisabled}
+            onChange={event => updateForm("deadline", event.target.value)}
+            required
+          />
+        </div>
 
-      <div className="field">
-        <label htmlFor={`${idPrefix}-llm-model`}>LLM-модель проверки</label>
-        <select
-          id={`${idPrefix}-llm-model`}
-          value={form.llmModelKey}
-          disabled={controlsDisabled}
-          onChange={event => updateForm("llmModelKey", event.target.value)}
-        >
-          <option value="">Без LLM-модели</option>
-          {modelOptions.map(model => (
-            <option key={model.key} value={model.key}>
-              {getModelOptionLabel(model)}
-            </option>
-          ))}
-        </select>
+        <div className="field">
+          <label htmlFor={`${idPrefix}-llm-model`}>LLM-модель проверки</label>
+          <select
+            id={`${idPrefix}-llm-model`}
+            value={form.llmModelKey}
+            disabled={controlsDisabled}
+            onChange={event => updateForm("llmModelKey", event.target.value)}
+          >
+            <option value="">Без LLM-модели</option>
+            {modelOptions.map(model => (
+              <option key={model.key} value={model.key}>
+                {getModelOptionLabel(model)}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       <div className="field">

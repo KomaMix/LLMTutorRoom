@@ -1,11 +1,15 @@
 import {
+  Bot,
   CheckCircle2,
+  ChevronDown,
   Eye,
   EyeOff,
   FileText,
   Pencil,
   Plus,
-  Trash2
+  Trash2,
+  UserRoundCheck,
+  WandSparkles
 } from "lucide-react";
 import { StatusBadge } from "../../shared/ui/StatusBadge.jsx";
 
@@ -20,6 +24,16 @@ export function TaskList({
   readOnly = false
 }) {
   const isTaskMutationBusy = disabled || Boolean(busyTaskId);
+
+  function getCheckMode(task) {
+    if (task.type !== "free-text") {
+      return { label: "Автопроверка", icon: WandSparkles };
+    }
+
+    return task.checkMode === "llm"
+      ? { label: "Проверка LLM", icon: Bot }
+      : { label: "Проверяет преподаватель", icon: UserRoundCheck };
+  }
 
   if (tasks.length === 0) {
     return (
@@ -42,71 +56,100 @@ export function TaskList({
   }
 
   return (
-    <div className="task-list">
-      {tasks.map((task, index) => (
-        <article className={task.isHidden ? "task-card hidden-task" : "task-card"} key={task.id}>
-          <div className="task-card-header">
-            <div className="task-card-title">
-              <strong>{index + 1}. {task.title}</strong>
-              <span>{task.maxPoints} баллов</span>
-            </div>
-            {!readOnly && (
-              <div className="task-actions">
-                <button
-                  type="button"
-                  className="icon-button"
-                  title="Редактировать"
-                  disabled={isTaskMutationBusy}
-                  onClick={() => onEdit(task)}
-                >
-                  <Pencil size={16} aria-hidden="true" />
-                </button>
-                <button
-                  type="button"
-                  className="icon-button"
-                  title={task.isHidden ? "Показать задание" : "Скрыть задание"}
-                  disabled={isTaskMutationBusy}
-                  onClick={() => onToggleVisibility(task, !task.isHidden)}
-                >
-                  {task.isHidden
-                    ? <Eye size={16} aria-hidden="true" />
-                    : <EyeOff size={16} aria-hidden="true" />}
-                </button>
-                <button
-                  type="button"
-                  className="icon-button danger"
-                  title="Удалить задание"
-                  disabled={isTaskMutationBusy}
-                  onClick={() => onDelete(task)}
-                >
-                  <Trash2 size={16} aria-hidden="true" />
-                </button>
+    <div className="task-list teacher-task-list">
+      {tasks.map((task, index) => {
+        const checkMode = getCheckMode(task);
+        const CheckModeIcon = checkMode.icon;
+        return (
+          <article
+            className={`task-card teacher-task-card${task.isHidden ? " hidden-task" : ""}`}
+            key={task.id}
+          >
+            <header className="teacher-task-card-header">
+              <div className="teacher-task-card-identity">
+                <span className="student-task-number teacher-task-number">{index + 1}</span>
+                <div>
+                  <strong>{task.title}</strong>
+                  <span>{task.maxPoints} баллов</span>
+                </div>
               </div>
-            )}
-          </div>
-          <div className="task-subline">
-            <StatusBadge status={task.type} />
-            {task.isHidden && <StatusBadge status="hidden" />}
-            {task.type === "multiple-choice" && task.wrongAnswerPenalty > 0 && (
-              <span className="task-penalty">Штраф: {task.wrongAnswerPenalty}</span>
-            )}
-          </div>
-          <p>{task.prompt}</p>
-          {task.options.length > 0 && (
-            <div className="answer-option-list">
-              {task.options.map(option => (
-                <span
-                  className={task.correctOptionIds.includes(option.id) ? "correct" : ""}
-                  key={option.id}
-                >
-                  {task.correctOptionIds.includes(option.id) && <CheckCircle2 size={14} aria-hidden="true" />}
-                  {option.text}
-                </span>
-              ))}
+              {!readOnly && (
+                <div className="task-actions">
+                  <button
+                    type="button"
+                    className="icon-button"
+                    title="Редактировать"
+                    aria-label={`Редактировать задание «${task.title}»`}
+                    disabled={isTaskMutationBusy}
+                    onClick={() => onEdit(task)}
+                  >
+                    <Pencil size={16} aria-hidden="true" />
+                  </button>
+                  <button
+                    type="button"
+                    className="icon-button"
+                    title={task.isHidden ? "Показать задание" : "Скрыть задание"}
+                    aria-label={`${task.isHidden ? "Показать" : "Скрыть"} задание «${task.title}»`}
+                    disabled={isTaskMutationBusy}
+                    onClick={() => onToggleVisibility(task, !task.isHidden)}
+                  >
+                    {task.isHidden
+                      ? <Eye size={16} aria-hidden="true" />
+                      : <EyeOff size={16} aria-hidden="true" />}
+                  </button>
+                  <button
+                    type="button"
+                    className="icon-button danger"
+                    title="Удалить задание"
+                    aria-label={`Удалить задание «${task.title}»`}
+                    disabled={isTaskMutationBusy}
+                    onClick={() => onDelete(task)}
+                  >
+                    <Trash2 size={16} aria-hidden="true" />
+                  </button>
+                </div>
+              )}
+            </header>
+
+            <div className="task-subline teacher-task-subline">
+              <StatusBadge status={task.type} />
+              <span className="teacher-task-check-mode">
+                <CheckModeIcon size={14} aria-hidden="true" />
+                {checkMode.label}
+              </span>
+              {task.isHidden && <StatusBadge status="hidden" />}
+              {task.type === "multiple-choice" && task.wrongAnswerPenalty > 0 && (
+                <span className="task-penalty">Штраф: {task.wrongAnswerPenalty}</span>
+              )}
             </div>
-          )}
-        </article>
-      ))}
+
+            <details className="teacher-task-disclosure">
+              <summary>
+                <span>Показать содержание</span>
+                <ChevronDown size={16} aria-hidden="true" />
+              </summary>
+              <div className="teacher-task-content">
+                <p>{task.prompt}</p>
+                {task.options.length > 0 && (
+                  <div className="answer-option-list">
+                    {task.options.map(option => (
+                      <span
+                        className={task.correctOptionIds.includes(option.id) ? "correct" : ""}
+                        key={option.id}
+                      >
+                        {task.correctOptionIds.includes(option.id) && (
+                          <CheckCircle2 size={14} aria-hidden="true" />
+                        )}
+                        {option.text}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </details>
+          </article>
+        );
+      })}
     </div>
   );
 }

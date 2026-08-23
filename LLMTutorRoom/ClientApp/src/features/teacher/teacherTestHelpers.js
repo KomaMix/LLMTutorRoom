@@ -197,7 +197,7 @@ export function createTestListSummary(test) {
     ? ` · скрыто ${hiddenTaskCount}`
     : "";
 
-  return `v${test.versionNumber} · ${test.subject} · ${visibleTaskCount} заданий${hiddenText} · ${test.timeLimitMinutes} мин`;
+  return `Версия ${test.versionNumber} · ${test.subject} · ${visibleTaskCount} заданий${hiddenText} · ${test.timeLimitMinutes} мин`;
 }
 
 export function createTaskCountSummary(test) {

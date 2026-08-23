@@ -1,13 +1,35 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Loader2, Save } from "lucide-react";
 import { saveManualReview } from "../../api/classroomApi.js";
 
-export function ManualTaskReviewForm({ reviewId, result, onSaved }) {
-  const [score, setScore] = useState(result.score ?? 0);
-  const [feedback, setFeedback] = useState(result.feedback ?? "");
-  const [findings, setFindings] = useState((result.findings ?? []).join("\n"));
+function createFormSnapshot(result) {
+  return {
+    score: String(result.score ?? 0),
+    feedback: result.feedback ?? "",
+    findings: (result.findings ?? []).join("\n")
+  };
+}
+
+export function ManualTaskReviewForm({ reviewId, result, onDirtyChange, onSaved }) {
+  const initialSnapshot = createFormSnapshot(result);
+  const baselineRef = useRef(initialSnapshot);
+  const dirtyKey = `${reviewId}:${result.taskId}`;
+  const [score, setScore] = useState(initialSnapshot.score);
+  const [feedback, setFeedback] = useState(initialSnapshot.feedback);
+  const [findings, setFindings] = useState(initialSnapshot.findings);
   const [message, setMessage] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const isDirty = score !== baselineRef.current.score
+    || feedback !== baselineRef.current.feedback
+    || findings !== baselineRef.current.findings;
+
+  useEffect(() => {
+    onDirtyChange?.(dirtyKey, isDirty);
+  }, [dirtyKey, isDirty, onDirtyChange]);
+
+  useEffect(() => () => {
+    onDirtyChange?.(dirtyKey, false);
+  }, [dirtyKey, onDirtyChange]);
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -19,7 +41,7 @@ export function ManualTaskReviewForm({ reviewId, result, onSaved }) {
       || !Number.isFinite(maxScore)
       || numericScore < 0
       || numericScore > maxScore) {
-      setMessage(`Укажи балл от 0 до ${result.maxScore}.`);
+      setMessage(`Укажите балл от 0 до ${result.maxScore}.`);
       return;
     }
 
@@ -36,6 +58,7 @@ export function ManualTaskReviewForm({ reviewId, result, onSaved }) {
           .filter(Boolean)
       });
 
+      baselineRef.current = { score, feedback, findings };
       setMessage("Оценка сохранена.");
       await onSaved?.();
     } catch (error) {
@@ -46,11 +69,11 @@ export function ManualTaskReviewForm({ reviewId, result, onSaved }) {
   }
 
   return (
-    <form className="result-card manual-review-form" onSubmit={handleSubmit} aria-busy={isSaving}>
-      <div>
+    <form className="result-card manual-review-form teacher-manual-review-form" onSubmit={handleSubmit} aria-busy={isSaving}>
+      <header className="teacher-manual-task-header">
         <strong>{result.taskTitle}</strong>
         <span>{result.maxScore} баллов</span>
-      </div>
+      </header>
       <div className="manual-review-context">
         <div>
           <span>Задание</span>
@@ -100,7 +123,7 @@ export function ManualTaskReviewForm({ reviewId, result, onSaved }) {
         {isSaving ? <Loader2 className="spin" size={16} aria-hidden="true" /> : <Save size={16} aria-hidden="true" />}
         {isSaving ? "Сохранение..." : "Сохранить оценку"}
       </button>
-      {message && <p className="form-note">{message}</p>}
+      {message && <p className="form-note" role="status">{message}</p>}
     </form>
   );
 }

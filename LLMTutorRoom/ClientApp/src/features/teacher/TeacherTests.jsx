@@ -854,10 +854,52 @@ export function TeacherTests({
     setTaskPanelMode("edit");
   }
 
+  function handleTaskPanelModeChange(nextMode) {
+    if (nextMode === taskPanelMode || hasMutationInProgress) {
+      return;
+    }
+
+    if (taskPanelMode === "create" && hasUnsavedTaskCreateChanges) {
+      const shouldDiscard = window.confirm(
+        "Новое задание не сохранено. Отменить создание и потерять изменения?"
+      );
+      if (!shouldDiscard) {
+        return;
+      }
+    }
+
+    if (taskPanelMode === "edit" && hasUnsavedTaskEditChanges) {
+      const shouldDiscard = window.confirm(
+        "Изменения задания не сохранены. Отменить редактирование?"
+      );
+      if (!shouldDiscard) {
+        return;
+      }
+    }
+
+    if (taskPanelMode === "create") {
+      const nextForm = createInitialTaskForm();
+      taskCreateBaselineRef.current = nextForm;
+      setTaskForm(nextForm);
+      setTaskMessage("");
+    }
+
+    if (taskPanelMode === "edit") {
+      const nextForm = createInitialTaskForm();
+      taskEditBaselineRef.current = nextForm;
+      setTaskEditForm(nextForm);
+      setTaskEditMessage("");
+      setEditingTaskId("");
+    }
+
+    setTaskPanelMode(nextMode);
+  }
+
   return (
-    <section className="tests-layout">
+    <section className="tests-layout teacher-page teacher-tests-page">
       <TestList
         form={testForm}
+        hasUnsavedChanges={hasUnsavedCreateTestChanges}
         isBusy={hasMutationInProgress}
         isCreating={isCreatingTest}
         message={testMessage}
@@ -887,7 +929,7 @@ export function TeacherTests({
         onRequestDeleteTask={setDeleteTaskCandidate}
         onTaskCreateFormChange={setTaskForm}
         onTaskEditFormChange={setTaskEditForm}
-        onTaskPanelModeChange={setTaskPanelMode}
+        onTaskPanelModeChange={handleTaskPanelModeChange}
         onTestFormChange={setTestEditForm}
         onToggleTaskVisibility={handleTaskVisibility}
         onPublishVersion={handlePublishVersion}

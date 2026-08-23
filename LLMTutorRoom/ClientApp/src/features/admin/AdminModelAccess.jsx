@@ -286,7 +286,6 @@ export function AdminModelAccess() {
         <div className="panel">
           <div className="panel-header">
             <div>
-              <span className="eyebrow">LLMGateway</span>
               <h2>Лимит модели</h2>
             </div>
             <Server size={18} aria-hidden="true" />
