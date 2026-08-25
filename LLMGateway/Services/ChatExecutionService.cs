@@ -103,7 +103,7 @@ namespace LLMGateway.Services
                         continue;
                     }
 
-                    var client = _chatClientFactory.CreateClient(deployment);
+                    using var client = _chatClientFactory.CreateClient(deployment);
                     var response = await client.GetResponseAsync(
                         messages,
                         new ChatOptions { Temperature = request.Temperature },
@@ -256,6 +256,9 @@ namespace LLMGateway.Services
 
         private static Uri GetModelsEndpoint(ModelDeployment deployment)
         {
+            if (string.IsNullOrWhiteSpace(deployment.Endpoint))
+                throw new UriFormatException("The OpenAI-compatible deployment endpoint is empty.");
+
             var endpoint = deployment.Endpoint.TrimEnd('/');
             return new Uri($"{endpoint}/models");
         }

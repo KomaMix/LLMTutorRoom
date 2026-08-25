@@ -18,9 +18,11 @@ namespace LLMGateway.Tests
         {
             await using var dbContext = CreateDbContext();
             var chatClientFactory = new FakeChatClientFactory();
-            chatClientFactory.Register("primary", new FakeChatClient(_ => throw new InvalidOperationException("provider failed")));
-            chatClientFactory.Register("secondary", new FakeChatClient(_ => Task.FromResult(new ChatResponse(
-                new ChatMessage(ChatRole.Assistant, "secondary response")))));
+            var primaryClient = new FakeChatClient(_ => throw new InvalidOperationException("provider failed"));
+            var secondaryClient = new FakeChatClient(_ => Task.FromResult(new ChatResponse(
+                new ChatMessage(ChatRole.Assistant, "secondary response"))));
+            chatClientFactory.Register("primary", primaryClient);
+            chatClientFactory.Register("secondary", secondaryClient);
 
             await AddModelAsync(dbContext, new[]
             {
@@ -34,6 +36,8 @@ namespace LLMGateway.Tests
 
             Assert.Equal(ChatExecutionStatus.Completed, result.Status);
             Assert.Equal("secondary response", result.Response?.Text);
+            Assert.True(primaryClient.IsDisposed);
+            Assert.True(secondaryClient.IsDisposed);
         }
 
         [Fact]
@@ -262,6 +266,8 @@ namespace LLMGateway.Tests
                 _handler = handler;
             }
 
+            public bool IsDisposed { get; private set; }
+
             public Task<ChatResponse> GetResponseAsync(
                 IEnumerable<ChatMessage> messages,
                 ChatOptions? options = null,
@@ -286,6 +292,7 @@ namespace LLMGateway.Tests
 
             public void Dispose()
             {
+                IsDisposed = true;
             }
         }
     }

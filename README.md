@@ -145,7 +145,7 @@ docker compose down -v
 EF Core migrations применяются при старте сервисов. Чтобы LLM-проверка реально
 выполнялась, в `LLMGateway` нужно создать модель и хотя бы один включённый
 OpenAI-compatible deployment, а затем выдать преподавателю доступ через экран
-администратора.
+администратора. Локальный `CodexHost` предоставляет такой endpoint поверх Codex SDK.
 
 ## Локальная разработка
 
@@ -155,7 +155,8 @@ OpenAI-compatible deployment, а затем выдать преподавате�
 - PostgreSQL;
 - RabbitMQ 3.13;
 - Node.js `^20.19.0`, `^22.13.0` или `>=24`;
-- OpenAI-compatible provider, если нужен реальный LLM-вызов.
+- OpenAI-compatible provider, если нужен реальный LLM-вызов;
+- авторизованный Codex CLI, если в роли provider используется локальный `CodexHost`.
 
 Сборка решения:
 
@@ -177,6 +178,7 @@ dotnet test LLMGateway.sln --no-restore
 | TeachingService | `http://localhost:5212` |
 | AttemptService | `http://localhost:5216` |
 | LLMGateway | `http://localhost:5200` |
+| CodexHost (необязательно) | `http://localhost:5250` |
 | ReviewService | `http://127.0.0.1:5214` |
 | LLMTutorRoom | `http://localhost:5206` |
 

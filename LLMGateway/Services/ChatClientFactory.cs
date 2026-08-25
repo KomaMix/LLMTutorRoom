@@ -1,4 +1,4 @@
-﻿using LLMGateway.Data.Models;
+using LLMGateway.Data.Models;
 using Microsoft.Extensions.AI;
 using OpenAI;
 using System.ClientModel;

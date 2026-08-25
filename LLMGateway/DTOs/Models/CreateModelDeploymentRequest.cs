@@ -4,12 +4,10 @@ namespace LLMGateway.DTOs.Models
 {
     public class CreateModelDeploymentRequest
     {
-        [Required, Url, MaxLength(2000)]
         public string Endpoint { get; set; } = string.Empty;
 
         public string? ApiKey { get; set; }
 
-        [Required, MaxLength(200)]
         public string ProviderModelId { get; set; } = string.Empty;
 
         public bool IsEnabled { get; set; } = true;

@@ -53,7 +53,7 @@ sequenceDiagram
     end
 ```
 
-[`ChatExecutionService`](../LLMGateway/Services/ChatExecutionService.cs) сначала отличает неизвестный ключ (`404`) от модели без включённых deployment (`503`). Перед фактическим вызовом он резервирует лимиты и делает `GET /models` с таймаутом три секунды, добавляя настроенный Bearer API key, если он задан. Затем [`ChatClientFactory`](../LLMGateway/Services/ChatClientFactory.cs) создаёт OpenAI-клиент для заданных endpoint и provider model ID. Пустой API key для этого клиента заменяется техническим значением `openai-compatible`.
+[`ChatExecutionService`](../LLMGateway/Services/ChatExecutionService.cs) сначала отличает неизвестный ключ (`404`) от модели без включённых deployment (`503`). Перед фактическим вызовом он резервирует лимиты и выполняет `GET /models` с таймаутом три секунды, добавляя Bearer API key, если он задан. Затем [`ChatClientFactory`](../LLMGateway/Services/ChatClientFactory.cs) создаёт OpenAI-compatible клиент, а `ProviderModelId` явно передаётся как model ID. Пустой API key заменяется техническим значением `openai-compatible`.
 
 Если попытка неуспешна, перебор продолжается. Когда исчерпаны все deployment, итоговый статус выбирается с приоритетом: ошибка provider (`502`), таймаут chat-вызова (`504`), недоступность health check (`503`), rate limit (`429`), concurrency limit (`429`).
 
@@ -66,7 +66,7 @@ HTTP-интерфейс делится на две части:
 - `/api/chat/{modelKey}` принимает непустой список сообщений с ролями `system`, `user` или `assistant` и необязательную temperature от 0 до 2;
 - `/api/models` управляет моделями, deployments и rate-limit rules; `/api/models/catalog` возвращает полный каталог, а `GET /api/models` — только ключи с хотя бы одним включённым deployment.
 
-Исходящие зависимости — PostgreSQL и OpenAI-compatible HTTP API. RabbitMQ и другие backend-сервисы gateway не вызывает.
+Исходящие зависимости — PostgreSQL и настроенные OpenAI-compatible HTTP API. RabbitMQ и другие backend-сервисы gateway не вызывает.
 
 ## Минимальная настройка модели
 
@@ -103,17 +103,34 @@ Content-Type: application/json
 администратор отдельно выдаёт преподавателю доступ и квоту в интерфейсе — это
 уже данные `ReviewService`, а не gateway.
 
+Если на host-машине запущен `CodexHost`, к отдельной логической модели с key
+`luna` добавляется обычный HTTP deployment:
+
+```http
+POST http://localhost:5200/api/models/luna/deployments
+Content-Type: application/json
+
+{
+  "endpoint": "http://host.docker.internal:5250/v1",
+  "apiKey": "local-codex-secret",
+  "providerModelId": "gpt-5.6-luna",
+  "isEnabled": true,
+  "priority": 0,
+  "maxConcurrentRequests": 1
+}
+```
+
 ## Данные и конфигурация
 
 [`AppDbContext`](../LLMGateway/Data/AppDbContext.cs) хранит `Models` и связанные с ними `ModelDeployments`; удаление модели каскадно удаляет deployments. Массив rate-limit rules сериализуется в одну колонку PostgreSQL `jsonb` с EF value comparer. API key сохраняется обычной строкой без прикладного шифрования, но намеренно отсутствует в response DTO. Миграция применяется автоматически при запуске для relational database.
 
-В [`appsettings.json`](../LLMGateway/appsettings.json) обязательна фактически только `ConnectionStrings:DefaultConnection`; provider endpoints и ключи создаются через model API, а не через конфигурацию. Таймаут health check зафиксирован в коде. Swagger доступен только в Development.
+В [`appsettings.json`](../LLMGateway/appsettings.json) обязательна фактически только `ConnectionStrings:DefaultConnection`; provider endpoints и ключи создаются через model API, а не через конфигурацию. Настройки Codex находятся в отдельном `CodexHost` и в контейнер gateway не передаются. Таймаут health check зафиксирован в коде. Swagger доступен только в Development.
 
 ## Ошибки и важные нюансы
 
 - Лимиты локальны одному процессу, сбрасываются при рестарте и не дают глобального ограничения при нескольких репликах.
 - Rate-limit timestamp записывается до health check. Недоступный или упавший provider всё равно расходует запрос в скользящем окне; только concurrency slot освобождается в `finally`.
-- Health-check timeout классифицируется как `ProviderUnavailable`; `ProviderTimedOut` относится к отмене самого chat-вызова не клиентским cancellation token.
+- Health-check timeout классифицируется как `ProviderUnavailable`; ошибка chat-вызова обнаруживается после него и допускает failover.
 - ID правила вычисляется как текущий глобальный максимум в JSON-массивах плюс один. Параллельное создание правил не защищено транзакционной последовательностью и может породить одинаковые ID.
 - API управления каталогом и chat endpoint не защищены. Если ограничение доступа требуется, его нужно обеспечить внешней сетевой политикой; текущий compose публикует и nginx-маршрут, и прямой порт `5200` на host.
 - Необработанные ошибки превращаются глобальным handler в обезличенный `500`; отмена исходного HTTP-запроса пробрасывается из execution service.
