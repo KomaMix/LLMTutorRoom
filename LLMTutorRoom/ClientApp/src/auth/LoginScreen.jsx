@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   BookOpen,
   Check,
@@ -7,7 +7,7 @@ import {
   LockKeyhole,
   School
 } from "lucide-react";
-import { useLocation } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "./AuthContext.jsx";
 
 const loginRoles = [
@@ -26,6 +26,10 @@ const loginRoles = [
 ];
 
 function getInitialRole(locationState) {
+  if (locationState?.preferredRole === "student") {
+    return "student";
+  }
+
   const requestedPath = locationState?.from?.pathname;
   return typeof requestedPath === "string" && requestedPath.startsWith("/student")
     ? "student"
@@ -34,10 +38,18 @@ function getInitialRole(locationState) {
 
 export function LoginScreen() {
   const location = useLocation();
-  const { clearError, error, isSigningIn, login } = useAuth();
+  const {
+    cancelAuthentication,
+    clearError,
+    error,
+    isSigningIn,
+    login
+  } = useAuth();
   const [selectedRole, setSelectedRole] = useState(() => getInitialRole(location.state));
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+
+  useEffect(() => () => cancelAuthentication(), [cancelAuthentication]);
 
   function selectRole(role) {
     setSelectedRole(role);
@@ -146,6 +158,15 @@ export function LoginScreen() {
             {isSigningIn ? "Вход..." : "Войти"}
           </button>
         </form>
+
+        {selectedRole === "student" && (
+          <p className="auth-switch">
+            Нет аккаунта студента?
+            <Link to="/register" state={location.state} onClick={clearError}>
+              Зарегистрироваться
+            </Link>
+          </p>
+        )}
       </section>
     </main>
   );

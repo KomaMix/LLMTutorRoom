@@ -55,6 +55,10 @@ export function TestDetails({
   }
 
   const isDraft = selectedTest.status === "draft";
+  const selectedModel = models.find(model => model.key === selectedTest.llmModelKey);
+  const modelDisplayName = selectedModel?.displayName
+    || selectedTest.llmModelKey
+    || "не выбрана";
 
   return (
     <article className="detail-panel teacher-test-details">
@@ -88,7 +92,7 @@ export function TestDetails({
         <InfoTile label="Задания" value={createTaskCountSummary(selectedTest)} />
         <InfoTile label="Баллы" value={selectedTest.totalPoints} />
         <InfoTile label="Дедлайн" value={formatDate(selectedTest.deadline)} />
-        <InfoTile label="LLM" value={selectedTest.llmModelKey || "не выбрана"} />
+        <InfoTile label="LLM" value={modelDisplayName} />
       </div>
 
       {isDraft && (

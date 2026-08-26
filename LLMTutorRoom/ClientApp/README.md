@@ -32,7 +32,7 @@ npm run build
 src/
   main.jsx          запуск React и общие providers
   app/              маршрутизация, layout и загрузка overview
-  auth/             сессия и экран входа
+  auth/             сессия, вход и регистрация студента
   api/              HTTP-клиент и API отдельных микросервисов
   features/
     admin/           преподаватели и доступ к моделям
@@ -48,6 +48,7 @@ src/
 
 ## Маршруты
 
+- `/login`, `/register`;
 - `/admin/teachers`, `/admin/model-access`;
 - `/teacher/dashboard`, `/teacher/tests`, `/teacher/tests/:testId`, `/teacher/reviews`,
   `/teacher/models`;

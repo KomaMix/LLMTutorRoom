@@ -1,5 +1,17 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { getCurrentUser, login as loginRequest } from "../api/authApi.js";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState
+} from "react";
+import {
+  getCurrentUser,
+  login as loginRequest,
+  registerStudent as registerStudentRequest
+} from "../api/authApi.js";
 import {
   ApiError,
   clearAccessToken,
@@ -16,7 +28,9 @@ export function AuthProvider({ children }) {
   const [status, setStatus] = useState("checking");
   const [error, setError] = useState("");
   const [isSigningIn, setIsSigningIn] = useState(false);
+  const [isRegistering, setIsRegistering] = useState(false);
   const [restoreVersion, setRestoreVersion] = useState(0);
+  const authenticationControllerRef = useRef(null);
 
   const logout = useCallback((message = "") => {
     clearAccessToken();
@@ -26,6 +40,23 @@ export function AuthProvider({ children }) {
   }, []);
 
   const clearError = useCallback(() => setError(""), []);
+
+  const cancelAuthentication = useCallback(() => {
+    authenticationControllerRef.current?.abort();
+    authenticationControllerRef.current = null;
+    setIsSigningIn(false);
+    setIsRegistering(false);
+  }, []);
+
+  const applySession = useCallback(session => {
+    if (!session?.accessToken || !session?.user) {
+      throw new ApiError("AuthService вернул неполную сессию.");
+    }
+
+    setAccessToken(session.accessToken);
+    setCurrentUser(session.user);
+    setStatus("authenticated");
+  }, []);
 
   useEffect(() => subscribeToUnauthorized(() => {
     logout("Сессия истекла. Войдите снова.");
@@ -68,11 +99,14 @@ export function AuthProvider({ children }) {
   }, [restoreVersion]);
 
   const login = useCallback(async (credentials, expectedRole) => {
+    cancelAuthentication();
+    const controller = new AbortController();
+    authenticationControllerRef.current = controller;
     setIsSigningIn(true);
     setError("");
 
     try {
-      const session = await loginRequest(credentials);
+      const session = await loginRequest(credentials, { signal: controller.signal });
       if (!session?.accessToken || !session?.user) {
         throw new ApiError("AuthService вернул неполную сессию.");
       }
@@ -87,11 +121,13 @@ export function AuthProvider({ children }) {
         return false;
       }
 
-      setAccessToken(session.accessToken);
-      setCurrentUser(session.user);
-      setStatus("authenticated");
+      applySession(session);
       return true;
     } catch (requestError) {
+      if (requestError?.name === "AbortError") {
+        return false;
+      }
+
       if (requestError instanceof ApiError && requestError.status === 401) {
         setError("Неверный email или пароль.");
       } else {
@@ -99,20 +135,73 @@ export function AuthProvider({ children }) {
       }
       return false;
     } finally {
-      setIsSigningIn(false);
+      if (authenticationControllerRef.current === controller) {
+        authenticationControllerRef.current = null;
+        setIsSigningIn(false);
+      }
     }
-  }, []);
+  }, [applySession, cancelAuthentication]);
+
+  const registerStudent = useCallback(async account => {
+    cancelAuthentication();
+    const controller = new AbortController();
+    authenticationControllerRef.current = controller;
+    setIsRegistering(true);
+    setError("");
+
+    try {
+      const session = await registerStudentRequest(account, { signal: controller.signal });
+      if (normalizeRole(session?.user?.role) !== "student") {
+        throw new ApiError("AuthService вернул учетную запись без роли студента.");
+      }
+
+      applySession(session);
+      return true;
+    } catch (requestError) {
+      if (requestError?.name === "AbortError") {
+        return false;
+      }
+
+      if (requestError instanceof ApiError && requestError.status === 409) {
+        setError("Имя пользователя или email уже заняты.");
+      } else if (requestError instanceof ApiError && requestError.status === 400) {
+        setError("Проверьте имя пользователя, email и пароль.");
+      } else {
+        setError("Не удалось создать аккаунт. Проверьте доступность AuthService.");
+      }
+      return false;
+    } finally {
+      if (authenticationControllerRef.current === controller) {
+        authenticationControllerRef.current = null;
+        setIsRegistering(false);
+      }
+    }
+  }, [applySession, cancelAuthentication]);
 
   const value = useMemo(() => ({
     currentUser,
     status,
     error,
     isSigningIn,
+    isRegistering,
     login,
+    registerStudent,
+    cancelAuthentication,
     clearError,
     logout,
     retrySession: () => setRestoreVersion(current => current + 1)
-  }), [currentUser, status, error, isSigningIn, login, clearError, logout]);
+  }), [
+    currentUser,
+    status,
+    error,
+    isSigningIn,
+    isRegistering,
+    login,
+    registerStudent,
+    cancelAuthentication,
+    clearError,
+    logout
+  ]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

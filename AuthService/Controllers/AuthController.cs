@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using AuthService.DTOs;
+using AuthService.Interfaces;
 using AuthService.Mappers;
 using AuthService.Models;
 using Microsoft.AspNetCore.Authorization;
@@ -15,15 +16,19 @@ namespace AuthService.Controllers
     {
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly JwtTokenFactory _jwtTokenFactory;
+        private readonly IUserAccountService _userAccountService;
 
         public AuthController(
             UserManager<ApplicationUser> userManager,
-            JwtTokenFactory jwtTokenFactory)
+            JwtTokenFactory jwtTokenFactory,
+            IUserAccountService userAccountService)
         {
             _userManager = userManager;
             _jwtTokenFactory = jwtTokenFactory;
+            _userAccountService = userAccountService;
         }
 
+        [AllowAnonymous]
         [HttpPost("login")]
         public async Task<ActionResult<LoginResponse>> Login(
             [FromBody] LoginRequest request,
@@ -48,17 +53,32 @@ namespace AuthService.Controllers
                     message = "Неверный пароль."
                 });
 
-            var roles = (await _userManager.GetRolesAsync(user)).ToList();
+            return Ok(await CreateLoginResponseAsync(user));
+        }
 
-            return Ok(new LoginResponse
+        [AllowAnonymous]
+        [HttpPost("register")]
+        public async Task<ActionResult<LoginResponse>> RegisterStudent(
+            [FromBody] RegisterStudentRequest request,
+            CancellationToken cancellationToken)
+        {
+            var student = await _userAccountService.CreateStudentAsync(
+                request.UserName,
+                request.Email,
+                request.Password,
+                cancellationToken);
+
+            if (student is null)
             {
-                AccessToken = _jwtTokenFactory.CreateAccessToken(
-                    user.Id,
-                    user.UserName ?? string.Empty,
-                    user.Email ?? string.Empty,
-                    roles),
-                User = user.ToAuthUserResponse(roles)
-            });
+                return Conflict(new
+                {
+                    code = "account-exists",
+                    message = "Имя пользователя или email уже заняты."
+                });
+            }
+
+            var response = await CreateLoginResponseAsync(student);
+            return CreatedAtAction(nameof(Me), response);
         }
 
         [Authorize]
@@ -84,6 +104,21 @@ namespace AuthService.Controllers
                 Email = email,
                 Role = role
             });
+        }
+
+        private async Task<LoginResponse> CreateLoginResponseAsync(ApplicationUser user)
+        {
+            var roles = (await _userManager.GetRolesAsync(user)).ToList();
+
+            return new LoginResponse
+            {
+                AccessToken = _jwtTokenFactory.CreateAccessToken(
+                    user.Id,
+                    user.UserName ?? string.Empty,
+                    user.Email ?? string.Empty,
+                    roles),
+                User = user.ToAuthUserResponse(roles)
+            };
         }
 
     }

@@ -1,17 +1,23 @@
+using AuthService.Data;
 using AuthService.Interfaces;
 using AuthService.Models;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace AuthService.Services
 {
     public sealed class UserAccountService : IUserAccountService
     {
         private readonly UserManager<ApplicationUser> _userManager;
+        private readonly AuthDbContext _dbContext;
 
         public UserAccountService(
-            UserManager<ApplicationUser> userManager)
+            UserManager<ApplicationUser> userManager,
+            AuthDbContext dbContext)
         {
             _userManager = userManager;
+            _dbContext = dbContext;
         }
 
         public async Task<List<ApplicationUser>> GetTeachersAsync(
@@ -30,6 +36,35 @@ namespace AuthService.Services
             string password,
             CancellationToken cancellationToken)
         {
+            return await CreateUserAsync(
+                userName,
+                email,
+                password,
+                UserRole.Teacher,
+                cancellationToken);
+        }
+
+        public async Task<ApplicationUser?> CreateStudentAsync(
+            string userName,
+            string email,
+            string password,
+            CancellationToken cancellationToken)
+        {
+            return await CreateUserAsync(
+                userName,
+                email,
+                password,
+                UserRole.Student,
+                cancellationToken);
+        }
+
+        private async Task<ApplicationUser?> CreateUserAsync(
+            string userName,
+            string email,
+            string password,
+            UserRole role,
+            CancellationToken cancellationToken)
+        {
             cancellationToken.ThrowIfCancellationRequested();
 
             var trimmedUserName = userName.Trim();
@@ -40,23 +75,52 @@ namespace AuthService.Services
             if (userExists is not null)
                 return null;
 
-            var teacher = new ApplicationUser
+            await using var transaction = _dbContext.Database.IsRelational()
+                ? await _dbContext.Database.BeginTransactionAsync(cancellationToken)
+                : null;
+
+            var user = new ApplicationUser
             {
                 UserName = trimmedUserName,
                 Email = trimmedEmail
             };
 
-            var createResult = await _userManager.CreateAsync(teacher, password);
+            IdentityResult createResult;
+            try
+            {
+                createResult = await _userManager.CreateAsync(user, password);
+            }
+            catch (DbUpdateException exception) when (IsUniqueConstraintViolation(exception))
+            {
+                return null;
+            }
+
             if (IsDuplicateUser(createResult))
                 return null;
 
-            ThrowIfFailed(createResult, "Create teacher");
-            cancellationToken.ThrowIfCancellationRequested();
+            ThrowIfFailed(createResult, $"Create {role.ToString().ToLowerInvariant()}");
 
-            var addRoleResult = await _userManager.AddToRoleAsync(teacher, UserRole.Teacher.ToString());
-            ThrowIfFailed(addRoleResult, "Add teacher role");
+            var addRoleResult = await _userManager.AddToRoleAsync(user, role.ToString());
+            if (!addRoleResult.Succeeded)
+            {
+                if (transaction is null)
+                    await _userManager.DeleteAsync(user);
 
-            return teacher;
+                ThrowIfFailed(addRoleResult, $"Add {role.ToString().ToLowerInvariant()} role");
+            }
+
+            if (transaction is not null)
+                await transaction.CommitAsync(cancellationToken);
+
+            return user;
+        }
+
+        private static bool IsUniqueConstraintViolation(DbUpdateException exception)
+        {
+            return exception.InnerException is PostgresException
+            {
+                SqlState: PostgresErrorCodes.UniqueViolation
+            };
         }
 
         private static bool IsDuplicateUser(IdentityResult result)

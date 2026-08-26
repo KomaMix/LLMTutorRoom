@@ -1875,6 +1875,36 @@ textarea:disabled {
   line-height: 48px;
 }
 
+.login-form .field small {
+  color: #66787b;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.auth-switch {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: -6px 0 0;
+  color: #66787b;
+  font-size: 14px;
+}
+
+.auth-switch a {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #256f6d;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.auth-switch a:hover {
+  text-decoration: underline;
+}
+
 .form-error {
   margin: 0;
   padding: 10px 12px;

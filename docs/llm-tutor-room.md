@@ -73,6 +73,7 @@ ingress.
 
 Основные разделы:
 
+- `/login` и `/register`;
 - `/admin/teachers` и `/admin/model-access`;
 - `/teacher/dashboard`, `/teacher/tests`, `/teacher/reviews`, `/teacher/models`;
 - `/student/tests` и `/student/results`.

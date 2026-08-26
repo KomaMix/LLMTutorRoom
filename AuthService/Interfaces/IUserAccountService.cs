@@ -12,5 +12,11 @@ namespace AuthService.Interfaces
             string email,
             string password,
             CancellationToken cancellationToken);
+
+        Task<ApplicationUser?> CreateStudentAsync(
+            string userName,
+            string email,
+            string password,
+            CancellationToken cancellationToken);
     }
 }

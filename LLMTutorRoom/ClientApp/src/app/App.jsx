@@ -3,6 +3,7 @@ import { Loader2 } from "lucide-react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext.jsx";
 import { LoginScreen } from "../auth/LoginScreen.jsx";
+import { RegisterScreen } from "../auth/RegisterScreen.jsx";
 import { normalizeRole } from "../shared/lib/roles.js";
 import { ErrorState } from "../shared/ui/ErrorState.jsx";
 import { LoadingState } from "../shared/ui/LoadingState.jsx";
@@ -76,7 +77,8 @@ function AuthenticatedApp() {
   }
 
   const requestedLocation = getAuthorizedRequestedLocation(location.state, role);
-  if (location.pathname === "/login" && requestedLocation) {
+  if ((location.pathname === "/login" || location.pathname === "/register")
+    && requestedLocation) {
     return <Navigate to={requestedLocation} replace />;
   }
 
@@ -149,6 +151,7 @@ export function App() {
     return (
       <Routes>
         <Route path="/login" element={<LoginScreen />} />
+        <Route path="/register" element={<RegisterScreen />} />
         <Route
           path="*"
           element={<Navigate to="/login" replace state={{ from: requestedLocation }} />}
