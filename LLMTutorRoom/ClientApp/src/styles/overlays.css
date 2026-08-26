@@ -1,0 +1,86 @@
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(16, 25, 24, 0.48);
+}
+
+.confirm-dialog {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  gap: 14px;
+  width: min(460px, 100%);
+  padding: 18px;
+  border: 1px solid #dbe3e4;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 24px 64px rgba(23, 32, 38, 0.24);
+}
+
+.confirm-dialog-icon {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 8px;
+  color: #8a351e;
+  background: #fff4ee;
+}
+
+.confirm-dialog.primary .confirm-dialog-icon {
+  color: #205f5d;
+  background: #e9f4f2;
+}
+
+.confirm-dialog h2 {
+  margin: 0;
+  font-size: 19px;
+  line-height: 1.25;
+}
+
+.confirm-dialog p {
+  margin: 8px 0 0;
+  color: #526367;
+  line-height: 1.5;
+}
+
+.confirm-dialog-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.screen-state {
+  display: grid;
+  place-items: center;
+  gap: 12px;
+  min-height: 100vh;
+  color: #526367;
+  background: #eef2f4;
+  font-weight: 800;
+}
+
+.route-loading {
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 10px;
+  min-height: 320px;
+  color: #526367;
+  font-weight: 800;
+}
+
+.spin {
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

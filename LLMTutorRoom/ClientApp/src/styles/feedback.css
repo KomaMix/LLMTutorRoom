@@ -1,0 +1,136 @@
+
+.result-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.manual-review-panel {
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid #e0e7e7;
+}
+
+.manual-review-form {
+  display: grid;
+  gap: 12px;
+}
+
+.manual-review-context {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid #e0e7e7;
+  border-radius: 8px;
+  background: #f7faf9;
+}
+
+.manual-review-context div {
+  display: grid;
+  gap: 4px;
+}
+
+.manual-review-context span {
+  color: #66787b;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.manual-review-context p {
+  margin: 0;
+  color: #263638;
+  white-space: pre-wrap;
+}
+
+.manual-review-form .button {
+  justify-self: start;
+}
+
+.result-card ul {
+  margin: 12px 0 0;
+  padding-left: 18px;
+  color: #4f6164;
+}
+
+.result-card li + li {
+  margin-top: 4px;
+}
+
+.empty-state {
+  display: grid;
+  place-items: center;
+  min-height: 320px;
+  color: #66787b;
+  text-align: center;
+}
+
+.compact-empty-state {
+  min-height: 180px;
+  gap: 10px;
+  border: 1px dashed #cbd8d8;
+  border-radius: 8px;
+  background: #f7faf9;
+}
+
+.status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
+  padding: 0 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.status.published,
+.status.checked,
+.status.available,
+.status.admin,
+.status.teacher,
+.status.student,
+.status.submitted {
+  color: #116149;
+  background: #dff5e9;
+}
+
+.status.draft,
+.status.standby,
+.status.in-progress,
+.status.queued,
+.status.processing,
+.status.retry-scheduled {
+  color: #6c5410;
+  background: #f8edc7;
+}
+
+.status.hidden {
+  color: #526367;
+  background: #e8eeee;
+}
+
+.status.superseded {
+  color: #526367;
+  background: #e8eeee;
+}
+
+.status.manual-review,
+.status.expired {
+  color: #8a351e;
+  background: #fae2d5;
+}
+
+.status.failed {
+  color: #8a1e1e;
+  background: #f9d7d7;
+}
+
+.status.single-choice,
+.status.multiple-choice,
+.status.free-text {
+  color: #24515f;
+  background: #e1f0f4;
+}

@@ -12,16 +12,16 @@ import { useAuth } from "./AuthContext.jsx";
 
 const loginRoles = [
   {
-    value: "teacher",
-    label: "Преподаватель",
-    description: "Тесты, задания и проверки",
-    icon: BookOpen
-  },
-  {
     value: "student",
     label: "Студент",
     description: "Задания, результаты и прогресс",
     icon: GraduationCap
+  },
+  {
+    value: "teacher",
+    label: "Преподаватель",
+    description: "Тесты, задания и проверки",
+    icon: BookOpen
   }
 ];
 

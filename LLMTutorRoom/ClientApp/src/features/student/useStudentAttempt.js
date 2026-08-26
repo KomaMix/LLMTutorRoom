@@ -1,83 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { getAccessToken } from "../../api/httpClient.js";
 import {
-  saveAttemptAnswers,
-  startAttempt,
-  submitAttempt
-} from "../../api/classroomApi.js";
-import { ApiError, getAccessToken } from "../../api/httpClient.js";
-
-const autosaveDelayMilliseconds = 900;
-
-function copyAnswers(answers) {
-  if (!answers || typeof answers !== "object" || Array.isArray(answers)) {
-    return {};
-  }
-
-  return { ...answers };
-}
-
-function getRemainingSeconds(attempt, now) {
-  if (!attempt || attempt.status !== "in-progress") {
-    return 0;
-  }
-
-  const endsAt = new Date(attempt.endsAt).getTime();
-  if (!Number.isFinite(endsAt)) {
-    return 0;
-  }
-
-  return Math.max(0, Math.ceil((endsAt - now) / 1000));
-}
-
-function getConflictAttempt(error) {
-  if (!(error instanceof ApiError) || error.status !== 409) {
-    return null;
-  }
-
-  const attempt = error.data;
-  const hasAnswers = attempt?.answers
-    && typeof attempt.answers === "object"
-    && !Array.isArray(attempt.answers);
-
-  return typeof attempt?.id === "string"
-    && attempt.id.length > 0
-    && typeof attempt.testId === "string"
-    && typeof attempt.status === "string"
-    && typeof attempt.startedAt === "string"
-    && typeof attempt.endsAt === "string"
-    && hasAnswers
-    ? attempt
-    : null;
-}
-
-function canAttemptAcceptAnswers(attempt, blockedAttemptIds) {
-  return Boolean(
-    attempt
-    && attempt.status === "in-progress"
-    && !blockedAttemptIds.has(attempt.id)
-  );
-}
-
-function isAttemptEditable(attempt, blockedAttemptIds) {
-  if (!canAttemptAcceptAnswers(attempt, blockedAttemptIds)) {
-    return false;
-  }
-
-  const endsAt = new Date(attempt.endsAt).getTime();
-  return Number.isFinite(endsAt) && endsAt > Date.now();
-}
-
-function createFinalSaveOptions(accessToken) {
-  const headers = accessToken
-    ? { Authorization: `Bearer ${accessToken}` }
-    : {};
-
-  return {
-    auth: false,
-    headers,
-    keepalive: true
-  };
-}
+  copyAnswers,
+  getRemainingSeconds
+} from "./attemptLifecycleUtils.js";
+import { useAttemptAutosave } from "./useAttemptAutosave.js";
+import { useAttemptCommands } from "./useAttemptCommands.js";
+import { useAttemptNavigation } from "./useAttemptNavigation.js";
+import { useAttemptPersistence } from "./useAttemptPersistence.js";
 
 export function useStudentAttempt({
   selectedTest,
@@ -175,156 +105,29 @@ export function useStudentAttempt({
     }
   }, []);
 
-  const enqueueAttemptMutation = useCallback((queuedAttemptId, work) => {
-    if (queuedAttemptId == null) {
-      return Promise.reject(new Error("Attempt is required for a student mutation."));
-    }
-
-    const queues = attemptQueuesRef.current;
-    const previous = queues.get(queuedAttemptId) ?? Promise.resolve();
-    const operation = previous
-      .catch(() => undefined)
-      .then(work);
-    const tail = operation.catch(() => undefined);
-    queues.set(queuedAttemptId, tail);
-    tail.then(() => {
-      if (queues.get(queuedAttemptId) === tail) {
-        queues.delete(queuedAttemptId);
-      }
-    });
-
-    return operation;
-  }, []);
-
-  const applyConflict = useCallback((
-    operationContext,
-    attempt,
-    conflictMessage,
-    shouldUpdateOverview = true
-  ) => {
-    const conflictedAttemptId = attempt?.id ?? operationContext.attemptId;
-    if (conflictedAttemptId != null) {
-      blockedAttemptIdsRef.current.add(conflictedAttemptId);
-    }
-
-    if (attempt && shouldUpdateOverview) {
-      callbacksRef.current.updateAttempt(attempt);
-    }
-
-    if (!isCurrentContext(operationContext)) {
-      return;
-    }
-
-    clearAutosaveTimer();
-    const authoritativeAnswers = copyAnswers(attempt?.answers);
-    answersRef.current = authoritativeAnswers;
-    savedRevisionRef.current = revisionRef.current;
-    setAnswersState({
-      generation: operationContext.generation,
-      value: authoritativeAnswers
-    });
-    setDirty(false);
-    setMessageState({
-      generation: operationContext.generation,
-      value: conflictMessage
-    });
-  }, [clearAutosaveTimer, isCurrentContext, setDirty]);
-
-  const persistAnswers = useCallback(async ({
-    operationContext,
-    answers,
-    revision,
-    successMessage,
-    conflictMessage,
-    requestOptions,
-    updateOverviewAfterUnmount = true
-  }) => {
-    if (blockedAttemptIdsRef.current.has(operationContext.attemptId)) {
-      return { conflict: true, attempt: null };
-    }
-
-    try {
-      const attempt = await saveAttemptAnswers(
-        operationContext.attemptId,
-        answers,
-        requestOptions);
-
-      if (updateOverviewAfterUnmount || mountedRef.current) {
-        callbacksRef.current.updateAttempt(attempt);
-      }
-
-      if (isCurrentContext(operationContext)) {
-        savedRevisionRef.current = Math.max(savedRevisionRef.current, revision);
-        const stillHasUnsavedAnswers = revisionRef.current > savedRevisionRef.current;
-        setDirty(stillHasUnsavedAnswers);
-
-        if (successMessage && !stillHasUnsavedAnswers) {
-          setMessageState({
-            generation: operationContext.generation,
-            value: successMessage
-          });
-        }
-      }
-
-      return { conflict: false, attempt };
-    } catch (error) {
-      const conflictAttempt = getConflictAttempt(error);
-      if (conflictAttempt) {
-        applyConflict(
-          operationContext,
-          conflictAttempt,
-          conflictMessage,
-          updateOverviewAfterUnmount || mountedRef.current);
-        return { conflict: true, attempt: conflictAttempt };
-      }
-
-      throw error;
-    }
-  }, [applyConflict, isCurrentContext, setDirty]);
-
-  const scheduleFinalSave = useCallback(() => {
-    const operationContext = contextRef.current;
-    if (!hasUnsavedAnswersRef.current
-        || !canAttemptAcceptAnswers(
-          operationContext.selectedAttempt,
-          blockedAttemptIdsRef.current)) {
-      return Promise.resolve(true);
-    }
-
-    const revision = revisionRef.current;
-    const existingFinalSave = finalSaveRevisionsRef.current
-      .get(operationContext.attemptId);
-    if (existingFinalSave?.generation === operationContext.generation
-        && existingFinalSave.revision >= revision) {
-      return existingFinalSave.promise;
-    }
-
-    const answers = copyAnswers(answersRef.current);
-    const requestOptions = createFinalSaveOptions(accessTokenSnapshotRef.current);
-    const finalSave = {
-      generation: operationContext.generation,
-      revision,
-      promise: null
-    };
-    finalSave.promise = enqueueAttemptMutation(operationContext.attemptId, () => persistAnswers({
-      operationContext,
-      answers,
-      revision,
-      successMessage: "",
-      conflictMessage: "Время выполнения истекло. Ответы больше нельзя изменить.",
-      requestOptions,
-      updateOverviewAfterUnmount: false
-    })).then(() => true, () => false);
-    finalSaveRevisionsRef.current.set(operationContext.attemptId, finalSave);
-    finalSave.promise.then(saved => {
-      if (!saved
-          && finalSaveRevisionsRef.current.get(operationContext.attemptId) === finalSave) {
-        finalSaveRevisionsRef.current.delete(operationContext.attemptId);
-      }
-    });
-
-    return finalSave.promise;
-  }, [enqueueAttemptMutation, persistAnswers]);
+  const {
+    applyConflict,
+    enqueueAttemptMutation,
+    persistAnswers,
+    scheduleFinalSave
+  } = useAttemptPersistence({
+    accessTokenSnapshotRef,
+    answersRef,
+    attemptQueuesRef,
+    blockedAttemptIdsRef,
+    callbacksRef,
+    clearAutosaveTimer,
+    contextRef,
+    finalSaveRevisionsRef,
+    hasUnsavedAnswersRef,
+    isCurrentContext,
+    mountedRef,
+    revisionRef,
+    savedRevisionRef,
+    setAnswersState,
+    setDirty,
+    setMessageState
+  });
 
   useEffect(() => {
     const operationContext = contextRef.current;
@@ -412,403 +215,72 @@ export function useStudentAttempt({
     return () => window.clearInterval(timer);
   }, [selectedAttempt]);
 
-  const onAnswerChange = useCallback((taskId, value) => {
-    const operationContext = contextRef.current;
-    if (!isAttemptEditable(
-      operationContext.selectedAttempt,
-      blockedAttemptIdsRef.current)
-        || submitOperationRef.current?.generation === operationContext.generation
-        || navigationPreparationRef.current?.generation === operationContext.generation) {
-      return;
-    }
-
-    const nextAnswers = {
-      ...answersRef.current,
-      [taskId]: value
-    };
-    revisionRef.current += 1;
-    answersRef.current = nextAnswers;
-    setAnswersState({
-      generation: operationContext.generation,
-      value: nextAnswers
-    });
-    setDirty(true);
-    setMessageState({ generation: operationContext.generation, value: "" });
-  }, [setDirty]);
-
-  const onStartAttempt = useCallback(() => {
-    const operationContext = contextRef.current;
-    const existingOperation = startOperationRef.current;
-    if (existingOperation?.generation === operationContext.generation) {
-      return existingOperation.promise;
-    }
-
-    const deadline = new Date(operationContext.selectedTest?.deadline).getTime();
-    if (!operationContext.selectedTest
-        || (Number.isFinite(deadline) && deadline <= Date.now())) {
-      if (isCurrentContext(operationContext)) {
-        setMessageState({
-          generation: operationContext.generation,
-          value: "Срок выполнения теста истёк."
-        });
-      }
-      return Promise.resolve(false);
-    }
-
-    const operation = {
-      generation: operationContext.generation,
-      promise: null
-    };
-    startOperationRef.current = operation;
-    setIsStartingAttempt(true);
-    setMessageState({ generation: operationContext.generation, value: "" });
-
-    operation.promise = (async () => {
-      try {
-        const expectedVersionNumber = operationContext.selectedTest?.versionNumber;
-        const attempt = await startAttempt(
-          operationContext.testId,
-          expectedVersionNumber
-        );
-        if (Number.isInteger(expectedVersionNumber)
-            && attempt.testRevision !== expectedVersionNumber) {
-          const refreshed = await callbacksRef.current.onAttemptVersionConflict?.();
-          if (!refreshed && isCurrentContext(operationContext)) {
-            setMessageState({
-              generation: operationContext.generation,
-              value: "Версия теста изменилась. Обновите страницу перед продолжением."
-            });
-          }
-          return Boolean(refreshed);
-        }
-
-        callbacksRef.current.updateAttempt(attempt);
-        return true;
-      } catch (error) {
-        if (error instanceof ApiError && error.status === 409) {
-          await callbacksRef.current.onAttemptVersionConflict?.();
-          if (isCurrentContext(operationContext)) {
-            setMessageState({
-              generation: operationContext.generation,
-              value: "Опубликована новая версия теста. Каталог обновлён — начните ещё раз."
-            });
-          }
-          return false;
-        }
-
-        if (isCurrentContext(operationContext)) {
-          setMessageState({
-            generation: operationContext.generation,
-            value: "Не удалось начать тест."
-          });
-        }
-        return false;
-      } finally {
-        if (startOperationRef.current === operation) {
-          startOperationRef.current = null;
-        }
-        if (isCurrentContext(operationContext)) {
-          setIsStartingAttempt(false);
-        }
-      }
-    })();
-
-    return operation.promise;
-  }, [isCurrentContext]);
-
-  const onSaveAnswers = useCallback(() => {
-    const operationContext = contextRef.current;
-    const existingOperation = saveOperationRef.current;
-    if (existingOperation?.generation === operationContext.generation) {
-      return existingOperation.promise;
-    }
-
-    const submission = submitOperationRef.current;
-    if (submission?.generation === operationContext.generation) {
-      return submission.promise;
-    }
-
-    if (!canAttemptAcceptAnswers(
-      operationContext.selectedAttempt,
-      blockedAttemptIdsRef.current)) {
-      return Promise.resolve(!hasUnsavedAnswersRef.current);
-    }
-
-    clearAutosaveTimer();
-    const revision = revisionRef.current;
-    const answers = copyAnswers(answersRef.current);
-    const operation = {
-      generation: operationContext.generation,
-      promise: null
-    };
-    saveOperationRef.current = operation;
-    setIsSavingAttempt(true);
-    setMessageState({ generation: operationContext.generation, value: "" });
-
-    operation.promise = enqueueAttemptMutation(
-      operationContext.attemptId,
-      () => persistAnswers({
-        operationContext,
-        answers,
-        revision,
-        successMessage: "Ответы сохранены.",
-        conflictMessage: "Время выполнения истекло. Ответы больше нельзя изменить."
-      }))
-      .then(() => true)
-      .catch(() => {
-        if (isCurrentContext(operationContext)) {
-          setMessageState({
-            generation: operationContext.generation,
-            value: "Не удалось сохранить ответы."
-          });
-        }
-        return false;
-      })
-      .finally(() => {
-        if (saveOperationRef.current === operation) {
-          saveOperationRef.current = null;
-        }
-        if (isCurrentContext(operationContext)) {
-          setIsSavingAttempt(false);
-        }
-      });
-
-    return operation.promise;
-  }, [clearAutosaveTimer, enqueueAttemptMutation, isCurrentContext, persistAnswers]);
-
-  const onSubmitAttempt = useCallback(() => {
-    const operationContext = contextRef.current;
-    const existingOperation = submitOperationRef.current;
-    if (existingOperation?.generation === operationContext.generation) {
-      return existingOperation.promise;
-    }
-
-    if (!isAttemptEditable(
-      operationContext.selectedAttempt,
-      blockedAttemptIdsRef.current)) {
-      return Promise.resolve(false);
-    }
-
-    clearAutosaveTimer();
-    const revision = revisionRef.current;
-    const answers = copyAnswers(answersRef.current);
-    const operation = {
-      generation: operationContext.generation,
-      promise: null
-    };
-    submitOperationRef.current = operation;
-    setIsSubmittingAttempt(true);
-    setMessageState({ generation: operationContext.generation, value: "" });
-
-    operation.promise = (async () => {
-      let submittedAttempt = null;
-
-      try {
-        const result = await enqueueAttemptMutation(operationContext.attemptId, async () => {
-          const saveResult = await persistAnswers({
-            operationContext,
-            answers,
-            revision,
-            successMessage: "",
-            conflictMessage: "Время выполнения истекло. Завершить тест уже нельзя."
-          });
-
-          if (saveResult.conflict) {
-            return null;
-          }
-
-          try {
-            const attempt = await submitAttempt(operationContext.attemptId);
-            callbacksRef.current.updateAttempt(attempt);
-            return attempt;
-          } catch (error) {
-            const conflictAttempt = getConflictAttempt(error);
-            if (!conflictAttempt) {
-              throw error;
-            }
-
-            applyConflict(
-              operationContext,
-              conflictAttempt,
-              "Время выполнения истекло. Ответы больше нельзя изменить.");
-            return null;
-          }
-        });
-
-        submittedAttempt = result;
-        if (submittedAttempt && isCurrentContext(operationContext)) {
-          const authoritativeAnswers = copyAnswers(submittedAttempt.answers);
-          answersRef.current = authoritativeAnswers;
-          savedRevisionRef.current = revisionRef.current;
-          setAnswersState({
-            generation: operationContext.generation,
-            value: authoritativeAnswers
-          });
-          setDirty(false);
-          setMessageState({
-            generation: operationContext.generation,
-            value: ""
-          });
-        }
-      } catch (error) {
-        if (isCurrentContext(operationContext)) {
-          setMessageState({
-            generation: operationContext.generation,
-            value: "Не удалось завершить тест."
-          });
-        }
-      } finally {
-        if (submitOperationRef.current === operation) {
-          submitOperationRef.current = null;
-        }
-        if (isCurrentContext(operationContext)) {
-          setIsSubmittingAttempt(false);
-        }
-      }
-
-      if (!submittedAttempt) {
-        return false;
-      }
-
-      await callbacksRef.current.onSubmitted?.(submittedAttempt);
-      return true;
-    })();
-
-    return operation.promise;
-  }, [
+  const {
+    onAnswerChange,
+    onSaveAnswers,
+    onStartAttempt,
+    onSubmitAttempt
+  } = useAttemptCommands({
+    answersRef,
     applyConflict,
+    blockedAttemptIdsRef,
+    callbacksRef,
     clearAutosaveTimer,
+    contextRef,
     enqueueAttemptMutation,
+    hasUnsavedAnswersRef,
     isCurrentContext,
+    navigationPreparationRef,
     persistAnswers,
-    setDirty
-  ]);
+    revisionRef,
+    savedRevisionRef,
+    saveOperationRef,
+    setAnswersState,
+    setDirty,
+    setIsSavingAttempt,
+    setIsStartingAttempt,
+    setIsSubmittingAttempt,
+    setMessageState,
+    startOperationRef,
+    submitOperationRef
+  });
 
-  const prepareForNavigation = useCallback(() => {
-    const existingPreparation = navigationPreparationRef.current;
-    if (existingPreparation) {
-      return existingPreparation.promise;
-    }
-
-    const operation = {
-      generation: contextRef.current.generation,
-      promise: null
-    };
-    navigationPreparationRef.current = operation;
-    operation.promise = (async () => {
-      clearAutosaveTimer();
-
-      const submission = submitOperationRef.current;
-      if (submission) {
-        const submitted = await submission.promise;
-        if (!submitted) {
-          return false;
-        }
-      }
-
-      const start = startOperationRef.current;
-      if (start) {
-        await start.promise;
-      }
-
-      const save = saveOperationRef.current;
-      if (save) {
-        const saved = await save.promise;
-        if (!saved && hasUnsavedAnswersRef.current) {
-          return false;
-        }
-      }
-
-      if (!hasUnsavedAnswersRef.current) {
-        return true;
-      }
-
-      const saved = await onSaveAnswers();
-      return saved || !hasUnsavedAnswersRef.current;
-    })().finally(() => {
-      if (navigationPreparationRef.current === operation) {
-        navigationPreparationRef.current = null;
-      }
-    });
-
-    return operation.promise;
-  }, [clearAutosaveTimer, onSaveAnswers]);
-
-  const shouldBlockNavigation = useCallback(() => {
-    const currentGeneration = contextRef.current.generation;
-    return hasUnsavedAnswersRef.current
-      || startOperationRef.current?.generation === currentGeneration
-      || saveOperationRef.current?.generation === currentGeneration
-      || submitOperationRef.current?.generation === currentGeneration
-      || navigationPreparationRef.current?.generation === currentGeneration;
-  }, []);
-
-  useEffect(() => {
-    clearAutosaveTimer();
-    const operationContext = contextRef.current;
-
-    if (!hasUnsavedAnswers
-        || operationContext.generation !== context.generation
-        || !isAttemptEditable(
-          operationContext.selectedAttempt,
-          blockedAttemptIdsRef.current)
-        || saveOperationRef.current?.generation === operationContext.generation
-        || submitOperationRef.current?.generation === operationContext.generation
-        || navigationPreparationRef.current?.generation === operationContext.generation) {
-      return;
-    }
-
-    const revision = revisionRef.current;
-    const answers = copyAnswers(answersRef.current);
-    autosaveTimerRef.current = window.setTimeout(() => {
-      autosaveTimerRef.current = null;
-      enqueueAttemptMutation(operationContext.attemptId, () => persistAnswers({
-        operationContext,
-        answers,
-        revision,
-        successMessage: "",
-        conflictMessage: "Время выполнения истекло. Ответы больше нельзя изменить."
-      })).catch(() => {
-        // Dirty остается true: следующая правка, ручное сохранение или
-        // navigation guard повторят запись последней ревизии.
-      });
-    }, autosaveDelayMilliseconds);
-
-    return clearAutosaveTimer;
-  }, [
-    answersState,
+  const {
+    prepareForNavigation,
+    shouldBlockNavigation
+  } = useAttemptNavigation({
     clearAutosaveTimer,
-    context.generation,
+    contextRef,
+    hasUnsavedAnswersRef,
+    navigationPreparationRef,
+    onSaveAnswers,
+    saveOperationRef,
+    startOperationRef,
+    submitOperationRef
+  });
+
+  useAttemptAutosave({
+    answersRef,
+    answersState,
+    autosaveTimerRef,
+    blockedAttemptIdsRef,
+    clearAutosaveTimer,
+    context,
+    contextRef,
     enqueueAttemptMutation,
     hasUnsavedAnswers,
+    hasUnsavedAnswersRef,
     isSavingAttempt,
     isSubmittingAttempt,
-    persistAnswers
-  ]);
-
-  useEffect(() => {
-    mountedRef.current = true;
-
-    function handleBeforeUnload(event) {
-      if (!shouldBlockNavigation()) {
-        return;
-      }
-
-      if (hasUnsavedAnswersRef.current) {
-        scheduleFinalSave();
-      }
-      event.preventDefault();
-      event.returnValue = "";
-    }
-
-    window.addEventListener("beforeunload", handleBeforeUnload);
-    return () => {
-      window.removeEventListener("beforeunload", handleBeforeUnload);
-      clearAutosaveTimer();
-      mountedRef.current = false;
-      scheduleFinalSave();
-    };
-  }, [clearAutosaveTimer, scheduleFinalSave, shouldBlockNavigation]);
+    mountedRef,
+    navigationPreparationRef,
+    persistAnswers,
+    revisionRef,
+    saveOperationRef,
+    scheduleFinalSave,
+    shouldBlockNavigation,
+    submitOperationRef
+  });
 
   const answers = answersState.generation === context.generation
     ? answersState.value
