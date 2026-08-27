@@ -4,6 +4,25 @@ function requireArray(value, fieldName) {
   }
 }
 
+function validateReviewTaskResult(taskResult, fieldName) {
+  requireArray(taskResult.findings, `${fieldName}.findings`);
+  if (taskResult.answerOptions == null) {
+    return;
+  }
+
+  requireArray(taskResult.answerOptions, `${fieldName}.answerOptions`);
+  taskResult.answerOptions.forEach((option, optionIndex) => {
+    if (!option || typeof option !== "object") {
+      throw new Error(`${fieldName}.answerOptions[${optionIndex}] must be an object.`);
+    }
+
+    if (typeof option.id !== "string" || typeof option.text !== "string") {
+      throw new Error(
+        `${fieldName}.answerOptions[${optionIndex}] must contain string id and text.`);
+    }
+  });
+}
+
 export function parseOverview(data) {
   if (!data || typeof data !== "object") {
     throw new Error("Overview response must be an object.");
@@ -60,7 +79,9 @@ export function parseOverview(data) {
     requireArray(review.taskResults, `reviews[${reviewIndex}].taskResults`);
 
     review.taskResults.forEach((taskResult, taskResultIndex) => {
-      requireArray(taskResult.findings, `reviews[${reviewIndex}].taskResults[${taskResultIndex}].findings`);
+      validateReviewTaskResult(
+        taskResult,
+        `reviews[${reviewIndex}].taskResults[${taskResultIndex}]`);
     });
   });
 
@@ -110,9 +131,9 @@ export function parseReviewHistoryPage(data) {
   data.reviews.forEach((review, reviewIndex) => {
     requireArray(review.taskResults, `reviews[${reviewIndex}].taskResults`);
     review.taskResults.forEach((taskResult, taskResultIndex) => {
-      requireArray(
-        taskResult.findings,
-        `reviews[${reviewIndex}].taskResults[${taskResultIndex}].findings`);
+      validateReviewTaskResult(
+        taskResult,
+        `reviews[${reviewIndex}].taskResults[${taskResultIndex}]`);
     });
   });
 

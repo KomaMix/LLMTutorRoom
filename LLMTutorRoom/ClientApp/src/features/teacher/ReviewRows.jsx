@@ -57,16 +57,19 @@ export function ReviewRows({
               </strong>
             </div>
 
-            {!compact && reviewItem.status === "manual-review" && (
+            {!compact && (
               <button
                 type="button"
                 className="button secondary teacher-review-open"
                 aria-expanded={isSelected}
-                title="Открыть проверку"
+                aria-controls={`teacher-review-details-${reviewItem.id}`}
+                title={reviewItem.status === "manual-review"
+                  ? "Открыть ручную проверку"
+                  : "Открыть подробности проверки"}
                 onClick={() => onSelectReview?.(reviewItem.id)}
               >
                 <Eye size={16} aria-hidden="true" />
-                Проверить
+                {reviewItem.status === "manual-review" ? "Проверить" : "Подробнее"}
               </button>
             )}
           </article>

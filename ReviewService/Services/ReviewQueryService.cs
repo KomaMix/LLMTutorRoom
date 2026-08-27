@@ -15,6 +15,10 @@ public sealed class ReviewQueryService(
     ReviewDbContext dbContext,
     IReviewScoringService scoringService) : IReviewQueryService
 {
+    private const string LegacyManualFeedbackPlaceholder = "Ожидает ручной проверки.";
+    private const string LegacyManualFindingPlaceholder =
+        "Задание ожидает ручной проверки преподавателем.";
+
     public Task<ReviewPageQueryResult> GetTeacherReviewsAsync(
         string teacherUserId,
         bool includeNonTerminal,
@@ -242,12 +246,33 @@ public sealed class ReviewQueryService(
 
     private static ReviewTaskResponse ToResponse(ReviewTask task)
     {
+        var answerOptions = DeserializeAnswerOptions(task.AnswerOptionsJson);
+        var feedback = task.Feedback;
+        var findings = DeserializeFindings(task.FindingsJson);
+        if (task.CheckMode == ReviewCheckMode.Manual
+            && task.Status == ReviewTaskStatus.Succeeded)
+        {
+            if (string.Equals(
+                    feedback.Trim(),
+                    LegacyManualFeedbackPlaceholder,
+                    StringComparison.Ordinal))
+            {
+                feedback = string.Empty;
+            }
+
+            findings.RemoveAll(finding => string.Equals(
+                finding.Trim(),
+                LegacyManualFindingPlaceholder,
+                StringComparison.Ordinal));
+        }
+
         return new ReviewTaskResponse(
             task.Id,
             task.TaskId,
             task.TaskTitle,
             task.TaskPrompt,
             task.StudentAnswer,
+            answerOptions,
             task.CheckMode,
             task.Status,
             task.Attempts,
@@ -256,8 +281,19 @@ public sealed class ReviewQueryService(
             task.LastError,
             task.Score,
             task.MaxScore,
-            task.Feedback,
-            DeserializeFindings(task.FindingsJson));
+            feedback,
+            findings);
+    }
+
+    private static List<ReviewAnswerOptionResponse> DeserializeAnswerOptions(string json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+            return [];
+
+        return JsonSerializer.Deserialize<List<ReviewAnswerOptionResponse>>(
+                json,
+                JsonHelper.Options)
+            ?? [];
     }
 
     private static List<string> DeserializeFindings(string json)

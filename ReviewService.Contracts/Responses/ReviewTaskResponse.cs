@@ -8,6 +8,7 @@ public sealed record ReviewTaskResponse(
     string TaskTitle,
     string TaskPrompt,
     string StudentAnswer,
+    List<ReviewAnswerOptionResponse> AnswerOptions,
     ReviewCheckMode CheckMode,
     ReviewTaskStatus Status,
     int Attempts,

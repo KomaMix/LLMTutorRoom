@@ -6,6 +6,7 @@ import { getReviewHistory } from "../../api/classroomApi.js";
 import { parseReviewHistoryPage } from "../../shared/lib/overview.js";
 import { isTerminalReview, mergeReviews } from "../../shared/lib/reviews.js";
 import { ManualReviewPanel } from "./ManualReviewPanel.jsx";
+import { ReviewDetailsPanel } from "./ReviewDetailsPanel.jsx";
 import { ReviewRows } from "./ReviewRows.jsx";
 
 const unsavedManualReviewPrompt = "Есть несохранённая ручная оценка. Покинуть страницу и потерять изменения?";
@@ -367,6 +368,7 @@ export function ReviewQueue({ reviews, tests, terminalReviewsNextCursor, onRevie
         </button>
       )}
       {historyError && <p className="form-error" role="alert">{historyError}</p>}
+      {selectedReview && <ReviewDetailsPanel review={selectedReview} />}
       {selectedReview?.status === "manual-review" && (
         <ManualReviewPanel
           key={`${selectedReview.id}:${manualFormGeneration}`}

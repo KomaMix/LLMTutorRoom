@@ -1,18 +1,31 @@
 import { useEffect, useRef, useState } from "react";
 import { Loader2, Save } from "lucide-react";
 import { saveManualReview } from "../../api/reviewApi.js";
+import { formatReviewAnswer } from "../../shared/lib/answers.js";
 import { formatPoints } from "../../shared/lib/points.js";
+
+const manualReviewPlaceholders = new Set([
+  "Ожидает ручной проверки.",
+  "Задание ожидает ручной проверки преподавателем."
+]);
+
+function isManualReviewPlaceholder(value) {
+  return typeof value === "string" && manualReviewPlaceholders.has(value.trim());
+}
 
 function createFormSnapshot(result) {
   return {
     score: String(result.score ?? 0),
-    feedback: result.feedback ?? "",
-    findings: (result.findings ?? []).join("\n")
+    feedback: isManualReviewPlaceholder(result.feedback) ? "" : result.feedback ?? "",
+    findings: (result.findings ?? [])
+      .filter(finding => !isManualReviewPlaceholder(finding))
+      .join("\n")
   };
 }
 
 export function ManualTaskReviewForm({ reviewId, result, onDirtyChange, onSaved }) {
   const initialSnapshot = createFormSnapshot(result);
+  const studentAnswer = formatReviewAnswer(result.studentAnswer, result.answerOptions);
   const baselineRef = useRef(initialSnapshot);
   const dirtyKey = `${reviewId}:${result.taskId}`;
   const [score, setScore] = useState(initialSnapshot.score);
@@ -82,7 +95,7 @@ export function ManualTaskReviewForm({ reviewId, result, onDirtyChange, onSaved 
         </div>
         <div>
           <span>Ответ ученика</span>
-          <p>{result.studentAnswer?.trim() || "Ответ не указан."}</p>
+          <p>{studentAnswer || "Ответ не указан."}</p>
         </div>
       </div>
       <div className="form-row">

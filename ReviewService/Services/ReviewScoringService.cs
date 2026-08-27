@@ -216,8 +216,8 @@ public sealed class ReviewScoringService : IReviewScoringService
             answer,
             ReviewTaskStatus.ManualReview,
             0,
-            "Ожидает ручной проверки.",
-            ["Задание ожидает ручной проверки преподавателем."],
+            string.Empty,
+            [],
             completedAt: null);
     }
 

@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { useLocation } from "react-router-dom";
 import { getReviewHistory } from "../../api/classroomApi.js";
+import { formatReviewAnswer } from "../../shared/lib/answers.js";
 import { formatDate } from "../../shared/lib/dates.js";
 import { parseReviewHistoryPage } from "../../shared/lib/overview.js";
 import { isTerminalReview, mergeReviews } from "../../shared/lib/reviews.js";
@@ -105,6 +106,9 @@ function ReviewTaskDetails({ result, taskIndex }) {
       .filter(finding => typeof finding === "string")
       .map(finding => finding.trim())
       .filter(Boolean))];
+  const studentAnswer = formatReviewAnswer(
+    result.studentAnswer,
+    result.answerOptions);
 
   return (
     <section className="student-result-task">
@@ -121,7 +125,7 @@ function ReviewTaskDetails({ result, taskIndex }) {
 
       <div className="student-result-copy-block">
         <span>Ваш ответ</span>
-        <p>{result.studentAnswer || "Ответ не указан."}</p>
+        <p>{studentAnswer || "Ответ не указан."}</p>
       </div>
 
       {result.feedback && (
