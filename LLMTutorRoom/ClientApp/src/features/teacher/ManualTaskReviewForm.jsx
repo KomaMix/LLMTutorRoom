@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Loader2, Save } from "lucide-react";
 import { saveManualReview } from "../../api/reviewApi.js";
+import { formatPoints } from "../../shared/lib/points.js";
 
 function createFormSnapshot(result) {
   return {
@@ -72,7 +73,7 @@ export function ManualTaskReviewForm({ reviewId, result, onDirtyChange, onSaved 
     <form className="result-card manual-review-form teacher-manual-review-form" onSubmit={handleSubmit} aria-busy={isSaving}>
       <header className="teacher-manual-task-header">
         <strong>{result.taskTitle}</strong>
-        <span>{result.maxScore} баллов</span>
+        <span>{formatPoints(result.maxScore)}</span>
       </header>
       <div className="manual-review-context">
         <div>

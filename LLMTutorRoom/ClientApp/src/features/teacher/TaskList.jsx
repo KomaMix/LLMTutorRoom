@@ -11,6 +11,7 @@ import {
   UserRoundCheck,
   WandSparkles
 } from "lucide-react";
+import { formatPoints } from "../../shared/lib/points.js";
 import { StatusBadge } from "../../shared/ui/StatusBadge.jsx";
 
 export function TaskList({
@@ -70,7 +71,7 @@ export function TaskList({
                 <span className="student-task-number teacher-task-number">{index + 1}</span>
                 <div>
                   <strong>{task.title}</strong>
-                  <span>{task.maxPoints} баллов</span>
+                  <span>{formatPoints(task.maxPoints)}</span>
                 </div>
               </div>
               {!readOnly && (

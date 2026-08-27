@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   AlertTriangle,
   CheckCircle2,
+  ChevronDown,
   Clock3,
   Hourglass,
   Loader2,
@@ -25,6 +26,37 @@ function getEntryTime(entry) {
     ?? entry.attempt?.startedAt;
   const timestamp = new Date(value).getTime();
   return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function getEntryId(entry) {
+  return entry.attempt
+    ? `attempt-${entry.attempt.id}`
+    : `review-${entry.review.id}`;
+}
+
+function getEntryTitle(entry) {
+  return entry.test?.title ?? entry.review?.testTitle ?? "Тест";
+}
+
+function getEntryDate(entry) {
+  return entry.review?.submittedAt
+    ?? entry.attempt?.submittedAt
+    ?? entry.attempt?.endsAt
+    ?? entry.attempt?.startedAt;
+}
+
+function getEntryStatus(entry, currentTime) {
+  if (entry.review?.status) {
+    return entry.review.status;
+  }
+
+  if (!entry.attempt) {
+    return null;
+  }
+
+  const remainingSeconds = Math.ceil(
+    (new Date(entry.attempt.endsAt).getTime() - currentTime) / 1000);
+  return getEffectiveAttemptStatus(entry.attempt, remainingSeconds);
 }
 
 function ReviewProgress({ attemptStatus, isReviewDeferred, review }) {
@@ -197,6 +229,8 @@ function StudentResultCard({ attempt, currentTime, isReviewDeferred, review, tes
 
 export function StudentResults({ attempts, reviews, tests, terminalReviewsNextCursor }) {
   const { hash } = useLocation();
+  const [selectedEntryId, setSelectedEntryId] = useState(() =>
+    hash ? decodeURIComponent(hash.slice(1)) : null);
   const [currentTime, setCurrentTime] = useState(Date.now());
   const [terminalReviews, setTerminalReviews] = useState(() =>
     reviews.filter(isTerminalReview));
@@ -239,17 +273,31 @@ export function StudentResults({ attempts, reviews, tests, terminalReviewsNextCu
         isReviewDeferred: false
       }))
   ].sort((left, right) => getEntryTime(right) - getEntryTime(left));
+  const selectedEntry = selectedEntryId === ""
+    ? null
+    : entries.find(entry => getEntryId(entry) === selectedEntryId) ?? entries[0];
+  const selectedEntryKey = selectedEntry ? getEntryId(selectedEntry) : "";
 
   useEffect(() => {
     if (!hash) {
       return;
     }
 
-    const target = document.getElementById(decodeURIComponent(hash.slice(1)));
+    setSelectedEntryId(decodeURIComponent(hash.slice(1)));
+  }, [hash]);
+
+  useEffect(() => {
+    if (!hash
+      || !selectedEntryKey
+      || selectedEntryKey !== decodeURIComponent(hash.slice(1))) {
+      return;
+    }
+
+    const target = document.getElementById(selectedEntryKey);
     if (target) {
       target.scrollIntoView({ behavior: "smooth", block: "start" });
     }
-  }, [hash, entries.length, terminalReviews.length]);
+  }, [hash, selectedEntryKey]);
 
   useEffect(() => {
     setTerminalReviews(current => mergeReviews(
@@ -313,24 +361,58 @@ export function StudentResults({ attempts, reviews, tests, terminalReviewsNextCu
     <section className="panel student-results-page">
       <header className="student-results-heading">
         <div>
-          <span className="eyebrow">История обучения</span>
           <h2>Результаты тестов</h2>
           <p>Здесь собраны завершённые попытки и подробные комментарии к ответам.</p>
         </div>
         <span className="student-result-count">{entries.length}</span>
       </header>
 
-      <div className="student-results-list">
-        {entries.map(entry => (
-          <StudentResultCard
-            key={entry.attempt ? `attempt-${entry.attempt.id}` : `review-${entry.review.id}`}
-            attempt={entry.attempt}
-            currentTime={currentTime}
-            isReviewDeferred={entry.isReviewDeferred}
-            review={entry.review}
-            test={entry.test}
-          />
-        ))}
+      <div className="student-result-accordion">
+        {entries.map(entry => {
+          const entryId = getEntryId(entry);
+          const isSelected = entryId === selectedEntryKey;
+          const status = getEntryStatus(entry, currentTime);
+
+          return (
+            <section
+              className={`student-result-accordion-item${isSelected ? " active" : ""}`}
+              key={entryId}
+            >
+              <button
+                type="button"
+                className="student-result-accordion-trigger"
+                aria-controls={`${entryId}-details`}
+                aria-expanded={isSelected}
+                onClick={() => setSelectedEntryId(isSelected ? "" : entryId)}
+              >
+                <span className="student-result-accordion-title">
+                  <strong>{getEntryTitle(entry)}</strong>
+                  <span>
+                    {entry.test?.subject ?? "Тест"} · {formatDate(getEntryDate(entry))}
+                  </span>
+                </span>
+                {status && <StatusBadge status={status} />}
+                <ChevronDown
+                  className="student-result-accordion-chevron"
+                  size={18}
+                  aria-hidden="true"
+                />
+              </button>
+
+              {isSelected && (
+                <div className="student-result-accordion-content" id={`${entryId}-details`}>
+                  <StudentResultCard
+                    attempt={entry.attempt}
+                    currentTime={currentTime}
+                    isReviewDeferred={entry.isReviewDeferred}
+                    review={entry.review}
+                    test={entry.test}
+                  />
+                </div>
+              )}
+            </section>
+          );
+        })}
       </div>
 
       {nextCursor && (

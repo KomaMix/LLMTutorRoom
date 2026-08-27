@@ -202,9 +202,39 @@
 
 .role-admin .admin-search input {
   height: 44px;
+  padding-right: 45px;
   padding-left: 40px;
   border-radius: 10px;
   background: #f8faf9;
+}
+
+.role-admin .admin-search input::-webkit-search-cancel-button {
+  display: none;
+}
+
+.role-admin .admin-search-clear {
+  position: absolute;
+  z-index: 2;
+  top: 50%;
+  right: 5px;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  color: #64777a;
+  background: transparent;
+  cursor: pointer;
+  transform: translateY(-50%);
+  transition: color 150ms ease, background 150ms ease;
+}
+
+.role-admin .admin-search-clear:hover,
+.role-admin .admin-search-clear:focus-visible {
+  color: #174f4d;
+  background: #dfeee9;
 }
 
 .role-admin .admin-teacher-list {
@@ -357,6 +387,81 @@
 .role-admin .admin-teacher-select {
   flex: 0 1 390px;
   width: min(100%, 390px);
+}
+
+.role-admin .admin-teacher-combobox {
+  position: relative;
+}
+
+.role-admin .admin-teacher-search {
+  margin-bottom: 0;
+}
+
+.role-admin .admin-teacher-options {
+  position: absolute;
+  z-index: 12;
+  top: calc(100% + 6px);
+  right: 0;
+  left: 0;
+  max-height: 280px;
+  padding: 6px;
+  border: 1px solid #cedddb;
+  border-radius: 10px;
+  background: #ffffff;
+  box-shadow: 0 14px 32px rgba(31, 56, 52, 0.16);
+  overflow-y: auto;
+}
+
+.role-admin .admin-teacher-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 52px;
+  padding: 8px 10px;
+  border-radius: 7px;
+  color: #2c3e40;
+  cursor: pointer;
+}
+
+.role-admin .admin-teacher-option.highlighted {
+  background: #edf6f3;
+}
+
+.role-admin .admin-teacher-option[aria-selected="true"] {
+  color: #175a55;
+}
+
+.role-admin .admin-teacher-option > span {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.role-admin .admin-teacher-option strong {
+  overflow: hidden;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.role-admin .admin-teacher-option small {
+  color: #637679;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.role-admin .admin-teacher-option > svg {
+  flex: 0 0 auto;
+  color: #26736b;
+}
+
+.role-admin .admin-teacher-options-empty {
+  margin: 0;
+  padding: 13px 10px;
+  color: #637679;
+  font-size: 13px;
+  text-align: center;
 }
 
 .role-admin .admin-action-banner {

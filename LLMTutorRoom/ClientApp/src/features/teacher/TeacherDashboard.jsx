@@ -1,21 +1,13 @@
 import {
-  ArrowRight,
-  BarChart3,
   BookOpen,
   Clock3,
-  ListChecks,
   UsersRound
 } from "lucide-react";
-import { formatDate } from "../../shared/lib/dates.js";
-import { InfoTile } from "../../shared/ui/InfoTile.jsx";
-import { StatusBadge } from "../../shared/ui/StatusBadge.jsx";
 import { ReviewRows } from "./ReviewRows.jsx";
 
 export function TeacherDashboard({
   overview,
-  selectedTest,
   activeReviews,
-  onOpenTests,
   onOpenReviews
 }) {
   const metricItems = [
@@ -27,25 +19,11 @@ export function TeacherDashboard({
       tone: "mint"
     },
     {
-      label: "Задания",
-      value: overview.metrics.tasks,
-      caption: "в опубликованных тестах",
-      icon: ListChecks,
-      tone: "blue"
-    },
-    {
       label: "Ожидают разбора",
       value: overview.metrics.pendingReviews,
       caption: "требуют внимания",
       icon: Clock3,
       tone: "amber"
-    },
-    {
-      label: "Средний балл",
-      value: `${overview.metrics.averageScore}%`,
-      caption: "по завершённым работам",
-      icon: BarChart3,
-      tone: "violet"
     }
   ];
   return (
@@ -66,37 +44,6 @@ export function TeacherDashboard({
             </article>
           );
         })}
-      </section>
-
-      <section className="teacher-dashboard-main">
-        <article className="panel teacher-current-test">
-          <header className="teacher-section-header">
-            <div>
-              <h2>{selectedTest.title}</h2>
-            </div>
-            <div className="teacher-current-test-status">
-              <span>Версия {selectedTest.versionNumber}</span>
-              <StatusBadge status={selectedTest.status} />
-            </div>
-          </header>
-
-          <p className="muted teacher-current-test-summary">
-            {selectedTest.summary || "Добавьте краткое описание, чтобы коллегам было проще ориентироваться в тесте."}
-          </p>
-
-          <div className="compact-grid teacher-current-test-meta">
-            <InfoTile label="Время" value={`${selectedTest.timeLimitMinutes} мин`} />
-            <InfoTile label="Задачи" value={selectedTest.tasks.length} />
-            <InfoTile label="Баллы" value={selectedTest.totalPoints} />
-            <InfoTile label="Дедлайн" value={formatDate(selectedTest.deadline)} />
-          </div>
-
-          <button type="button" className="button primary teacher-current-test-action" onClick={onOpenTests}>
-            Открыть тест
-            <ArrowRight size={16} aria-hidden="true" />
-          </button>
-        </article>
-
       </section>
 
       <section className="panel teacher-review-overview">

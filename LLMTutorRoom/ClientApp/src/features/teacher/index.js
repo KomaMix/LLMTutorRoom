@@ -1,4 +1,3 @@
-export { EmptyTeacherState } from "./EmptyTeacherState.jsx";
 export { ModelPanel } from "./ModelPanel.jsx";
 export { ReviewQueue } from "./ReviewQueue.jsx";
 export { TeacherDashboard } from "./TeacherDashboard.jsx";

@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { formatDate, formatDuration } from "../../shared/lib/dates.js";
+import { formatPoints } from "../../shared/lib/points.js";
 import { StatusBadge } from "../../shared/ui/StatusBadge.jsx";
 import {
   getAttemptStatusText,
@@ -43,7 +44,7 @@ function SubmissionSummary({ attempt, attemptStatus, isReviewDeferred, review })
         </span>
         <div>
           <span>Результат готов</span>
-          <strong>{review.score} из {review.maxScore} баллов</strong>
+          <strong>{formatPoints(review.score)} из {review.maxScore}</strong>
         </div>
         <Link className="button secondary" to={`/student/results#attempt-${attempt.id}`}>
           Открыть результат
@@ -175,7 +176,7 @@ export function StudentWorkspace({
               onClick={() => onSelectTest(test.id)}
             >
               <span>{test.title}</span>
-              <small>{test.totalPoints} баллов · {test.timeLimitMinutes} мин</small>
+              <small>{formatPoints(test.totalPoints)} · {test.timeLimitMinutes} мин</small>
             </button>
           ))}
         </div>
@@ -195,7 +196,7 @@ export function StudentWorkspace({
         {selectedTest.summary && <p className="muted student-test-summary">{selectedTest.summary}</p>}
         <div className="student-test-facts" aria-label="Параметры теста">
           <span><Clock3 size={15} aria-hidden="true" />{selectedTest.timeLimitMinutes} мин</span>
-          <span><FileCheck2 size={15} aria-hidden="true" />{selectedTest.totalPoints} баллов</span>
+          <span><FileCheck2 size={15} aria-hidden="true" />{formatPoints(selectedTest.totalPoints)}</span>
         </div>
 
         <section className={`attempt-panel ${effectiveAttemptStatus ?? "not-started"}`}>
@@ -322,7 +323,7 @@ export function StudentWorkspace({
                         <strong>{task.title}</strong>
                         <span>Задание {taskIndex + 1}</span>
                       </div>
-                      <span className="student-task-points">{task.maxPoints} баллов</span>
+                      <span className="student-task-points">{formatPoints(task.maxPoints)}</span>
                     </header>
                     <p className="student-task-prompt">{task.prompt}</p>
                     {isReadOnly ? (

@@ -61,7 +61,7 @@ export function useAdminModelAccess() {
     if (teacherId !== selectedTeacherIdRef.current
       && hasUnsavedAccessChangesRef.current
       && !window.confirm(unsavedAccessPrompt)) {
-      return;
+      return false;
     }
 
     accessRequestVersionRef.current += 1;
@@ -79,6 +79,7 @@ export function useAdminModelAccess() {
     formBaselineRef.current = nextForm;
     setForm(nextForm);
     setIsAccessLoading(Boolean(teacherId));
+    return true;
   }, []);
 
   const cancelDelete = useCallback(() => setPendingDeleteAccess(null), []);

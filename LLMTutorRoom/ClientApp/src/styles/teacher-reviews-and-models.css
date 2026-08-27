@@ -33,6 +33,60 @@
   box-shadow: 0 3px 10px rgba(31, 44, 46, 0.08);
 }
 
+.role-teacher .teacher-review-test-filter {
+  display: grid;
+  gap: 8px;
+}
+
+.role-teacher .teacher-review-test-filter > span {
+  color: #3f5154;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.role-teacher .teacher-review-test-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.role-teacher .teacher-review-test-option {
+  min-height: 38px;
+  max-width: min(100%, 360px);
+  padding: 8px 13px;
+  border: 1px solid #d5e1df;
+  border-radius: 10px;
+  color: #506568;
+  background: #f7faf9;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+
+.role-teacher .teacher-review-test-option:not(:disabled):hover {
+  border-color: #9fc8c0;
+  color: #1e605c;
+  background: #f0f8f4;
+}
+
+.role-teacher .teacher-review-test-option.active {
+  border-color: #5b9f94;
+  color: #174b49;
+  background: #ddf1e8;
+  box-shadow: 0 0 0 2px rgba(37, 111, 109, 0.08);
+}
+
+.role-teacher .teacher-review-test-option:disabled {
+  cursor: default;
+  opacity: 0.65;
+}
+
+.role-teacher .teacher-review-test-empty {
+  margin: 0;
+}
+
 .role-teacher .teacher-review-stats {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -344,8 +398,4 @@
 .role-teacher .teacher-model-empty > div {
   display: grid;
   gap: 3px;
-}
-
-.role-teacher .teacher-empty-state {
-  border-radius: 14px;
 }

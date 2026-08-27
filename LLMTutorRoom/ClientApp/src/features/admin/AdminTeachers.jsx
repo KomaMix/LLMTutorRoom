@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { Loader2, Search, UserPlus, UsersRound } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Loader2, Search, UserPlus, UsersRound, X } from "lucide-react";
 import {
   createTeacher as createTeacherRequest,
   getTeachers
@@ -35,6 +35,7 @@ export function AdminTeachers() {
   const [loadError, setLoadError] = useState("");
   const [actionMessage, setActionMessage] = useState(null);
   const [loadVersion, setLoadVersion] = useState(0);
+  const searchInputRef = useRef(null);
   const isCreateFormDisabled = isCreating || isLoading || Boolean(loadError);
   const hasUnsavedTeacher = Object.values(form)
     .some(value => String(value).length > 0);
@@ -131,16 +132,34 @@ export function AdminTeachers() {
           </header>
 
           {!isLoading && !loadError && teachers.length > 0 && (
-            <label className="admin-search">
+            <div className="admin-search">
               <Search size={17} aria-hidden="true" />
-              <span className="visually-hidden">Найти преподавателя</span>
+              <label className="visually-hidden" htmlFor="admin-teacher-search">
+                Найти преподавателя
+              </label>
               <input
+                id="admin-teacher-search"
+                ref={searchInputRef}
                 type="search"
                 value={query}
                 placeholder="Поиск по имени пользователя или email"
                 onChange={event => setQuery(event.target.value)}
               />
-            </label>
+              {query && (
+                <button
+                  type="button"
+                  className="admin-search-clear"
+                  aria-label="Очистить поиск"
+                  title="Очистить поиск"
+                  onClick={() => {
+                    setQuery("");
+                    searchInputRef.current?.focus();
+                  }}
+                >
+                  <X size={18} aria-hidden="true" />
+                </button>
+              )}
+            </div>
           )}
 
           {isLoading ? (

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useBlocker } from "react-router-dom";
 import { CheckCircle2, ClipboardCheck, Clock3, Loader2, UserRoundCheck } from "lucide-react";
 import { useNavigationGuard } from "../../app/NavigationGuardContext.jsx";
@@ -10,8 +10,37 @@ import { ReviewRows } from "./ReviewRows.jsx";
 
 const unsavedManualReviewPrompt = "Есть несохранённая ручная оценка. Покинуть страницу и потерять изменения?";
 
-export function ReviewQueue({ reviews, terminalReviewsNextCursor, onReviewsChanged }) {
+function createTestOptions(tests, reviewGroups) {
+  const optionsById = new Map(tests.map(test => [
+    test.id,
+    { id: test.id, title: test.title || "Тест без названия" }
+  ]));
+
+  reviewGroups.flat().forEach(review => {
+    if (!review.testId || optionsById.has(review.testId)) {
+      return;
+    }
+
+    optionsById.set(review.testId, {
+      id: review.testId,
+      title: review.testTitle || "Тест без названия"
+    });
+  });
+
+  return [...optionsById.values()];
+}
+
+function getInitialTestId(tests, reviews) {
+  const reviewRequiringTeacher = reviews.find(review => review.status === "manual-review");
+  return reviewRequiringTeacher?.testId
+    ?? reviews[0]?.testId
+    ?? tests[0]?.id
+    ?? "";
+}
+
+export function ReviewQueue({ reviews, tests, terminalReviewsNextCursor, onReviewsChanged }) {
   const { registerBeforeLogout } = useNavigationGuard();
+  const [selectedTestId, setSelectedTestId] = useState(() => getInitialTestId(tests, reviews));
   const [selectedReviewId, setSelectedReviewId] = useState("");
   const [showHistory, setShowHistory] = useState(false);
   const [currentTerminalReviews, setCurrentTerminalReviews] = useState(() =>
@@ -87,10 +116,28 @@ export function ReviewQueue({ reviews, terminalReviewsNextCursor, onReviewsChang
     setCurrentNextCursor(terminalReviewsNextCursor ?? null);
   }, [reviews, terminalReviewsNextCursor]);
 
+  const testOptions = useMemo(() => createTestOptions(tests, [
+    reviews,
+    currentTerminalReviews,
+    historicalTerminalReviews
+  ]), [currentTerminalReviews, historicalTerminalReviews, reviews, tests]);
+
+  useEffect(() => {
+    if (testOptions.some(test => test.id === selectedTestId)) {
+      return;
+    }
+
+    setSelectedTestId(testOptions[0]?.id ?? "");
+    setSelectedReviewId("");
+  }, [selectedTestId, testOptions]);
+
   const nonTerminalReviews = reviews.filter(review => !isTerminalReview(review));
-  const visibleReviews = mergeReviews(
+  const reviewsForSelectedMode = mergeReviews(
     nonTerminalReviews,
     showHistory ? historicalTerminalReviews : currentTerminalReviews);
+  const visibleReviews = selectedTestId
+    ? reviewsForSelectedMode.filter(review => review.testId === selectedTestId)
+    : [];
   const selectedReview = visibleReviews.find(review => review.id === selectedReviewId)
     ?? visibleReviews.find(review => review.status === "manual-review")
     ?? null;
@@ -164,6 +211,19 @@ export function ReviewQueue({ reviews, terminalReviewsNextCursor, onReviewsChang
     });
   }
 
+  function handleTestChange(nextTestId) {
+    if (nextTestId === selectedTestId) {
+      return;
+    }
+
+    if (!confirmDiscardManualReview()) {
+      return;
+    }
+
+    setSelectedTestId(nextTestId);
+    setSelectedReviewId("");
+  }
+
   async function handleReviewsChanged() {
     await onReviewsChanged?.();
     if (showHistory) {
@@ -216,7 +276,7 @@ export function ReviewQueue({ reviews, terminalReviewsNextCursor, onReviewsChang
         <div>
           <span className="eyebrow">Работы учеников</span>
           <h2>Проверки учеников</h2>
-          <p>Следите за автоматической проверкой и выставляйте баллы там, где нужен преподаватель.</p>
+          <p>Выберите тест, следите за автоматической проверкой и выставляйте баллы там, где нужен преподаватель.</p>
         </div>
         <div className="teacher-segmented" role="group" aria-label="Версии проверок">
           <button
@@ -243,6 +303,35 @@ export function ReviewQueue({ reviews, terminalReviewsNextCursor, onReviewsChang
         </div>
       </header>
 
+      <div className="teacher-review-test-filter">
+        <span id="teacher-review-test-label">Тест</span>
+        {testOptions.length === 0 ? (
+          <p className="muted teacher-review-test-empty">Нет тестов</p>
+        ) : (
+          <div
+            className="teacher-review-test-options"
+            role="group"
+            aria-labelledby="teacher-review-test-label"
+          >
+            {testOptions.map(test => {
+              const isSelected = test.id === selectedTestId;
+              return (
+                <button
+                  type="button"
+                  className={`teacher-review-test-option${isSelected ? " active" : ""}`}
+                  key={test.id}
+                  aria-pressed={isSelected}
+                  disabled={isLoadingHistory}
+                  onClick={() => handleTestChange(test.id)}
+                >
+                  {test.title}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
       <div className="teacher-review-stats" aria-label="Состояние проверок">
         <div>
           <span className="manual"><UserRoundCheck size={17} aria-hidden="true" /></span>
@@ -260,6 +349,9 @@ export function ReviewQueue({ reviews, terminalReviewsNextCursor, onReviewsChang
 
       <ReviewRows
         reviews={visibleReviews}
+        emptyMessage={selectedTestId
+          ? "Для выбранного теста проверок в этом списке нет."
+          : "Выберите тест, чтобы посмотреть проверки."}
         selectedReviewId={selectedReview?.id ?? ""}
         onSelectReview={handleSelectReview}
       />

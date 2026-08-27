@@ -1,7 +1,6 @@
 import { useEffect } from "react";
 import { Navigate, Route, Routes, useNavigate, useParams } from "react-router-dom";
 import {
-  EmptyTeacherState,
   ModelPanel,
   ReviewQueue,
   TeacherDashboard,
@@ -10,7 +9,6 @@ import {
 
 function TeacherDashboardRoute({ overview }) {
   const navigate = useNavigate();
-  const selectedTest = overview.tests[0] ?? null;
   const publishedVersions = new Map(overview.tests.map(test => [
     test.id,
     test.publishedVersionNumber
@@ -29,16 +27,10 @@ function TeacherDashboardRoute({ overview }) {
     return currentVersion != null && item.testRevision === currentVersion;
   });
 
-  if (!selectedTest) {
-    return <EmptyTeacherState onOpenTests={() => navigate("/teacher/tests")} />;
-  }
-
   return (
     <TeacherDashboard
       overview={overview}
-      selectedTest={selectedTest}
       activeReviews={activeReviews}
-      onOpenTests={() => navigate(`/teacher/tests/${selectedTest.id}`)}
       onOpenReviews={() => navigate("/teacher/reviews")}
     />
   );
@@ -88,6 +80,7 @@ export function TeacherRoutes({ overview, refresh }) {
         element={(
           <ReviewQueue
             reviews={overview.reviews}
+            tests={overview.tests}
             terminalReviewsNextCursor={overview.terminalReviewsNextCursor}
             onReviewsChanged={refresh}
           />

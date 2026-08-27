@@ -1,4 +1,5 @@
 import { Server } from "lucide-react";
+import { getRussianPluralForm } from "../../../shared/lib/russianPlural.js";
 
 export function AdminModelAccessHeader({ isLoading, modelCount, teacherCount }) {
   return (
@@ -15,11 +16,16 @@ export function AdminModelAccessHeader({ isLoading, modelCount, teacherCount }) 
       <div className="admin-page-summary-group">
         <div className="admin-page-summary">
           <strong>{isLoading ? "—" : teacherCount}</strong>
-          <span>преподавателей</span>
+          <span>{getRussianPluralForm(
+            teacherCount,
+            "преподаватель",
+            "преподавателя",
+            "преподавателей"
+          )}</span>
         </div>
         <div className="admin-page-summary">
           <strong>{isLoading ? "—" : modelCount}</strong>
-          <span>моделей</span>
+          <span>{getRussianPluralForm(modelCount, "модель", "модели", "моделей")}</span>
         </div>
       </div>
     </header>

@@ -5,11 +5,12 @@ import { StatusBadge } from "../../shared/ui/StatusBadge.jsx";
 export function ReviewRows({
   reviews,
   compact = false,
+  emptyMessage = "Нет проверок в этом списке.",
   selectedReviewId = "",
   onSelectReview = null
 }) {
   if (reviews.length === 0) {
-    return <p className="muted teacher-review-empty">Нет проверок в этом списке.</p>;
+    return <p className="muted teacher-review-empty">{emptyMessage}</p>;
   }
 
   return (
