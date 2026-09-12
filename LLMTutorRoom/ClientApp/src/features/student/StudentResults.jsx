@@ -368,7 +368,7 @@ export function StudentResults({ attempts, reviews, tests, terminalReviewsNextCu
           <h2>Результаты тестов</h2>
           <p>Здесь собраны завершённые попытки и подробные комментарии к ответам.</p>
         </div>
-        <span className="student-result-count">{entries.length}</span>
+        <span className="count-badge">{entries.length}</span>
       </header>
 
       <div className="student-result-accordion">

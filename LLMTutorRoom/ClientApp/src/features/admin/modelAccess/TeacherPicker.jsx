@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
-import { Check, Search, UserRound, X } from "lucide-react";
+import { Check, UserRound } from "lucide-react";
+import { SearchField } from "../../../shared/ui/SearchField.jsx";
 
 function matchesQuery(teacher, normalizedQuery) {
   return String(teacher.userName ?? "").toLocaleLowerCase("ru-RU").includes(normalizedQuery)
@@ -36,6 +37,17 @@ export function TeacherPicker({
   function updateQuery(value) {
     setQuery(value);
     setActiveIndex(0);
+    setIsOpen(true);
+  }
+
+  function openList() {
+    if (isDisabled || isOpen) {
+      return;
+    }
+
+    const selectedIndex = filteredTeachers
+      .findIndex(teacher => teacher.id === selectedTeacherId);
+    setActiveIndex(Math.max(selectedIndex, 0));
     setIsOpen(true);
   }
 
@@ -107,66 +119,45 @@ export function TeacherPicker({
       <div className="field admin-teacher-select">
         <label htmlFor="access-teacher-search">Найти преподавателя</label>
         <div
-          className="admin-teacher-combobox"
+          className="search-combobox"
           onBlur={event => {
             if (!event.currentTarget.contains(event.relatedTarget)) {
               setIsOpen(false);
             }
           }}
         >
-          <div className="admin-search admin-teacher-search">
-            <Search size={17} aria-hidden="true" />
-            <input
-              id="access-teacher-search"
-              ref={inputRef}
-              type="search"
-              role="combobox"
-              aria-autocomplete="list"
-              aria-controls={isListOpen ? listboxId : undefined}
-              aria-expanded={isListOpen}
-              aria-activedescendant={
-                isListOpen && filteredTeachers.length > 0
-                  ? `${listboxId}-option-${highlightedIndex}`
-                  : undefined
-              }
-              value={query}
-              placeholder={teachers.length === 0 ? "Нет преподавателей" : "Имя пользователя или email"}
-              autoComplete="off"
-              spellCheck={false}
-              disabled={isDisabled}
-              onChange={event => updateQuery(event.target.value)}
-              onFocus={() => {
-                const selectedIndex = filteredTeachers
-                  .findIndex(teacher => teacher.id === selectedTeacherId);
-                setActiveIndex(Math.max(selectedIndex, 0));
-                setIsOpen(true);
-              }}
-              onKeyDown={handleKeyDown}
-            />
-            {query && !isDisabled && (
-              <button
-                type="button"
-                className="admin-search-clear"
-                aria-label="Очистить поиск"
-                title="Очистить поиск"
-                onClick={() => {
-                  updateQuery("");
-                  inputRef.current?.focus();
-                }}
-              >
-                <X size={18} aria-hidden="true" />
-              </button>
-            )}
-          </div>
+          <SearchField
+            id="access-teacher-search"
+            inputRef={inputRef}
+            onClear={() => updateQuery("")}
+            role="combobox"
+            aria-autocomplete="list"
+            aria-controls={isListOpen ? listboxId : undefined}
+            aria-expanded={isListOpen}
+            aria-activedescendant={
+              isListOpen && filteredTeachers.length > 0
+                ? `${listboxId}-option-${highlightedIndex}`
+                : undefined
+            }
+            value={query}
+            placeholder={teachers.length === 0 ? "Нет преподавателей" : "Имя пользователя или email"}
+            autoComplete="off"
+            spellCheck={false}
+            disabled={isDisabled}
+            onChange={event => updateQuery(event.target.value)}
+            onFocus={openList}
+            onClick={openList}
+            onKeyDown={handleKeyDown}
+          />
 
           {isListOpen && (
             <div
-              className="admin-teacher-options"
+              className="search-options"
               id={listboxId}
               role={filteredTeachers.length > 0 ? "listbox" : undefined}
             >
               {filteredTeachers.length === 0 ? (
-                <p className="admin-teacher-options-empty" role="status">
+                <p className="search-options-empty" role="status">
                   Преподаватель не найден
                 </p>
               ) : (
@@ -175,7 +166,7 @@ export function TeacherPicker({
                     id={`${listboxId}-option-${index}`}
                     ref={index === highlightedIndex ? activeOptionRef : undefined}
                     key={teacher.id}
-                    className={`admin-teacher-option${index === highlightedIndex ? " highlighted" : ""}`}
+                    className={`search-option${index === highlightedIndex ? " highlighted" : ""}`}
                     role="option"
                     aria-selected={teacher.id === selectedTeacherId}
                     onMouseDown={event => event.preventDefault()}

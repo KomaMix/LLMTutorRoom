@@ -34,7 +34,7 @@ export function TaskPanel({
       <header className="teacher-section-header teacher-task-panel-header">
         <div>
           <span className="eyebrow">Содержание</span>
-          <h3>Задания <span className="teacher-inline-count">{tasks.length}</span></h3>
+          <h3>Задания <span className="count-badge teacher-inline-count">{tasks.length}</span></h3>
         </div>
         {!readOnly && (
           <div className="task-panel-actions" role="group" aria-label="Режим работы с заданиями">

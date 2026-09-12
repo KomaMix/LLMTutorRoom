@@ -1,4 +1,4 @@
-import { Bot, CalendarClock, Gauge, Loader2, Pencil, Trash2 } from "lucide-react";
+import { Bot, CalendarClock, Check, CircleMinus, Gauge, Loader2, Pencil, Trash2, TriangleAlert } from "lucide-react";
 import { formatDate, formatPeriod } from "../../../shared/lib/dates.js";
 
 export function ModelAccessCard({
@@ -13,8 +13,9 @@ export function ModelAccessCard({
   const remainingChecks = Math.max(0, Number(access.remainingChecks) || 0);
   const usedChecks = Math.max(0, Number(access.usedChecks) || 0);
   const accessState = access.isEnabled
-    ? { className: "active", label: "Доступ включён" }
-    : { className: "disabled", label: "Доступ выключен" };
+    ? { className: "active", label: "Доступ включён", icon: Check }
+    : { className: "disabled", label: "Доступ выключен", icon: CircleMinus };
+  const AccessStateIcon = accessState.icon;
 
   return (
     <article className={`admin-access-card${isEditing ? " editing" : ""}`}>
@@ -30,10 +31,14 @@ export function ModelAccessCard({
         </div>
         <div className="admin-access-state-group">
           <span className={`admin-access-state ${accessState.className}`}>
+            <AccessStateIcon size={16} aria-hidden="true" />
             {accessState.label}
           </span>
           {!access.hasEnabledDeployment && (
-            <span className="admin-access-state warning">Модель недоступна</span>
+            <span className="admin-access-state warning">
+              <TriangleAlert size={16} aria-hidden="true" />
+              Модель недоступна
+            </span>
           )}
         </div>
       </header>

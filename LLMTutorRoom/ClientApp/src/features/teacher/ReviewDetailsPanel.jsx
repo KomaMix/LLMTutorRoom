@@ -136,7 +136,7 @@ export function ReviewDetailsPanel({ review }) {
       <div className="teacher-review-completed-results">
         <div className="teacher-review-results-heading">
           <h4>Завершённые задания</h4>
-          <span>{completedResults.length}</span>
+          <span className="count-badge">{completedResults.length}</span>
         </div>
         {completedResults.length === 0 ? (
           <p className="muted teacher-review-results-empty">

@@ -18,27 +18,9 @@
   align-items: center;
 }
 
-.role-teacher .teacher-list-count,
 .role-teacher .teacher-inline-count {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 32px;
-  min-height: 28px;
-  padding: 4px 9px;
-  border-radius: var(--radius-pill);
-  color: var(--color-accent);
-  background: var(--color-accent-soft);
-  font-size: 12px;
-  font-weight: 850;
-}
-
-.role-teacher .teacher-inline-count {
-  min-width: 26px;
-  min-height: 24px;
   margin-left: 5px;
-  padding: 3px 7px;
-  vertical-align: 2px;
+  vertical-align: middle;
 }
 
 .role-teacher .teacher-test-list {

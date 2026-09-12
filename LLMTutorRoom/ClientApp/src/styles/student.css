@@ -37,8 +37,7 @@
 
 .student-test-facts span,
 .student-readonly-label,
-.student-task-points,
-.student-result-count {
+.student-task-points {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -303,12 +302,6 @@
   margin: 8px 0 0;
   color: var(--color-text-muted);
   line-height: 1.5;
-}
-
-.student-result-count {
-  min-width: 34px;
-  color: var(--color-accent);
-  background: var(--color-accent-soft);
 }
 
 .student-result-accordion {

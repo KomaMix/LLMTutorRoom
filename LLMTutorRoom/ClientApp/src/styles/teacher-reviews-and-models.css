@@ -287,7 +287,6 @@
 
 .role-teacher .teacher-review-total-score span,
 .role-teacher .teacher-review-details-summary > div:last-child > span,
-.role-teacher .teacher-review-results-heading > span,
 .role-teacher .teacher-review-copy-block > span,
 .role-teacher .teacher-review-findings > span {
   color: var(--color-text-muted);
@@ -317,17 +316,6 @@
 
 .role-teacher .teacher-review-results-heading h4 {
   margin: 0;
-}
-
-.role-teacher .teacher-review-results-heading > span {
-  display: inline-grid;
-  place-items: center;
-  min-width: 26px;
-  height: 26px;
-  padding-inline: 7px;
-  border-radius: var(--radius-pill);
-  color: var(--color-accent);
-  background: var(--color-accent-soft);
 }
 
 .role-teacher .teacher-review-task-results {

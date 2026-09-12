@@ -26,7 +26,7 @@ export function AccessDirectory({
               : "Выберите преподавателя, чтобы увидеть доступы."}
           </p>
         </div>
-        {isAccessCurrent && <span className="admin-count">{accessList.length}</span>}
+        {isAccessCurrent && <span className="count-badge">{accessList.length}</span>}
       </header>
 
       {!selectedTeacherId ? (

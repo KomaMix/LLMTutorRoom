@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from "react";
-import { Loader2, Search, UserPlus, UsersRound, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Loader2, Search, UserPlus, UsersRound } from "lucide-react";
 import {
   createTeacher as createTeacherRequest,
   getTeachers
 } from "../../api/usersApi.js";
 import { useUnsavedChangesGuard } from "../../shared/hooks/useUnsavedChangesGuard.js";
+import { SearchField } from "../../shared/ui/SearchField.jsx";
 import { getRequestErrorMessage } from "./requestError.js";
 
 const emptyTeacherForm = {
@@ -12,15 +13,6 @@ const emptyTeacherForm = {
   email: "",
   password: ""
 };
-
-function getTeacherInitials(teacher) {
-  const source = teacher.userName?.trim() || "П";
-  return source
-    .split(/[._-]+/)
-    .slice(0, 2)
-    .map(part => part.charAt(0).toLocaleUpperCase("ru-RU"))
-    .join("");
-}
 
 function compareTeachers(left, right) {
   return left.userName.localeCompare(right.userName, "ru");
@@ -35,7 +27,6 @@ export function AdminTeachers() {
   const [loadError, setLoadError] = useState("");
   const [actionMessage, setActionMessage] = useState(null);
   const [loadVersion, setLoadVersion] = useState(0);
-  const searchInputRef = useRef(null);
   const isCreateFormDisabled = isCreating || isLoading || Boolean(loadError);
   const hasUnsavedTeacher = Object.values(form)
     .some(value => String(value).length > 0);
@@ -127,39 +118,20 @@ export function AdminTeachers() {
               <p>Учётные записи с доступом к кабинету преподавателя.</p>
             </div>
             {!isLoading && !loadError && (
-              <span className="admin-count">{filteredTeachers.length}</span>
+              <span className="count-badge">{filteredTeachers.length}</span>
             )}
           </header>
 
           {!isLoading && !loadError && teachers.length > 0 && (
-            <div className="admin-search">
-              <Search size={17} aria-hidden="true" />
-              <label className="visually-hidden" htmlFor="admin-teacher-search">
-                Найти преподавателя
-              </label>
-              <input
-                id="admin-teacher-search"
-                ref={searchInputRef}
-                type="search"
-                value={query}
-                placeholder="Поиск по имени пользователя или email"
-                onChange={event => setQuery(event.target.value)}
-              />
-              {query && (
-                <button
-                  type="button"
-                  className="admin-search-clear"
-                  aria-label="Очистить поиск"
-                  title="Очистить поиск"
-                  onClick={() => {
-                    setQuery("");
-                    searchInputRef.current?.focus();
-                  }}
-                >
-                  <X size={18} aria-hidden="true" />
-                </button>
-              )}
-            </div>
+            <SearchField
+              className="admin-directory-search"
+              id="admin-teacher-search"
+              aria-label="Найти преподавателя"
+              value={query}
+              placeholder="Поиск по имени пользователя или email"
+              onChange={event => setQuery(event.target.value)}
+              onClear={() => setQuery("")}
+            />
           )}
 
           {isLoading ? (
@@ -197,9 +169,6 @@ export function AdminTeachers() {
             <div className="admin-teacher-list">
               {filteredTeachers.map(teacher => (
                 <article className="admin-teacher-row" key={teacher.id ?? teacher.userName}>
-                  <span className="admin-teacher-avatar" aria-hidden="true">
-                    {getTeacherInitials(teacher)}
-                  </span>
                   <div className="admin-teacher-identity">
                     <strong>{teacher.userName}</strong>
                     <span>{teacher.email}</span>

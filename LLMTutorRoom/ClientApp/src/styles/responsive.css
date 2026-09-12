@@ -399,10 +399,6 @@
     padding: 18px;
   }
 
-  .role-admin .admin-teacher-row {
-    grid-template-columns: 42px minmax(0, 1fr);
-  }
-
   .role-admin .admin-access-card-header {
     align-items: flex-start;
     flex-direction: column;

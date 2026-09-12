@@ -32,7 +32,7 @@ export function TestList({
           <span className="eyebrow">Учебные материалы</span>
           <h2>Тесты</h2>
         </div>
-        <span className="teacher-list-count" aria-label={`Тестов: ${tests.length}`}>
+        <span className="count-badge" aria-label={`Тестов: ${tests.length}`}>
           {tests.length}
         </span>
       </header>
