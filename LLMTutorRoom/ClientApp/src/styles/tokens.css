@@ -1,0 +1,77 @@
+:root {
+  --color-text: #172026;
+  --color-text-secondary: #3f5154;
+  --color-text-muted: #66787b;
+  --color-text-disabled: #8b9b9d;
+  --color-on-accent: #ffffff;
+
+  --color-page: #eef2f4;
+  --color-surface: #ffffff;
+  --color-surface-subtle: #f7faf9;
+  --color-surface-muted: #f1f5f5;
+  --color-border: #e0e7e7;
+  --color-border-control: #cfdbdc;
+
+  --color-accent: #256f6d;
+  --color-accent-hover: #1f5f5d;
+  --color-accent-soft: #e5f3ed;
+  --color-accent-border: #a9cfc1;
+  --color-accent-disabled: #9ab4b0;
+
+  --color-success: #116149;
+  --color-success-soft: #dff5e9;
+  --color-success-surface: #f0f8f4;
+  --color-success-border: #bcded0;
+  --color-warning: #6c5410;
+  --color-warning-soft: #f8edc7;
+  --color-warning-surface: #fbf8f2;
+  --color-warning-border: #e4d397;
+  --color-attention: #8a351e;
+  --color-attention-soft: #fae2d5;
+  --color-attention-surface: #fff4ee;
+  --color-attention-border: #efc8b5;
+  --color-danger: #8a1e1e;
+  --color-danger-soft: #f9d7d7;
+  --color-danger-surface: #fff0ed;
+  --color-danger-border: #e7beb7;
+  --color-info: #24515f;
+  --color-info-soft: #e1f0f4;
+  --color-info-surface: #f0f7f9;
+  --color-info-border: #bcd6de;
+
+  --color-sidebar: #16211f;
+  --color-sidebar-text: #f7faf9;
+  --color-sidebar-muted: #a8bbb5;
+  --color-sidebar-link: #dbe7e2;
+  --color-sidebar-accent: #9ee6c2;
+  --color-sidebar-border: rgba(255, 255, 255, 0.08);
+  --color-sidebar-surface: rgba(255, 255, 255, 0.04);
+  --color-sidebar-selected: rgba(158, 230, 194, 0.16);
+  --color-overlay: rgba(16, 28, 25, 0.4);
+
+  --background-page: linear-gradient(180deg, #ffffff, var(--color-page));
+  --background-workspace: radial-gradient(circle at 96% 0%, rgba(158, 230, 194, 0.11), transparent 24%);
+  --background-highlight: linear-gradient(120deg, var(--color-accent-soft), var(--color-surface-subtle));
+  --background-auth:
+    radial-gradient(circle at 14% 18%, color-mix(in srgb, var(--color-sidebar-accent) 34%, transparent), transparent 29%),
+    radial-gradient(circle at 88% 82%, color-mix(in srgb, var(--color-accent) 18%, transparent), transparent 30%),
+    linear-gradient(145deg, var(--color-surface-subtle), var(--color-accent-soft), var(--color-surface-muted));
+
+  --radius-panel: 14px;
+  --radius-card: 12px;
+  --radius-control: 8px;
+  --radius-small: 6px;
+  --radius-pill: 999px;
+  --control-height: 42px;
+  --control-height-compact: 36px;
+  --progress-height: 8px;
+
+  --shadow-panel: 0 12px 30px rgba(31, 44, 46, 0.06);
+  --shadow-card: 0 6px 16px rgba(31, 44, 46, 0.04);
+  --shadow-control: 0 1px 4px rgba(31, 44, 46, 0.18);
+  --shadow-floating: 0 18px 40px rgba(31, 44, 46, 0.14);
+  --shadow-dialog: 0 30px 70px rgba(16, 28, 25, 0.24);
+  --shadow-drawer: 18px 0 48px rgba(16, 28, 25, 0.24);
+  --shadow-focus: 0 0 0 3px rgba(37, 111, 109, 0.14);
+  --shadow-selected: 0 0 0 1px var(--color-accent-border);
+}

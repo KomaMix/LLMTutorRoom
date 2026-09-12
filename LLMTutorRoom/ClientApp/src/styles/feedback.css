@@ -9,7 +9,7 @@
 .manual-review-panel {
   margin-top: 18px;
   padding-top: 18px;
-  border-top: 1px solid #e0e7e7;
+  border-top: 1px solid var(--color-border);
 }
 
 .manual-review-form {
@@ -21,9 +21,9 @@
   display: grid;
   gap: 8px;
   padding: 12px;
-  border: 1px solid #e0e7e7;
-  border-radius: 8px;
-  background: #f7faf9;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background: var(--color-surface-subtle);
 }
 
 .manual-review-context div {
@@ -32,7 +32,7 @@
 }
 
 .manual-review-context span {
-  color: #66787b;
+  color: var(--color-text-muted);
   font-size: 12px;
   font-weight: 800;
   text-transform: uppercase;
@@ -40,7 +40,7 @@
 
 .manual-review-context p {
   margin: 0;
-  color: #263638;
+  color: var(--color-text);
   white-space: pre-wrap;
 }
 
@@ -51,7 +51,7 @@
 .result-card ul {
   margin: 12px 0 0;
   padding-left: 18px;
-  color: #4f6164;
+  color: var(--color-text-secondary);
 }
 
 .result-card li + li {
@@ -62,16 +62,16 @@
   display: grid;
   place-items: center;
   min-height: 320px;
-  color: #66787b;
+  color: var(--color-text-muted);
   text-align: center;
 }
 
 .compact-empty-state {
   min-height: 180px;
   gap: 10px;
-  border: 1px dashed #cbd8d8;
-  border-radius: 8px;
-  background: #f7faf9;
+  border: 1px dashed var(--color-border-control);
+  border-radius: var(--radius-card);
+  background: var(--color-surface-subtle);
 }
 
 .status {
@@ -80,7 +80,7 @@
   justify-content: center;
   min-height: 28px;
   padding: 0 9px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   font-size: 12px;
   font-weight: 800;
   white-space: nowrap;
@@ -93,8 +93,8 @@
 .status.teacher,
 .status.student,
 .status.submitted {
-  color: #116149;
-  background: #dff5e9;
+  color: var(--color-success);
+  background: var(--color-success-soft);
 }
 
 .status.draft,
@@ -102,35 +102,35 @@
 .status.in-progress,
 .status.queued,
 .status.processing,
-.status.retry-scheduled {
-  color: #6c5410;
-  background: #f8edc7;
+.status.retry-scheduled,
+.status.expired {
+  color: var(--color-warning);
+  background: var(--color-warning-soft);
 }
 
 .status.hidden {
-  color: #526367;
-  background: #e8eeee;
+  color: var(--color-text-secondary);
+  background: var(--color-surface-muted);
 }
 
 .status.superseded {
-  color: #526367;
-  background: #e8eeee;
+  color: var(--color-text-secondary);
+  background: var(--color-surface-muted);
 }
 
-.status.manual-review,
-.status.expired {
-  color: #8a351e;
-  background: #fae2d5;
+.status.manual-review {
+  color: var(--color-attention);
+  background: var(--color-attention-soft);
 }
 
 .status.failed {
-  color: #8a1e1e;
-  background: #f9d7d7;
+  color: var(--color-danger);
+  background: var(--color-danger-soft);
 }
 
 .status.single-choice,
 .status.multiple-choice,
 .status.free-text {
-  color: #24515f;
-  background: #e1f0f4;
+  color: var(--color-info);
+  background: var(--color-info-soft);
 }

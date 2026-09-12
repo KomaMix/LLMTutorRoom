@@ -3,8 +3,8 @@
   font-family:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
     sans-serif;
-  color: #172026;
-  background: #eef2f4;
+  color: var(--color-text);
+  background: var(--color-page);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
 }
@@ -29,9 +29,7 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(238, 242, 244, 0.96)),
-    #eef2f4;
+  background: var(--background-page);
 }
 
 button,
@@ -43,6 +41,11 @@ textarea {
 
 button {
   cursor: pointer;
+}
+
+:is(button, a, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
 }
 
 .app-shell {
@@ -57,8 +60,8 @@ button {
   gap: 20px;
   min-height: 100vh;
   padding: 20px;
-  color: #f7faf9;
-  background: #16211f;
+  color: var(--color-sidebar-text);
+  background: var(--color-sidebar);
 }
 
 .brand {
@@ -73,14 +76,20 @@ button {
   place-items: center;
   width: 42px;
   height: 42px;
-  border-radius: 8px;
-  color: #16211f;
-  background: #9ee6c2;
+  border-radius: var(--radius-control);
+  color: var(--color-sidebar);
+  background: var(--color-sidebar-accent);
 }
 
 .brand strong {
   display: block;
   font-size: 15px;
+}
+
+.model-icon,
+.model-card .model-icon {
+  color: var(--color-accent);
+  background: var(--color-accent-soft);
 }
 
 .user-card {
@@ -89,9 +98,9 @@ button {
   gap: 12px;
   min-height: 64px;
   padding: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--color-sidebar-border);
+  border-radius: var(--radius-control);
+  background: var(--color-sidebar-surface);
 }
 
 .user-avatar {
@@ -99,9 +108,9 @@ button {
   place-items: center;
   width: 38px;
   height: 38px;
-  border-radius: 8px;
-  color: #16211f;
-  background: #ffffff;
+  border-radius: var(--radius-control);
+  color: var(--color-sidebar);
+  background: var(--color-surface);
 }
 
 .user-card strong {
@@ -112,7 +121,7 @@ button {
 .user-card span {
   display: block;
   margin-top: 2px;
-  color: #a8bbb5;
+  color: var(--color-sidebar-muted);
   font-size: 12px;
 }
 
@@ -132,8 +141,8 @@ button {
   min-height: 42px;
   width: 100%;
   border: 0;
-  border-radius: 8px;
-  color: #dbe7e2;
+  border-radius: var(--radius-control);
+  color: var(--color-sidebar-link);
   background: transparent;
   text-decoration: none;
   text-align: left;
@@ -150,8 +159,8 @@ button {
 
 .nav-list a:hover,
 .nav-list a.active {
-  color: #ffffff;
-  background: rgba(158, 230, 194, 0.16);
+  color: var(--color-on-accent);
+  background: var(--color-sidebar-selected);
 }
 
 .app-shell.sidebar-collapsed {
@@ -175,6 +184,7 @@ button {
 .workspace {
   min-width: 0;
   padding: 24px;
+  background: var(--background-workspace);
 }
 
 .topbar {
@@ -220,7 +230,7 @@ button {
 .eyebrow {
   display: block;
   margin-bottom: 6px;
-  color: #5d6f72;
+  color: var(--color-text-muted);
   font-size: 12px;
   font-weight: 700;
   text-transform: uppercase;
@@ -238,10 +248,10 @@ button {
   gap: 12px;
   margin-bottom: 18px;
   padding: 12px 14px;
-  border: 1px solid #f1c6b4;
-  border-radius: 8px;
-  color: #8a351e;
-  background: #fff4ee;
+  border: 1px solid var(--color-danger-border);
+  border-radius: var(--radius-control);
+  color: var(--color-danger);
+  background: var(--color-danger-surface);
   font-size: 13px;
   font-weight: 700;
 }
@@ -256,10 +266,10 @@ button {
 .panel,
 .list-panel,
 .detail-panel {
-  border: 1px solid #dbe3e4;
-  border-radius: 8px;
-  background: #ffffff;
-  box-shadow: 0 12px 30px rgba(31, 44, 46, 0.06);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-panel);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-panel);
 }
 
 .metric-card {
@@ -270,7 +280,7 @@ button {
 }
 
 .metric-card svg {
-  color: #256f6d;
+  color: var(--color-accent);
 }
 
 .metric-card span,
@@ -281,7 +291,7 @@ button {
 .review-row span,
 .result-card p,
 .muted {
-  color: #66787b;
+  color: var(--color-text-muted);
 }
 
 .metric-card strong {
@@ -341,9 +351,9 @@ button {
 .info-tile {
   min-height: 72px;
   padding: 12px;
-  border: 1px solid #e2e9e8;
-  border-radius: 8px;
-  background: #f7faf9;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background: var(--color-surface-subtle);
 }
 
 .info-tile strong {
@@ -361,9 +371,9 @@ button {
 .pipeline-step {
   min-height: 82px;
   padding: 12px;
-  border: 1px solid #e0e8e3;
-  border-radius: 8px;
-  background: #f8fbf8;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background: var(--color-surface-subtle);
 }
 
 .pipeline-step span {
@@ -373,8 +383,8 @@ button {
   height: 24px;
   margin-bottom: 10px;
   border-radius: 50%;
-  color: #ffffff;
-  background: #256f6d;
+  color: var(--color-on-accent);
+  background: var(--color-accent);
   font-size: 12px;
   font-weight: 800;
 }
@@ -391,60 +401,67 @@ button {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  min-height: 40px;
+  min-height: var(--control-height);
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   font-weight: 700;
 }
 
 .button {
   padding: 0 14px;
+  text-decoration: none;
 }
 
 .button.primary {
-  color: #ffffff;
-  background: #256f6d;
+  color: var(--color-on-accent);
+  background: var(--color-accent);
 }
 
-.button.primary:hover {
-  background: #1f5f5d;
+.button.primary:not(:disabled):hover {
+  background: var(--color-accent-hover);
 }
 
 .button.primary:disabled {
   cursor: default;
-  background: #9ab4b0;
+  background: var(--color-accent-disabled);
 }
 
 .button.secondary:disabled,
 .button.danger:disabled {
   cursor: default;
-  color: #9aabad;
-  border-color: #e0e7e7;
-  background: #f4f7f7;
+  color: var(--color-text-disabled);
+  border-color: var(--color-border);
+  background: var(--color-surface-muted);
 }
 
 .button.secondary,
 .icon-button {
-  color: #172026;
-  border-color: #d7e2e0;
-  background: #ffffff;
+  color: var(--color-text);
+  border-color: var(--color-border-control);
+  background: var(--color-surface);
+}
+
+.button.secondary:not(:disabled):hover,
+.icon-button:not(.danger):not(:disabled):hover {
+  border-color: var(--color-accent-border);
+  background: var(--color-accent-soft);
 }
 
 .button.danger,
 .icon-button.danger {
-  color: #8a351e;
-  border-color: #f1c6b4;
-  background: #fff4ee;
+  color: var(--color-danger);
+  border-color: var(--color-danger-border);
+  background: var(--color-danger-surface);
 }
 
 .button.danger:not(:disabled):hover,
 .icon-button.danger:not(:disabled):hover {
-  border-color: #e5a084;
-  background: #fae2d5;
+  border-color: var(--color-danger);
+  background: var(--color-danger-soft);
 }
 
 .icon-button {
-  width: 40px;
+  width: var(--control-height);
   padding: 0;
 }
 
@@ -459,17 +476,17 @@ button {
   width: 100%;
   min-height: 72px;
   padding: 12px;
-  border: 1px solid #e0e7e7;
-  border-radius: 8px;
-  color: #172026;
-  background: #ffffff;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  color: var(--color-text);
+  background: var(--color-surface);
   text-align: left;
 }
 
 .select-list button.active,
-.select-list button:hover {
-  border-color: #256f6d;
-  background: #eff8f4;
+.select-list button:not(:disabled):hover {
+  border-color: var(--color-accent-border);
+  background: var(--color-accent-soft);
 }
 
 .select-list span {
@@ -477,7 +494,7 @@ button {
 }
 
 .select-list small {
-  color: #66787b;
+  color: var(--color-text-muted);
 }
 
 .editor-form {
@@ -496,14 +513,14 @@ button {
 .test-edit-form {
   margin-top: 18px;
   padding-top: 18px;
-  border-top: 1px solid #e0e7e7;
+  border-top: 1px solid var(--color-border);
 }
 
 .task-create-form,
 .panel-section {
   margin-top: 18px;
   padding-top: 18px;
-  border-top: 1px solid #e0e7e7;
+  border-top: 1px solid var(--color-border);
 }
 
 .test-meta-grid {
@@ -513,9 +530,9 @@ button {
 .version-panel {
   margin-top: 18px;
   padding: 16px;
-  border: 1px solid #dbe3e4;
-  border-radius: 8px;
-  background: #f7faf9;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background: var(--color-surface-subtle);
 }
 
 .version-panel h3 {
@@ -545,17 +562,17 @@ button {
   gap: 7px;
   min-height: 38px;
   padding: 4px 8px 4px 12px;
-  border: 1px solid #d7e2e0;
-  border-radius: 999px;
-  color: #3f5154;
-  background: #ffffff;
+  border: 1px solid var(--color-border-control);
+  border-radius: var(--radius-pill);
+  color: var(--color-text-secondary);
+  background: var(--color-surface);
   font-weight: 800;
 }
 
 .version-list button.active,
 .version-list button:not(:disabled):hover {
-  border-color: #256f6d;
-  box-shadow: 0 0 0 2px rgba(37, 111, 109, 0.12);
+  border-color: var(--color-accent);
+  box-shadow: var(--shadow-selected);
 }
 
 .version-readonly-note {
@@ -582,27 +599,27 @@ button {
   align-items: center;
   justify-content: center;
   gap: 7px;
-  min-height: 38px;
+  min-height: var(--control-height-compact);
   padding: 0 12px;
-  border: 1px solid #d7e2e0;
-  border-radius: 8px;
-  color: #3f5154;
-  background: #ffffff;
+  border: 1px solid var(--color-border-control);
+  border-radius: var(--radius-control);
+  color: var(--color-text-secondary);
+  background: var(--color-surface);
   font-weight: 750;
 }
 
 .task-panel-actions button.active,
 .task-panel-actions button:not(:disabled):hover {
-  color: #ffffff;
-  border-color: #256f6d;
-  background: #256f6d;
+  color: var(--color-on-accent);
+  border-color: var(--color-accent);
+  background: var(--color-accent);
 }
 
 .task-panel-actions button:disabled {
   cursor: default;
-  color: #9aabad;
-  border-color: #e0e7e7;
-  background: #f4f7f7;
+  color: var(--color-text-disabled);
+  border-color: var(--color-border);
+  background: var(--color-surface-muted);
 }
 
 .task-card-header {
@@ -622,13 +639,13 @@ button {
 }
 
 .task-penalty {
-  color: #8a5b12;
+  color: var(--color-warning);
   font-size: 12px;
   font-weight: 800;
 }
 
 .hidden-task {
-  background: #f8faf9;
+  background: var(--color-surface-subtle);
 }
 
 .hidden-task p,
@@ -655,15 +672,15 @@ button {
   width: 100%;
   min-height: 36px;
   padding: 8px 10px;
-  border: 1px solid #dfe8e8;
-  border-radius: 8px;
-  color: #3f5154;
-  background: #f7faf9;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  color: var(--color-text-secondary);
+  background: var(--color-surface-subtle);
 }
 
 .answer-option-list span.correct {
-  color: #116149;
-  border-color: #b8e8cd;
-  background: #edf8f2;
+  color: var(--color-success);
+  border-color: var(--color-success-border);
+  background: var(--color-success-surface);
   font-weight: 750;
 }

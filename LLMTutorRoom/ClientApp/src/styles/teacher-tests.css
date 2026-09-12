@@ -26,9 +26,9 @@
   min-width: 32px;
   min-height: 28px;
   padding: 4px 9px;
-  border-radius: 999px;
-  color: #ffffff;
-  background: #256f6d;
+  border-radius: var(--radius-pill);
+  color: var(--color-accent);
+  background: var(--color-accent-soft);
   font-size: 12px;
   font-weight: 850;
 }
@@ -48,7 +48,7 @@
 .role-teacher .teacher-test-list > button {
   min-height: 82px;
   padding: 13px;
-  border-radius: 11px;
+  border-radius: var(--radius-card);
 }
 
 .role-teacher .teacher-test-list-primary {
@@ -73,18 +73,18 @@
   align-items: center;
   gap: 10px;
   padding: 12px;
-  border-radius: 10px;
-  color: #607376;
-  background: #f3f7f6;
+  border-radius: var(--radius-card);
+  color: var(--color-text-muted);
+  background: var(--color-surface-subtle);
   font-size: 13px;
   line-height: 1.45;
 }
 
 .role-teacher .teacher-create-test {
   margin-top: 2px;
-  border: 1px solid #d9e4e2;
-  border-radius: 12px;
-  background: #f8faf9;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background: var(--color-surface-subtle);
 }
 
 .role-teacher .teacher-create-test-toggle {
@@ -97,7 +97,7 @@
   padding: 10px;
   border: 0;
   border-radius: inherit;
-  color: #26393b;
+  color: var(--color-text-secondary);
   background: transparent;
   text-align: left;
 }
@@ -108,7 +108,7 @@
 }
 
 .role-teacher .teacher-create-test-toggle small {
-  color: #6a7c7f;
+  color: var(--color-text-muted);
 }
 
 .role-teacher .teacher-create-test-toggle > svg {
@@ -157,8 +157,8 @@
 .role-teacher .teacher-version-panel {
   margin-top: 0;
   padding: 17px;
-  border-radius: 12px;
-  background: #f5f8f7;
+  border-radius: var(--radius-card);
+  background: var(--color-surface-subtle);
 }
 
 .role-teacher .teacher-version-header {
@@ -171,13 +171,13 @@
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 5px;
-  color: #5b6f72;
+  color: var(--color-text-muted);
   font-size: 12px;
   font-weight: 750;
 }
 
 .role-teacher .teacher-version-context svg {
-  color: #256f6d;
+  color: var(--color-accent);
 }
 
 .role-teacher .teacher-version-panel .version-list {
@@ -193,7 +193,7 @@
 
 .role-teacher .teacher-version-actions {
   padding-top: 14px;
-  border-top: 1px solid #dce5e3;
+  border-top: 1px solid var(--color-border);
 }
 
 .role-teacher .teacher-version-actions .button.danger {
@@ -211,15 +211,15 @@
 
 .role-teacher .teacher-test-meta-grid .info-tile {
   min-height: 78px;
-  border-radius: 10px;
+  border-radius: var(--radius-card);
 }
 
 .role-teacher .teacher-editor-surface {
   margin-top: 20px;
   padding: 18px;
-  border: 1px solid #dce5e3;
-  border-radius: 12px;
-  background: #fbfcfc;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background: var(--color-surface-subtle);
 }
 
 .role-teacher .teacher-editor-surface .test-edit-form {
@@ -255,8 +255,8 @@
 
 .role-teacher .teacher-task-card {
   padding: 16px;
-  border-radius: 12px;
-  box-shadow: 0 7px 20px rgba(31, 44, 46, 0.035);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
 }
 
 .role-teacher .teacher-task-card-header {
@@ -285,7 +285,7 @@
 }
 
 .role-teacher .teacher-task-card .teacher-task-number {
-  color: #ffffff;
+  color: var(--color-on-accent);
 }
 
 .role-teacher .teacher-task-subline {
@@ -298,9 +298,9 @@
   gap: 5px;
   min-height: 26px;
   padding: 4px 9px;
-  border-radius: 999px;
-  color: #485f62;
-  background: #eff3f3;
+  border-radius: var(--radius-pill);
+  color: var(--color-text-secondary);
+  background: var(--color-surface-muted);
   font-size: 11px;
   font-weight: 800;
 }
@@ -314,7 +314,7 @@
   align-items: center;
   gap: 7px;
   list-style: none;
-  color: #256f6d;
+  color: var(--color-accent);
   font-size: 12px;
   font-weight: 800;
   cursor: pointer;
@@ -335,13 +335,13 @@
 .role-teacher .teacher-task-content {
   margin-top: 12px;
   padding: 13px;
-  border-radius: 10px;
-  background: #f5f8f7;
+  border-radius: var(--radius-control);
+  background: var(--color-surface-subtle);
 }
 
 .role-teacher .teacher-task-content > p {
   margin: 0;
-  color: #344649;
+  color: var(--color-text-secondary);
   white-space: pre-wrap;
 }
 
@@ -352,7 +352,7 @@
 }
 
 .role-teacher .teacher-task-editor .option-editor {
-  border-radius: 11px;
+  border-radius: var(--radius-card);
 }
 
 .role-teacher .teacher-editor-cancel {

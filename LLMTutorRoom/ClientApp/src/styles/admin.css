@@ -1,11 +1,5 @@
 /* Admin workspace */
 
-.role-admin .workspace {
-  background:
-    radial-gradient(circle at 96% 0%, rgba(123, 169, 214, 0.1), transparent 25%),
-    transparent;
-}
-
 .role-admin .admin-page {
   display: grid;
   gap: 20px;
@@ -14,7 +8,7 @@
 }
 
 .role-admin .admin-panel {
-  border-radius: 14px;
+  border-radius: var(--radius-panel);
 }
 
 .role-admin .admin-page-heading {
@@ -24,12 +18,10 @@
   gap: 24px;
   min-height: 118px;
   padding: 22px 24px;
-  border: 1px solid #d8e4e2;
-  border-radius: 14px;
-  background:
-    linear-gradient(120deg, rgba(239, 248, 244, 0.96), rgba(247, 250, 252, 0.98)),
-    #ffffff;
-  box-shadow: 0 14px 34px rgba(31, 44, 46, 0.05);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-panel);
+  background: var(--background-highlight);
+  box-shadow: var(--shadow-panel);
 }
 
 .role-admin .admin-page-heading-copy,
@@ -61,7 +53,7 @@
 .role-admin .admin-section-header p,
 .role-admin .admin-teacher-picker p {
   margin: 7px 0 0;
-  color: #5d7073;
+  color: var(--color-text-muted);
   line-height: 1.5;
 }
 
@@ -75,21 +67,21 @@
   display: grid;
   flex: 0 0 auto;
   place-items: center;
-  color: #205f5d;
-  background: #dff3e9;
+  color: var(--color-accent);
+  background: var(--color-accent-soft);
 }
 
 .role-admin .admin-page-icon {
   width: 46px;
   height: 46px;
-  border-radius: 12px;
+  border-radius: var(--radius-card);
 }
 
 .role-admin .admin-section-icon,
 .role-admin .admin-model-icon {
   width: 40px;
   height: 40px;
-  border-radius: 10px;
+  border-radius: var(--radius-control);
 }
 
 .role-admin .admin-page-summary-group {
@@ -102,20 +94,20 @@
   display: grid;
   min-width: 96px;
   padding: 11px 14px;
-  border: 1px solid #d5e5e0;
-  border-radius: 11px;
-  background: rgba(255, 255, 255, 0.8);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
 }
 
 .role-admin .admin-page-summary strong {
-  color: #205f5d;
+  color: var(--color-accent);
   font-size: 22px;
   line-height: 1;
 }
 
 .role-admin .admin-page-summary span {
   margin-top: 5px;
-  color: #647679;
+  color: var(--color-text-muted);
   font-size: 11px;
   font-weight: 750;
   white-space: nowrap;
@@ -177,9 +169,9 @@
   min-width: 34px;
   height: 30px;
   padding-inline: 9px;
-  border-radius: 999px;
-  color: #205f5d;
-  background: #e2f3eb;
+  border-radius: var(--radius-pill);
+  color: var(--color-accent);
+  background: var(--color-accent-soft);
   font-size: 12px;
   font-weight: 850;
 }
@@ -195,17 +187,17 @@
   z-index: 1;
   top: 50%;
   left: 13px;
-  color: #718184;
+  color: var(--color-text-muted);
   transform: translateY(-50%);
   pointer-events: none;
 }
 
 .role-admin .admin-search input {
-  height: 44px;
+  height: var(--control-height);
   padding-right: 45px;
   padding-left: 40px;
-  border-radius: 10px;
-  background: #f8faf9;
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
 }
 
 .role-admin .admin-search input::-webkit-search-cancel-button {
@@ -223,8 +215,8 @@
   height: 34px;
   padding: 0;
   border: 0;
-  border-radius: 8px;
-  color: #64777a;
+  border-radius: var(--radius-control);
+  color: var(--color-text-muted);
   background: transparent;
   cursor: pointer;
   transform: translateY(-50%);
@@ -233,8 +225,8 @@
 
 .role-admin .admin-search-clear:hover,
 .role-admin .admin-search-clear:focus-visible {
-  color: #174f4d;
-  background: #dfeee9;
+  color: var(--color-accent);
+  background: var(--color-accent-soft);
 }
 
 .role-admin .admin-teacher-list {
@@ -249,14 +241,14 @@
   gap: 12px;
   min-height: 68px;
   padding: 11px 13px;
-  border: 1px solid #dfe8e6;
-  border-radius: 11px;
-  background: #fbfcfc;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background: var(--color-surface-subtle);
 }
 
 .role-admin .admin-teacher-row:hover {
-  border-color: #bfd6d1;
-  background: #f7fbf9;
+  border-color: var(--color-accent-border);
+  background: var(--color-accent-soft);
 }
 
 .role-admin .admin-teacher-avatar {
@@ -264,9 +256,9 @@
   place-items: center;
   width: 42px;
   height: 42px;
-  border-radius: 11px;
-  color: #ffffff;
-  background: #2b7370;
+  border-radius: var(--radius-control);
+  color: var(--color-accent);
+  background: var(--color-accent-soft);
   font-size: 12px;
   font-weight: 850;
   letter-spacing: 0.02em;
@@ -286,7 +278,7 @@
 
 .role-admin .admin-teacher-identity span {
   min-width: 0;
-  color: #5d7073;
+  color: var(--color-text-muted);
   font-size: 12px;
   overflow-wrap: anywhere;
   user-select: text;
@@ -299,7 +291,7 @@
 }
 
 .role-admin .admin-form .field small {
-  color: #5d7073;
+  color: var(--color-text-muted);
   font-size: 12px;
   font-weight: 600;
 }
@@ -307,8 +299,8 @@
 .role-admin .admin-form input,
 .role-admin .admin-form select,
 .role-admin .admin-teacher-select select {
-  height: 45px;
-  border-radius: 10px;
+  height: var(--control-height);
+  border-radius: var(--radius-control);
 }
 
 .role-admin .admin-period-field {
@@ -319,8 +311,8 @@
 
 .role-admin .admin-submit {
   width: 100%;
-  min-height: 45px;
-  border-radius: 10px;
+  min-height: var(--control-height);
+  border-radius: var(--radius-control);
 }
 
 .role-admin .admin-action-message:empty {
@@ -334,7 +326,7 @@
   gap: 7px;
   min-height: 230px;
   padding: 24px;
-  color: #617477;
+  color: var(--color-text-muted);
   text-align: center;
 }
 
@@ -343,11 +335,11 @@
 }
 
 .role-admin .admin-state > svg {
-  color: #397874;
+  color: var(--color-accent);
 }
 
 .role-admin .admin-state strong {
-  color: #263638;
+  color: var(--color-text);
 }
 
 .role-admin .admin-state span {
@@ -363,7 +355,7 @@
 
 .role-admin .admin-page-state {
   min-height: 280px;
-  border-radius: 14px;
+  border-radius: var(--radius-panel);
 }
 
 .role-admin .admin-page-state > div {
@@ -405,10 +397,10 @@
   left: 0;
   max-height: 280px;
   padding: 6px;
-  border: 1px solid #cedddb;
-  border-radius: 10px;
-  background: #ffffff;
-  box-shadow: 0 14px 32px rgba(31, 56, 52, 0.16);
+  border: 1px solid var(--color-border-control);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-floating);
   overflow-y: auto;
 }
 
@@ -419,17 +411,17 @@
   gap: 10px;
   min-height: 52px;
   padding: 8px 10px;
-  border-radius: 7px;
-  color: #2c3e40;
+  border-radius: var(--radius-small);
+  color: var(--color-text-secondary);
   cursor: pointer;
 }
 
 .role-admin .admin-teacher-option.highlighted {
-  background: #edf6f3;
+  background: var(--color-accent-soft);
 }
 
 .role-admin .admin-teacher-option[aria-selected="true"] {
-  color: #175a55;
+  color: var(--color-accent);
 }
 
 .role-admin .admin-teacher-option > span {
@@ -446,20 +438,20 @@
 }
 
 .role-admin .admin-teacher-option small {
-  color: #637679;
+  color: var(--color-text-muted);
   font-size: 12px;
   overflow-wrap: anywhere;
 }
 
 .role-admin .admin-teacher-option > svg {
   flex: 0 0 auto;
-  color: #26736b;
+  color: var(--color-accent);
 }
 
 .role-admin .admin-teacher-options-empty {
   margin: 0;
   padding: 13px 10px;
-  color: #637679;
+  color: var(--color-text-muted);
   font-size: 13px;
   text-align: center;
 }
@@ -469,20 +461,21 @@
   align-items: center;
   gap: 10px;
   padding: 12px 14px;
-  border: 1px solid #bfe0d0;
-  border-radius: 11px;
-  color: #245c4d;
-  background: #edf8f2;
+  border: 1px solid var(--color-success-border);
+  border-radius: var(--radius-card);
+  color: var(--color-success);
+  background: var(--color-success-surface);
 }
 
 .role-admin .admin-action-banner.error {
-  border-color: #efc8b8;
-  color: #8a351e;
-  background: #fff4ee;
+  border-color: var(--color-danger-border);
+  color: var(--color-danger);
+  background: var(--color-danger-surface);
 }
 
 .role-admin .admin-action-banner p {
   padding: 0;
+  color: inherit;
   background: transparent;
 }
 
@@ -495,15 +488,15 @@
   display: grid;
   gap: 15px;
   padding: 16px;
-  border: 1px solid #dce7e5;
-  border-radius: 12px;
-  background: #fbfcfc;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background: var(--color-surface-subtle);
   transition: border-color 160ms ease, box-shadow 160ms ease;
 }
 
 .role-admin .admin-access-card.editing {
-  border-color: #77aaa2;
-  box-shadow: 0 0 0 3px rgba(37, 111, 109, 0.1);
+  border-color: var(--color-accent-border);
+  box-shadow: var(--shadow-selected);
 }
 
 .role-admin .admin-access-card-header,
@@ -539,8 +532,8 @@
   white-space: nowrap;
 }
 
-.role-admin .admin-model-identity span {
-  color: #5d7073;
+.role-admin .admin-model-identity > div > span {
+  color: var(--color-text-muted);
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 12px;
 }
@@ -551,7 +544,7 @@
   align-items: center;
   min-height: 28px;
   padding: 0 9px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   font-size: 11px;
   font-weight: 800;
   white-space: nowrap;
@@ -566,33 +559,33 @@
 }
 
 .role-admin .admin-access-state.active {
-  color: #116149;
-  background: #dff5e9;
+  color: var(--color-success);
+  background: var(--color-success-soft);
 }
 
 .role-admin .admin-access-state.disabled {
-  color: #56676a;
-  background: #e9eeee;
+  color: var(--color-text-secondary);
+  background: var(--color-surface-muted);
 }
 
 .role-admin .admin-access-state.warning {
-  color: #805f13;
-  background: #f8edc7;
+  color: var(--color-warning);
+  background: var(--color-warning-soft);
 }
 
 .role-admin .admin-access-quota {
   display: grid;
   gap: 8px;
   padding: 12px;
-  border-radius: 10px;
-  background: #f1f7f5;
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
 }
 
 .role-admin .admin-access-quota span {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  color: #52676a;
+  color: var(--color-text-secondary);
   font-size: 12px;
   font-weight: 750;
 }
@@ -603,27 +596,27 @@
 
 .role-admin .admin-access-quota progress {
   width: 100%;
-  height: 7px;
+  height: var(--progress-height);
   border: 0;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   overflow: hidden;
-  background: #d9e6e2;
+  background: var(--color-surface-muted);
   appearance: none;
 }
 
 .role-admin .admin-access-quota progress::-webkit-progress-bar {
-  border-radius: 999px;
-  background: #d9e6e2;
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-muted);
 }
 
 .role-admin .admin-access-quota progress::-webkit-progress-value {
-  border-radius: 999px;
-  background: #3c8a7e;
+  border-radius: var(--radius-pill);
+  background: var(--color-accent);
 }
 
 .role-admin .admin-access-quota progress::-moz-progress-bar {
-  border-radius: 999px;
-  background: #3c8a7e;
+  border-radius: var(--radius-pill);
+  background: var(--color-accent);
 }
 
 .role-admin .admin-access-meta {
@@ -636,16 +629,16 @@
 .role-admin .admin-access-meta > div {
   min-width: 0;
   padding: 10px;
-  border: 1px solid #e4ecea;
-  border-radius: 9px;
-  background: #ffffff;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
 }
 
 .role-admin .admin-access-meta dt {
   display: flex;
   align-items: center;
   gap: 4px;
-  color: #5d7073;
+  color: var(--color-text-muted);
   font-size: 11px;
   font-weight: 800;
   text-transform: uppercase;
@@ -660,11 +653,11 @@
 
 .role-admin .admin-access-actions {
   padding-top: 13px;
-  border-top: 1px solid #e2e9e8;
+  border-top: 1px solid var(--color-border);
 }
 
 .role-admin .admin-access-actions .button {
-  min-height: 38px;
+  min-height: var(--control-height-compact);
 }
 
 .role-admin .admin-editor-close {
@@ -679,9 +672,9 @@
   gap: 11px;
   min-height: 62px;
   padding: 10px 12px;
-  border: 1px solid #dce6e4;
-  border-radius: 10px;
-  background: #f8faf9;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface-subtle);
   cursor: pointer;
 }
 
@@ -697,8 +690,8 @@
   display: block;
   width: 38px;
   height: 22px;
-  border-radius: 999px;
-  background: #b8c6c5;
+  border-radius: var(--radius-pill);
+  background: var(--color-border-control);
   transition: background 160ms ease;
 }
 
@@ -709,14 +702,14 @@
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  background: #ffffff;
-  box-shadow: 0 1px 4px rgba(19, 42, 38, 0.25);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-control);
   transition: transform 160ms ease;
   content: "";
 }
 
 .role-admin .admin-switch input:checked + span {
-  background: #2d7973;
+  background: var(--color-accent);
 }
 
 .role-admin .admin-switch input:checked + span::after {
@@ -724,7 +717,7 @@
 }
 
 .role-admin .admin-switch input:focus-visible + span {
-  outline: 3px solid rgba(37, 111, 109, 0.2);
+  outline: 2px solid var(--color-accent);
   outline-offset: 2px;
 }
 
@@ -739,26 +732,14 @@
 }
 
 .role-admin .admin-switch strong {
-  color: #324548;
+  color: var(--color-text-secondary);
   font-size: 13px;
 }
 
 .role-admin .admin-switch small {
-  color: #5d7073;
+  color: var(--color-text-muted);
   font-size: 12px;
   line-height: 1.35;
-}
-
-.role-admin :is(
-  button,
-  a,
-  input,
-  select,
-  textarea,
-  .admin-action-banner
-):focus-visible {
-  outline: 3px solid rgba(37, 111, 109, 0.2);
-  outline-offset: 2px;
 }
 
 .workspace-sidebar-close,

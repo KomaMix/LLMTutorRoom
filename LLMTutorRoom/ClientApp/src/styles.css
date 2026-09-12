@@ -1,3 +1,4 @@
+@import "./styles/tokens.css";
 @import "./styles/core.css";
 @import "./styles/forms.css";
 @import "./styles/student.css";
