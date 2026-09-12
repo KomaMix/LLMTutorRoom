@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef } from "react";
 import { FileText } from "lucide-react";
 import {
   Navigate,
+  Link,
   Route,
   Routes,
   useBlocker,
@@ -10,6 +11,7 @@ import {
 } from "react-router-dom";
 import { useNavigationGuard } from "../../app/NavigationGuardContext.jsx";
 import { StudentResults, StudentWorkspace, useStudentAttempt } from "./index.js";
+import { useStudentTestAvailability } from "./useStudentTestAvailability.js";
 
 const completedReviewStatuses = new Set(["checked", "failed"]);
 
@@ -81,12 +83,19 @@ function StudentTestsRoute({ overview, refresh, updateAttempt }) {
   const { registerBeforeLogout } = useNavigationGuard();
   const blockerRef = useRef(null);
   const allowSubmittedNavigationRef = useRef(false);
+  const { availableTests, attemptByTestId } = useStudentTestAvailability(
+    overview.tests,
+    overview.attempts);
+  // Keep the requested attempt mounted until the navigation guard finishes saving.
   const selectedTest = overview.tests.find(test => test.id === testId)
-    ?? overview.tests[0]
+    ?? availableTests[0]
     ?? null;
   const selectedAttempt = selectedTest
-    ? overview.attempts.find(attempt => attempt.testId === selectedTest.id) ?? null
+    ? attemptByTestId.get(selectedTest.id) ?? null
     : null;
+  const selectedTestId = selectedTest?.id ?? null;
+  const selectedAttemptId = selectedAttempt?.id ?? null;
+  const isSelectedTestAvailable = availableTests.some(test => test.id === selectedTest?.id);
   const selectedReview = selectedAttempt
     ? overview.reviews.find(review => review.attemptId === selectedAttempt.id) ?? null
     : null;
@@ -167,16 +176,26 @@ function StudentTestsRoute({ overview, refresh, updateAttempt }) {
   ]);
 
   useEffect(() => {
-    if (selectedTest && selectedTest.id !== testId) {
-      navigate(`/student/tests/${selectedTest.id}`, { replace: true });
+    if (!selectedTestId) {
+      return;
     }
-  }, [navigate, selectedTest, testId]);
+
+    if (!isSelectedTestAvailable) {
+      const entryId = selectedAttemptId
+        ? `attempt-${selectedAttemptId}`
+        : `test-${selectedTestId}`;
+      navigate(`/student/results#${entryId}`, { replace: true });
+    } else if (selectedTestId !== testId) {
+      navigate(`/student/tests/${selectedTestId}`, { replace: true });
+    }
+  }, [navigate, selectedTestId, selectedAttemptId, isSelectedTestAvailable, testId]);
 
   if (!selectedTest) {
     return (
       <section className="panel empty-state">
         <FileText size={28} aria-hidden="true" />
         <h2>Доступных тестов пока нет</h2>
+        <Link className="button secondary" to="/student/results">Открыть результаты</Link>
       </section>
     );
   }
@@ -191,7 +210,7 @@ function StudentTestsRoute({ overview, refresh, updateAttempt }) {
 
   return (
     <StudentWorkspace
-      tests={overview.tests}
+      tests={availableTests}
       selectedTest={selectedTest}
       selectedTestId={selectedTest.id}
       selectedAttempt={selectedAttempt}

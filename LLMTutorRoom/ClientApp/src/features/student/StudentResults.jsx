@@ -19,12 +19,17 @@ import {
   getEffectiveAttemptStatus,
   getReviewStatusMessage
 } from "./attemptUtils.js";
+import {
+  getUnavailableTestStatus,
+  useStudentTestAvailability
+} from "./useStudentTestAvailability.js";
 
 function getEntryTime(entry) {
   const value = entry.review?.submittedAt
     ?? entry.attempt?.submittedAt
     ?? entry.attempt?.endsAt
-    ?? entry.attempt?.startedAt;
+    ?? entry.attempt?.startedAt
+    ?? entry.test?.deadline;
   const timestamp = new Date(value).getTime();
   return Number.isFinite(timestamp) ? timestamp : 0;
 }
@@ -32,7 +37,7 @@ function getEntryTime(entry) {
 function getEntryId(entry) {
   return entry.attempt
     ? `attempt-${entry.attempt.id}`
-    : `review-${entry.review.id}`;
+    : entry.review ? `review-${entry.review.id}` : `test-${entry.test.id}`;
 }
 
 function getEntryTitle(entry) {
@@ -43,7 +48,8 @@ function getEntryDate(entry) {
   return entry.review?.submittedAt
     ?? entry.attempt?.submittedAt
     ?? entry.attempt?.endsAt
-    ?? entry.attempt?.startedAt;
+    ?? entry.attempt?.startedAt
+    ?? entry.test?.deadline;
 }
 
 function getEntryStatus(entry, currentTime) {
@@ -52,7 +58,7 @@ function getEntryStatus(entry, currentTime) {
   }
 
   if (!entry.attempt) {
-    return null;
+    return entry.test ? getUnavailableTestStatus(entry.test, currentTime) : null;
   }
 
   const remainingSeconds = Math.ceil(
@@ -113,10 +119,9 @@ function ReviewTaskDetails({ result, taskIndex }) {
   return (
     <section className="student-result-task">
       <header>
-        <span className="student-task-number">{taskIndex + 1}</span>
         <div>
-          <strong>{result.taskTitle}</strong>
-          <span>Задание {taskIndex + 1}</span>
+          <h4>Задание {taskIndex + 1}</h4>
+          <span>{result.taskTitle}</span>
         </div>
         <strong className="student-result-task-score">
           {result.score}/{result.maxScore}
@@ -156,14 +161,15 @@ function StudentResultCard({ attempt, currentTime, isReviewDeferred, review, tes
   const attemptStatus = attempt
     ? getEffectiveAttemptStatus(attempt, remainingSeconds)
     : null;
-  const displayStatus = review?.status ?? attemptStatus;
+  const displayStatus = getEntryStatus({ attempt, review, test }, currentTime);
   const isChecked = review?.status === "checked";
+  const isNotStarted = !attempt && !review;
   const title = test?.title ?? review?.testTitle ?? "Тест";
 
   return (
     <article
       className={`student-result-card${isChecked ? " checked" : ""}`}
-      id={attempt ? `attempt-${attempt.id}` : `review-${review.id}`}
+      id={getEntryId({ attempt, review, test })}
     >
       <header className="student-result-header">
         <div>
@@ -173,7 +179,17 @@ function StudentResultCard({ attempt, currentTime, isReviewDeferred, review, tes
         {displayStatus && <StatusBadge status={displayStatus} />}
       </header>
 
-      {isChecked ? (
+      {isNotStarted ? (
+        <div className={`student-result-state ${displayStatus === "expired" ? "expired" : "deferred"}`}>
+          <Clock3 size={20} aria-hidden="true" />
+          <div>
+            <strong>{displayStatus === "expired"
+              ? "Срок выполнения теста истёк"
+              : "Тест больше недоступен для выполнения"}</strong>
+            <p>Вы не начинали этот тест.</p>
+          </div>
+        </div>
+      ) : isChecked ? (
         <div className="student-result-summary">
           <div className="student-result-score">
             <strong>{review.score}</strong>
@@ -193,6 +209,12 @@ function StudentResultCard({ attempt, currentTime, isReviewDeferred, review, tes
       )}
 
       <div className="student-result-meta">
+        {isNotStarted && test.deadline && (
+          <span>
+            <Clock3 size={15} aria-hidden="true" />
+            Срок выполнения {formatDate(test.deadline)}
+          </span>
+        )}
         {attempt?.startedAt && (
           <span><Clock3 size={15} aria-hidden="true" />Начат {formatDate(attempt.startedAt)}</span>
         )}
@@ -235,7 +257,7 @@ export function StudentResults({ attempts, reviews, tests, terminalReviewsNextCu
   const { hash } = useLocation();
   const [selectedEntryId, setSelectedEntryId] = useState(() =>
     hash ? decodeURIComponent(hash.slice(1)) : null);
-  const [currentTime, setCurrentTime] = useState(Date.now());
+  const { unavailableTests, attemptByTestId, currentTime } = useStudentTestAvailability(tests, attempts);
   const [terminalReviews, setTerminalReviews] = useState(() =>
     reviews.filter(isTerminalReview));
   const [nextCursor, setNextCursor] = useState(terminalReviewsNextCursor ?? null);
@@ -256,6 +278,7 @@ export function StudentResults({ attempts, reviews, tests, terminalReviewsNextCu
     ? Math.min(...terminalReviewTimes)
     : null;
   const completedAttemptIds = new Set(completedAttempts.map(attempt => attempt.id));
+  const reviewedTestIds = new Set(visibleReviews.map(review => review.testId));
   const entries = [
     ...completedAttempts.map(attempt => ({
       attempt,
@@ -274,6 +297,14 @@ export function StudentResults({ attempts, reviews, tests, terminalReviewsNextCu
         attempt: null,
         review,
         test: tests.find(test => test.id === review.testId) ?? null,
+        isReviewDeferred: false
+      })),
+    ...unavailableTests
+      .filter(test => !attemptByTestId.has(test.id) && !reviewedTestIds.has(test.id))
+      .map(test => ({
+        attempt: null,
+        review: null,
+        test,
         isReviewDeferred: false
       }))
   ].sort((left, right) => getEntryTime(right) - getEntryTime(left));
@@ -312,25 +343,6 @@ export function StudentResults({ attempts, reviews, tests, terminalReviewsNextCu
     }
   }, [reviews, terminalReviewsNextCursor]);
 
-  useEffect(() => {
-    const nextDeadline = attempts
-      .filter(attempt => attempt.status === "in-progress")
-      .map(attempt => new Date(attempt.endsAt).getTime())
-      .filter(deadline => Number.isFinite(deadline) && deadline > currentTime)
-      .sort((left, right) => left - right)[0];
-
-    if (!nextDeadline) {
-      return;
-    }
-
-    const maximumTimeout = 2_147_000_000;
-    const delay = Math.min(
-      maximumTimeout,
-      Math.max(25, nextDeadline - Date.now() + 25));
-    const timer = window.setTimeout(() => setCurrentTime(Date.now()), delay);
-    return () => window.clearTimeout(timer);
-  }, [attempts, currentTime]);
-
   async function handleLoadMore() {
     if (!nextCursor || isLoadingHistory) {
       return;
@@ -366,7 +378,7 @@ export function StudentResults({ attempts, reviews, tests, terminalReviewsNextCu
       <header className="student-results-heading">
         <div>
           <h2>Результаты тестов</h2>
-          <p>Здесь собраны завершённые попытки и подробные комментарии к ответам.</p>
+          <p>Завершённые попытки, комментарии к ответам и тесты, которые уже недоступны для выполнения.</p>
         </div>
         <span className="count-badge">{entries.length}</span>
       </header>

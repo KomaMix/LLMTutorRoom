@@ -19,19 +19,8 @@
 }
 
 .student-option:not(.readonly):hover {
-  border-color: var(--color-accent-border);
-  background: var(--color-accent-soft);
-}
-
-.student-option.selected {
-  color: var(--color-accent);
-  border-color: var(--color-accent-border);
-  background: var(--color-accent-soft);
-  font-weight: 700;
-}
-
-.student-option.selected > span {
-  color: inherit;
+  border-color: var(--color-border-control);
+  background: var(--color-surface-muted);
 }
 
 .student-option.readonly {
@@ -47,7 +36,13 @@
   width: 18px;
   height: 18px;
   margin: 0;
-  accent-color: var(--color-accent);
+  padding: 0;
+  accent-color: var(--color-text-secondary);
+}
+
+.student-option input:focus-visible {
+  outline: 2px solid var(--color-text-secondary);
+  outline-offset: 2px;
 }
 
 .task-type-grid {
@@ -175,7 +170,7 @@ textarea {
   height: 92px;
 }
 
-input:focus,
+input:not([type="radio"]):not([type="checkbox"]):focus,
 select:focus,
 textarea:focus {
   border-color: var(--color-accent);

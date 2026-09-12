@@ -259,10 +259,7 @@ export function StudentWorkspace({
         {selectedAttempt && (
           <>
             <div className="student-section-heading">
-              <div>
-                <span className="eyebrow">Задания</span>
-                <h3>{isReadOnly ? "Ваши ответы" : "Выполнение теста"}</h3>
-              </div>
+              <h3>{isReadOnly ? "Ваши ответы" : "Текст"}</h3>
               {isReadOnly && <span className="student-readonly-label">Только просмотр</span>}
             </div>
 
@@ -318,10 +315,9 @@ export function StudentWorkspace({
                 return (
                   <article className={`answer-card${isReadOnly ? " readonly" : ""}`} key={task.id}>
                     <header className="student-answer-card-header">
-                      <span className="student-task-number">{taskIndex + 1}</span>
                       <div>
-                        <strong>{task.title}</strong>
-                        <span>Задание {taskIndex + 1}</span>
+                        <h4>Задание {taskIndex + 1}</h4>
+                        <span>{task.title}</span>
                       </div>
                       <span className="student-task-points">{formatPoints(task.maxPoints)}</span>
                     </header>
