@@ -29,6 +29,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "docs", "docs", "{955A505C-D
 		docs\README.md = docs\README.md
 		docs\review-service.md = docs\review-service.md
 		docs\teaching-service.md = docs\teaching-service.md
+		docs\images\llmtutorroom-admin-model-access.png = docs\images\llmtutorroom-admin-model-access.png
+		docs\images\llmtutorroom-review-history.png = docs\images\llmtutorroom-review-history.png
 	EndProjectSection
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LLMTutorRoom.Tests", "LLMTutorRoom.Tests\LLMTutorRoom.Tests.csproj", "{E54A4B3E-3B11-45E2-AD27-38003E4446D3}"

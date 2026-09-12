@@ -86,13 +86,11 @@ flowchart LR
 
 ### Управление доступами к моделям
 
-> Место для скриншота. Ожидаемый файл:
-> `docs/images/llmtutorroom-admin-model-access.png`.
+![Управление доступами к моделям](docs/images/llmtutorroom-admin-model-access.png)
 
 ### Очередь и история проверок
 
-> Место для скриншота. Ожидаемый файл:
-> `docs/images/llmtutorroom-review-history.png`.
+![Очередь и история проверок](docs/images/llmtutorroom-review-history.png)
 
 ## Быстрый запуск
 
