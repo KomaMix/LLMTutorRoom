@@ -68,7 +68,6 @@ export function TestDetails({
           <h2>{selectedTest.title}</h2>
         </div>
         <div className="teacher-test-heading-status">
-          <span className="teacher-version-number">Версия {selectedTest.versionNumber}</span>
           <StatusBadge status={selectedTest.status} />
         </div>
       </header>

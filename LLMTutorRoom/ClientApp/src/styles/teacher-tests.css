@@ -249,46 +249,18 @@
 }
 
 .role-teacher .teacher-task-card-identity {
-  display: grid;
-  grid-template-columns: 34px minmax(0, 1fr);
-  align-items: center;
-  gap: 12px;
   min-width: 0;
-}
-
-.role-teacher .teacher-task-card-identity > div {
-  display: grid;
-  gap: 3px;
-  min-width: 0;
-}
-
-.role-teacher .teacher-task-card-identity strong {
   overflow-wrap: anywhere;
-}
-
-.role-teacher .teacher-task-card .teacher-task-number {
-  color: var(--color-on-accent);
-}
-
-.role-teacher .teacher-task-subline {
-  margin-left: 46px;
 }
 
 .role-teacher .teacher-task-check-mode {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  min-height: 26px;
-  padding: 4px 9px;
-  border-radius: var(--radius-pill);
-  color: var(--color-text-secondary);
-  background: var(--color-surface-muted);
-  font-size: 11px;
-  font-weight: 800;
 }
 
 .role-teacher .teacher-task-disclosure {
-  margin: 13px 0 0 46px;
+  margin: 13px 0 0;
 }
 
 .role-teacher .teacher-task-disclosure summary {
@@ -318,7 +290,7 @@
   margin-top: 12px;
   padding: 13px;
   border-radius: var(--radius-control);
-  background: var(--color-surface-subtle);
+  background: var(--color-surface);
 }
 
 .role-teacher .teacher-task-content > p {

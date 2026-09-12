@@ -32,7 +32,8 @@
   background: var(--color-surface-subtle);
 }
 
-.student-option input {
+.student-option input,
+.option-editor-row .option-control {
   width: 18px;
   height: 18px;
   margin: 0;
@@ -40,7 +41,8 @@
   accent-color: var(--color-text-secondary);
 }
 
-.student-option input:focus-visible {
+.student-option input:focus-visible,
+.option-editor-row .option-control:focus-visible {
   outline: 2px solid var(--color-text-secondary);
   outline-offset: 2px;
 }
@@ -76,11 +78,15 @@
   background: var(--color-surface-muted);
 }
 
-.task-type-grid button.active:not(:disabled),
 .task-type-grid button:not(:disabled):hover {
-  color: var(--color-on-accent);
-  border-color: var(--color-accent);
-  background: var(--color-accent);
+  background: var(--color-selection-background);
+}
+
+.task-type-grid button.active:not(:disabled) {
+  color: var(--color-selection-text);
+  border-color: var(--color-selection-border);
+  background: var(--color-selection-background);
+  box-shadow: var(--shadow-selected);
 }
 
 .option-editor {
@@ -107,11 +113,7 @@
 }
 
 .option-editor-row .option-control {
-  width: 18px;
-  height: 18px;
-  margin: 0;
   justify-self: center;
-  accent-color: var(--color-accent);
 }
 
 .icon-button:disabled {
@@ -319,7 +321,47 @@ textarea:disabled {
   width: 18px;
   height: 18px;
   margin: 0;
-  accent-color: var(--color-accent);
+  accent-color: var(--color-text-secondary);
+}
+
+.task-heading {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.task-heading > h4,
+.task-heading > h5 {
+  margin: 0;
+  color: var(--color-text);
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.task-heading > span {
+  color: var(--color-text-secondary);
+  font-size: 14px;
+  font-weight: 400;
+}
+
+.task-heading > small {
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+
+.task-points {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 5px 10px;
+  border-radius: var(--radius-pill);
+  color: var(--color-text-secondary);
+  background: var(--color-surface-muted);
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .task-list,

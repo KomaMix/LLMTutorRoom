@@ -61,7 +61,7 @@
   }
 
   .role-teacher .teacher-review-row {
-    grid-template-columns: minmax(210px, 1.2fr) minmax(120px, 0.7fr) minmax(110px, 0.55fr) 65px auto;
+    grid-template-columns: minmax(210px, 1.2fr) minmax(120px, 0.7fr) minmax(110px, 0.55fr) auto;
   }
 
   :is(.role-teacher, .role-admin) .sidebar:not(.collapsed) {
@@ -120,10 +120,6 @@
     grid-template-columns: 1fr;
     gap: 11px;
     padding: 15px;
-  }
-
-  .role-teacher .teacher-review-field.score-field {
-    text-align: left;
   }
 
   .role-teacher .teacher-review-open {
@@ -224,16 +220,6 @@
     width: 100%;
   }
 
-  .student-result-summary {
-    grid-template-columns: 1fr;
-  }
-
-  .student-result-score {
-    padding: 0 0 14px;
-    border-right: 0;
-    border-bottom: 1px solid var(--color-success-border);
-  }
-
   .student-test-list-panel .panel-header,
   .student-results-heading,
   .student-result-header {
@@ -319,11 +305,6 @@
     align-self: flex-end;
   }
 
-  .role-teacher .teacher-task-subline,
-  .role-teacher .teacher-task-disclosure {
-    margin-left: 0;
-  }
-
   .role-teacher .teacher-task-panel-header .task-panel-actions {
     width: 100%;
   }
@@ -338,10 +319,6 @@
 
   .role-teacher .teacher-segmented button {
     flex: 1 1 0;
-  }
-
-  .role-teacher .teacher-manual-review-panel {
-    padding: 15px;
   }
 
   .role-teacher .teacher-manual-task-header {

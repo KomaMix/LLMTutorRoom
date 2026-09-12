@@ -119,7 +119,7 @@ function ReviewTaskDetails({ result, taskIndex }) {
   return (
     <section className="student-result-task">
       <header>
-        <div>
+        <div className="task-heading">
           <h4>Задание {taskIndex + 1}</h4>
           <span>{result.taskTitle}</span>
         </div>
@@ -194,10 +194,6 @@ function StudentResultCard({ attempt, currentTime, isReviewDeferred, review, tes
           <div className="student-result-score">
             <strong>{review.score}</strong>
             <span>из {review.maxScore}</span>
-          </div>
-          <div>
-            <span>Итог проверки</span>
-            <p>{review.summary || "Проверка завершена."}</p>
           </div>
         </div>
       ) : (

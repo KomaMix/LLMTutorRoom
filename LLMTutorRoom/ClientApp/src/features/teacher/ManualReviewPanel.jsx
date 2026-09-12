@@ -9,11 +9,15 @@ export function ManualReviewPanel({ review, onDirtyChange, onSaved }) {
   }
 
   return (
-    <section className="manual-review-panel teacher-manual-review-panel">
+    <section
+      className="manual-review-panel teacher-manual-review-panel"
+      id={`teacher-manual-review-${review.id}`}
+      aria-labelledby={`teacher-manual-review-title-${review.id}`}
+    >
       <header className="teacher-section-header">
         <div>
           <span className="eyebrow">Ручная проверка</span>
-          <h3>{review.testTitle}</h3>
+          <h3 id={`teacher-manual-review-title-${review.id}`}>{review.testTitle}</h3>
         </div>
         <UserRoundCheck size={18} aria-hidden="true" />
       </header>

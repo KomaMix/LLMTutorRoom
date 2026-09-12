@@ -11,6 +11,9 @@
   --color-surface-muted: #f1f5f5;
   --color-border: #e0e7e7;
   --color-border-control: #cfdbdc;
+  --color-selection-border: var(--color-text-muted);
+  --color-selection-background: var(--color-surface-muted);
+  --color-selection-text: var(--color-text-secondary);
 
   --color-accent: #256f6d;
   --color-accent-hover: #1f5f5d;
@@ -74,5 +77,5 @@
   --shadow-dialog: 0 30px 70px rgba(16, 28, 25, 0.24);
   --shadow-drawer: 18px 0 48px rgba(16, 28, 25, 0.24);
   --shadow-focus: 0 0 0 3px rgba(37, 111, 109, 0.14);
-  --shadow-selected: 0 0 0 1px var(--color-accent-border);
+  --shadow-selected: 0 0 0 1px var(--color-selection-border);
 }

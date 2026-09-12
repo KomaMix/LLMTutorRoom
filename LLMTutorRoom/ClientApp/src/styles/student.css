@@ -36,8 +36,7 @@
 }
 
 .student-test-facts span,
-.student-readonly-label,
-.student-task-points {
+.student-readonly-label {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -94,28 +93,6 @@
   align-items: center;
 }
 
-.student-answer-card-header > div,
-.student-result-task > header > div {
-  display: grid;
-  gap: 3px;
-  min-width: 0;
-}
-
-.student-answer-card-header h4,
-.student-result-task > header h4 {
-  margin: 0;
-  color: var(--color-text);
-  font-size: 18px;
-  font-weight: 700;
-}
-
-.student-answer-card-header > div > span,
-.student-result-task > header > div > span {
-  color: var(--color-text-secondary);
-  font-size: 14px;
-  font-weight: 400;
-}
-
 .student-task-prompt {
   margin: 16px 0 !important;
   color: var(--color-text-secondary);
@@ -123,8 +100,7 @@
 }
 
 .student-answer-label,
-.student-result-copy-block > span,
-.student-result-summary > div:last-child > span {
+.student-result-copy-block > span {
   display: block;
   margin-bottom: 8px;
   color: var(--color-text-muted);
@@ -305,7 +281,7 @@
 }
 
 .student-result-accordion-item.active {
-  border-color: var(--color-accent-border);
+  border-color: var(--color-selection-border);
   box-shadow: var(--shadow-selected);
 }
 
@@ -395,29 +371,18 @@
 }
 
 .student-result-summary {
-  display: grid;
-  grid-template-columns: 112px minmax(0, 1fr);
+  display: flex;
   align-items: center;
-  gap: 18px;
   margin-top: 18px;
   padding: 16px;
   border-radius: var(--radius-card);
   background: var(--color-success-surface);
 }
 
-.student-result-summary p {
-  margin: 0;
-  color: var(--color-text-secondary);
-  font-size: 15px;
-  line-height: 1.55;
-}
-
 .student-result-score {
   display: flex;
   align-items: baseline;
   gap: 5px;
-  padding-right: 18px;
-  border-right: 1px solid var(--color-success-border);
 }
 
 .student-result-score strong {
@@ -521,7 +486,7 @@
 }
 
 .student-result-copy-block.feedback {
-  background: var(--color-success-surface);
+  background: var(--color-surface-muted);
 }
 
 .student-result-copy-block > span {

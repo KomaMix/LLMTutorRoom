@@ -49,7 +49,7 @@ export function TestList({
           >
             <span className="teacher-test-list-primary">
               <strong>{test.title}</strong>
-              <StatusBadge status={test.status} />
+              <StatusBadge status={test.status} variant="inline" />
             </span>
             <small>{createTestListSummary(test)}</small>
           </button>

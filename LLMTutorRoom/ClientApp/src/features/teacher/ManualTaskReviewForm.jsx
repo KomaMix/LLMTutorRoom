@@ -83,7 +83,7 @@ export function ManualTaskReviewForm({ reviewId, result, onDirtyChange, onSaved 
   }
 
   return (
-    <form className="result-card manual-review-form teacher-manual-review-form" onSubmit={handleSubmit} aria-busy={isSaving}>
+    <form className="result-card manual-review-form teacher-manual-review-form" onSubmit={handleSubmit} aria-busy={isSaving} noValidate>
       <header className="teacher-manual-task-header">
         <strong>{result.taskTitle}</strong>
         <span>{formatPoints(result.maxScore)}</span>
@@ -98,30 +98,29 @@ export function ManualTaskReviewForm({ reviewId, result, onDirtyChange, onSaved 
           <p>{studentAnswer || "Ответ не указан."}</p>
         </div>
       </div>
-      <div className="form-row">
-        <div className="field">
-          <label htmlFor={`manual-score-${reviewId}-${result.taskId}`}>Балл</label>
-          <input
-            id={`manual-score-${reviewId}-${result.taskId}`}
-            min="0"
-            max={result.maxScore}
-            step="0.1"
-            type="number"
-            value={score}
-            disabled={isSaving}
-            onChange={event => setScore(event.target.value)}
-            required
-          />
-        </div>
-        <div className="field">
-          <label htmlFor={`manual-feedback-${reviewId}-${result.taskId}`}>Комментарий</label>
-          <input
-            id={`manual-feedback-${reviewId}-${result.taskId}`}
-            value={feedback}
-            disabled={isSaving}
-            onChange={event => setFeedback(event.target.value)}
-          />
-        </div>
+      <div className="field manual-review-score">
+        <label htmlFor={`manual-score-${reviewId}-${result.taskId}`}>Балл</label>
+        <input
+          id={`manual-score-${reviewId}-${result.taskId}`}
+          min="0"
+          max={result.maxScore}
+          step="1"
+          type="number"
+          value={score}
+          disabled={isSaving}
+          onChange={event => setScore(event.target.value)}
+          required
+        />
+      </div>
+      <div className="field">
+        <label htmlFor={`manual-feedback-${reviewId}-${result.taskId}`}>Комментарий</label>
+        <textarea
+          id={`manual-feedback-${reviewId}-${result.taskId}`}
+          className="compact-textarea"
+          value={feedback}
+          disabled={isSaving}
+          onChange={event => setFeedback(event.target.value)}
+        />
       </div>
       <div className="field">
         <label htmlFor={`manual-findings-${reviewId}-${result.taskId}`}>Выводы</label>

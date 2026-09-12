@@ -344,7 +344,7 @@
 }
 
 .role-admin .admin-access-card.editing {
-  border-color: var(--color-accent-border);
+  border-color: var(--color-selection-border);
   box-shadow: var(--shadow-selected);
 }
 

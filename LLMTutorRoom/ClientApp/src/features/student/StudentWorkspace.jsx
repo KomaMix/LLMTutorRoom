@@ -315,11 +315,11 @@ export function StudentWorkspace({
                 return (
                   <article className={`answer-card${isReadOnly ? " readonly" : ""}`} key={task.id}>
                     <header className="student-answer-card-header">
-                      <div>
+                      <div className="task-heading">
                         <h4>Задание {taskIndex + 1}</h4>
                         <span>{task.title}</span>
                       </div>
-                      <span className="student-task-points">{formatPoints(task.maxPoints)}</span>
+                      <span className="task-points student-task-points">{formatPoints(task.maxPoints)}</span>
                     </header>
                     <p className="student-task-prompt">{task.prompt}</p>
                     {isReadOnly ? (

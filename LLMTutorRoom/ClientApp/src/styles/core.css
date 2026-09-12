@@ -221,7 +221,6 @@ button {
 .topbar-actions,
 .panel-header,
 .task-card > div,
-.result-card > div,
 .review-row {
   display: flex;
   align-items: center;
@@ -473,8 +472,8 @@ button {
 
 .button.secondary:not(:disabled):hover,
 .icon-button:not(.danger):not(:disabled):hover {
-  border-color: var(--color-accent-border);
-  background: var(--color-accent-soft);
+  border-color: var(--color-border-control);
+  background: var(--color-surface-muted);
 }
 
 .button.danger,
@@ -513,13 +512,18 @@ button {
   text-align: left;
 }
 
-.select-list button.active,
 .select-list button:not(:disabled):hover {
-  border-color: var(--color-accent-border);
-  background: var(--color-accent-soft);
+  border-color: var(--color-border-control);
+  background: var(--color-selection-background);
 }
 
-.select-list span {
+.select-list button.active {
+  border-color: var(--color-selection-border);
+  background: var(--color-selection-background);
+  box-shadow: var(--shadow-selected);
+}
+
+.select-list span:not(.status) {
   font-weight: 750;
 }
 
@@ -586,6 +590,12 @@ button {
   margin-bottom: 14px;
 }
 
+.version-list .status-inline::before {
+  width: 1px;
+  height: 14px;
+  border-radius: 0;
+}
+
 .version-list button {
   display: inline-flex;
   align-items: center;
@@ -593,15 +603,20 @@ button {
   min-height: 38px;
   padding: 4px 8px 4px 12px;
   border: 1px solid var(--color-border-control);
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-control);
   color: var(--color-text-secondary);
   background: var(--color-surface);
   font-weight: 800;
 }
 
-.version-list button.active,
 .version-list button:not(:disabled):hover {
-  border-color: var(--color-accent);
+  border-color: var(--color-border-control);
+  background: var(--color-selection-background);
+}
+
+.version-list button.active {
+  border-color: var(--color-selection-border);
+  background: var(--color-selection-background);
   box-shadow: var(--shadow-selected);
 }
 
@@ -638,11 +653,15 @@ button {
   font-weight: 750;
 }
 
-.task-panel-actions button.active,
 .task-panel-actions button:not(:disabled):hover {
-  color: var(--color-on-accent);
-  border-color: var(--color-accent);
-  background: var(--color-accent);
+  background: var(--color-selection-background);
+}
+
+.task-panel-actions button.active:not(:disabled) {
+  color: var(--color-selection-text);
+  border-color: var(--color-selection-border);
+  background: var(--color-selection-background);
+  box-shadow: var(--shadow-selected);
 }
 
 .task-panel-actions button:disabled {
@@ -705,12 +724,11 @@ button {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-control);
   color: var(--color-text-secondary);
-  background: var(--color-surface-subtle);
+  background: var(--color-surface);
 }
 
 .answer-option-list span.correct {
-  color: var(--color-success);
-  border-color: var(--color-success-border);
-  background: var(--color-success-surface);
+  border-color: var(--color-selection-border);
+  background: var(--color-selection-background);
   font-weight: 750;
 }

@@ -2,6 +2,7 @@ import {
   endOfLocalDayToIso,
   toInputDate
 } from "../../shared/lib/dates.js";
+import { getRussianPluralForm } from "../../shared/lib/russianPlural.js";
 
 export const taskTypes = [
   { value: "single-choice", label: "Один ответ" },
@@ -193,11 +194,12 @@ export function ensureChoiceOptions(options) {
 export function createTestListSummary(test) {
   const visibleTaskCount = test.tasks.filter(task => !task.isHidden).length;
   const hiddenTaskCount = test.tasks.length - visibleTaskCount;
+  const taskLabel = getRussianPluralForm(visibleTaskCount, "задание", "задания", "заданий");
   const hiddenText = hiddenTaskCount > 0
     ? ` · скрыто ${hiddenTaskCount}`
     : "";
 
-  return `Версия ${test.versionNumber} · ${test.subject} · ${visibleTaskCount} заданий${hiddenText} · ${test.timeLimitMinutes} мин`;
+  return `Версия ${test.versionNumber} · ${test.subject} · ${visibleTaskCount} ${taskLabel}${hiddenText} · ${test.timeLimitMinutes} мин`;
 }
 
 export function createTaskCountSummary(test) {

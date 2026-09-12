@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useBlocker } from "react-router-dom";
+import { useBlocker, useLocation } from "react-router-dom";
 import { CheckCircle2, ClipboardCheck, Clock3, Loader2, UserRoundCheck } from "lucide-react";
 import { useNavigationGuard } from "../../app/NavigationGuardContext.jsx";
 import { getReviewHistory } from "../../api/classroomApi.js";
@@ -9,7 +9,7 @@ import { ManualReviewPanel } from "./ManualReviewPanel.jsx";
 import { ReviewDetailsPanel } from "./ReviewDetailsPanel.jsx";
 import { ReviewRows } from "./ReviewRows.jsx";
 
-const unsavedManualReviewPrompt = "Есть несохранённая ручная оценка. Покинуть страницу и потерять изменения?";
+const unsavedManualReviewPrompt = "Есть несохранённая ручная оценка. Продолжить и потерять изменения?";
 
 function createTestOptions(tests, reviewGroups) {
   const optionsById = new Map(tests.map(test => [
@@ -39,10 +39,24 @@ function getInitialTestId(tests, reviews) {
     ?? "";
 }
 
+function getLinkedSelection(tests, reviews, search) {
+  const searchParams = new URLSearchParams(search);
+  const reviewId = searchParams.get("reviewId") ?? "";
+  const review = reviews.find(item => String(item.id) === reviewId);
+  const testId = review?.testId
+    ?? tests.find(test => String(test.id) === searchParams.get("testId"))?.id
+    ?? getInitialTestId(tests, reviews);
+
+  return { testId, reviewId };
+}
+
 export function ReviewQueue({ reviews, tests, terminalReviewsNextCursor, onReviewsChanged }) {
   const { registerBeforeLogout } = useNavigationGuard();
-  const [selectedTestId, setSelectedTestId] = useState(() => getInitialTestId(tests, reviews));
-  const [selectedReviewId, setSelectedReviewId] = useState("");
+  const { key: locationKey, search } = useLocation();
+  const linkedSelection = getLinkedSelection(tests, reviews, search);
+  const [selectedTestId, setSelectedTestId] = useState(linkedSelection.testId);
+  const [selectedReviewId, setSelectedReviewId] = useState(linkedSelection.reviewId);
+  const [reviewScrollRequest, setReviewScrollRequest] = useState(null);
   const [showHistory, setShowHistory] = useState(false);
   const [currentTerminalReviews, setCurrentTerminalReviews] = useState(() =>
     reviews.filter(isTerminalReview));
@@ -54,6 +68,7 @@ export function ReviewQueue({ reviews, tests, terminalReviewsNextCursor, onRevie
   const [dirtyManualTasks, setDirtyManualTasks] = useState(() => new Set());
   const [manualFormGeneration, setManualFormGeneration] = useState(0);
   const requestIdRef = useRef(0);
+  const appliedLocationRef = useRef(null);
   const hasUnsavedManualReview = dirtyManualTasks.size > 0;
   const confirmDiscardManualReview = useCallback(() => {
     if (!hasUnsavedManualReview) {
@@ -92,6 +107,8 @@ export function ReviewQueue({ reviews, tests, terminalReviewsNextCursor, onRevie
     }
 
     if (window.confirm(unsavedManualReviewPrompt)) {
+      setDirtyManualTasks(new Set());
+      setManualFormGeneration(current => current + 1);
       proceedNavigation();
     } else {
       resetNavigation();
@@ -117,6 +134,20 @@ export function ReviewQueue({ reviews, tests, terminalReviewsNextCursor, onRevie
     setCurrentNextCursor(terminalReviewsNextCursor ?? null);
   }, [reviews, terminalReviewsNextCursor]);
 
+  useEffect(() => {
+    if (appliedLocationRef.current === locationKey) {
+      return;
+    }
+
+    appliedLocationRef.current = locationKey;
+    setSelectedTestId(linkedSelection.testId);
+    setSelectedReviewId(linkedSelection.reviewId);
+    setShowHistory(false);
+    setReviewScrollRequest(linkedSelection.reviewId
+      ? { reviewId: linkedSelection.reviewId }
+      : null);
+  }, [linkedSelection.reviewId, linkedSelection.testId, locationKey]);
+
   const testOptions = useMemo(() => createTestOptions(tests, [
     reviews,
     currentTerminalReviews,
@@ -139,10 +170,27 @@ export function ReviewQueue({ reviews, tests, terminalReviewsNextCursor, onRevie
   const visibleReviews = selectedTestId
     ? reviewsForSelectedMode.filter(review => review.testId === selectedTestId)
     : [];
-  const selectedReview = visibleReviews.find(review => review.id === selectedReviewId)
-    ?? visibleReviews.find(review => review.status === "manual-review")
-    ?? null;
+  const selectedReview = visibleReviews.find(
+    review => String(review.id) === selectedReviewId) ?? null;
   const nextCursor = showHistory ? historicalNextCursor : currentNextCursor;
+
+  useEffect(() => {
+    if (!reviewScrollRequest || String(selectedReview?.id) !== reviewScrollRequest.reviewId) {
+      return;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      const details = document.getElementById(`teacher-review-details-${selectedReview.id}`);
+      const target = selectedReview.status === "manual-review"
+        ? document.getElementById(`teacher-manual-review-${selectedReview.id}`) ?? details
+        : details;
+      const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      target?.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "start" });
+      setReviewScrollRequest(null);
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [reviewScrollRequest, selectedReview?.id, selectedReview?.status]);
 
   async function loadHistoryPage({ includeHistoricalVersions, cursor, replace }) {
     const requestId = ++requestIdRef.current;
@@ -190,6 +238,7 @@ export function ReviewQueue({ reviews, tests, terminalReviewsNextCursor, onRevie
 
     setShowHistory(nextShowHistory);
     setSelectedReviewId("");
+    setReviewScrollRequest(null);
     setHistoryError("");
     if (nextShowHistory && historicalTerminalReviews.length === 0) {
       loadHistoryPage({
@@ -223,6 +272,7 @@ export function ReviewQueue({ reviews, tests, terminalReviewsNextCursor, onRevie
 
     setSelectedTestId(nextTestId);
     setSelectedReviewId("");
+    setReviewScrollRequest(null);
   }
 
   async function handleReviewsChanged() {
@@ -254,15 +304,13 @@ export function ReviewQueue({ reviews, tests, terminalReviewsNextCursor, onRevie
   }, []);
 
   function handleSelectReview(reviewId) {
-    if (reviewId === selectedReview?.id) {
-      return;
-    }
-
     if (!confirmDiscardManualReview()) {
       return;
     }
 
-    setSelectedReviewId(reviewId);
+    const nextReviewId = reviewId === selectedReview?.id ? "" : String(reviewId);
+    setSelectedReviewId(nextReviewId);
+    setReviewScrollRequest(nextReviewId ? { reviewId: nextReviewId } : null);
   }
 
   const manualReviewCount = visibleReviews.filter(
@@ -355,7 +403,24 @@ export function ReviewQueue({ reviews, tests, terminalReviewsNextCursor, onRevie
           : "Выберите тест, чтобы посмотреть проверки."}
         selectedReviewId={selectedReview?.id ?? ""}
         onSelectReview={handleSelectReview}
+        selectedReviewDetails={selectedReview && (
+          <ReviewDetailsPanel review={selectedReview}>
+            {selectedReview.status === "manual-review" && (
+              <ManualReviewPanel
+                key={`${selectedReview.id}:${manualFormGeneration}`}
+                review={selectedReview}
+                onDirtyChange={handleManualTaskDirtyChange}
+                onSaved={handleReviewsChanged}
+              />
+            )}
+          </ReviewDetailsPanel>
+        )}
       />
+      {selectedReviewId && !selectedReview && (
+        <p className="muted" role="status">
+          Этой проверки нет в текущем списке. Попробуйте открыть всю историю.
+        </p>
+      )}
       {nextCursor && (
         <button
           type="button"
@@ -368,15 +433,6 @@ export function ReviewQueue({ reviews, tests, terminalReviewsNextCursor, onRevie
         </button>
       )}
       {historyError && <p className="form-error" role="alert">{historyError}</p>}
-      {selectedReview && <ReviewDetailsPanel review={selectedReview} />}
-      {selectedReview?.status === "manual-review" && (
-        <ManualReviewPanel
-          key={`${selectedReview.id}:${manualFormGeneration}`}
-          review={selectedReview}
-          onDirtyChange={handleManualTaskDirtyChange}
-          onSaved={handleReviewsChanged}
-        />
-      )}
     </section>
   );
 }

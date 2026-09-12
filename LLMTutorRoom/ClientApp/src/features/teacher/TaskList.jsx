@@ -1,6 +1,5 @@
 import {
   Bot,
-  CheckCircle2,
   ChevronDown,
   Eye,
   EyeOff,
@@ -67,12 +66,9 @@ export function TaskList({
             key={task.id}
           >
             <header className="teacher-task-card-header">
-              <div className="teacher-task-card-identity">
-                <span className="student-task-number teacher-task-number">{index + 1}</span>
-                <div>
-                  <strong>{task.title}</strong>
-                  <span>{formatPoints(task.maxPoints)}</span>
-                </div>
+              <div className="task-heading teacher-task-card-identity">
+                <h4>Задание {index + 1}</h4>
+                <span>{task.title}</span>
               </div>
               {!readOnly && (
                 <div className="task-actions">
@@ -113,8 +109,9 @@ export function TaskList({
             </header>
 
             <div className="task-subline teacher-task-subline">
+              <span className="task-points">{formatPoints(task.maxPoints)}</span>
               <StatusBadge status={task.type} />
-              <span className="teacher-task-check-mode">
+              <span className="status teacher-task-check-mode">
                 <CheckModeIcon size={14} aria-hidden="true" />
                 {checkMode.label}
               </span>
@@ -139,7 +136,7 @@ export function TaskList({
                         key={option.id}
                       >
                         {task.correctOptionIds.includes(option.id) && (
-                          <CheckCircle2 size={14} aria-hidden="true" />
+                          <small className="visually-hidden">Правильный ответ: </small>
                         )}
                         {option.text}
                       </span>

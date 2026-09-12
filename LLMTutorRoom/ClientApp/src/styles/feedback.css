@@ -14,21 +14,36 @@
 
 .manual-review-form {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
+  min-width: 0;
+}
+
+.manual-review-score {
+  width: min(100%, 180px);
 }
 
 .manual-review-context {
   display: grid;
-  gap: 8px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  min-width: 0;
   padding: 12px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-card);
   background: var(--color-surface-subtle);
 }
 
-.manual-review-context div {
+.manual-review-context > div {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 4px;
+  min-width: 0;
+}
+
+.manual-review-context > div + div {
+  padding-top: 12px;
+  border-top: 1px solid var(--color-border-control);
 }
 
 .manual-review-context span {
@@ -41,6 +56,8 @@
 .manual-review-context p {
   margin: 0;
   color: var(--color-text);
+  line-height: 1.55;
+  overflow-wrap: anywhere;
   white-space: pre-wrap;
 }
 
@@ -99,7 +116,7 @@
   justify-content: center;
   min-height: 30px;
   padding: 0 9px;
-  border: 1px solid var(--color-border-control);
+  border: 1px solid var(--status-color, var(--color-border-control));
   border-radius: var(--radius-control);
   color: var(--color-text-secondary);
   background: var(--color-surface);
@@ -114,8 +131,8 @@
 .status.teacher,
 .status.student,
 .status.submitted {
+  --status-color: var(--color-success);
   border-width: 2px;
-  border-color: var(--color-success);
 }
 
 .status.draft,
@@ -126,16 +143,33 @@
 .status.retry-scheduled,
 .status.expired,
 .status.manual-review {
+  --status-color: var(--color-warning-border-strong);
   border-width: 2px;
-  border-color: var(--color-warning-border-strong);
 }
 
 .status.failed {
-  border-color: var(--color-danger);
+  --status-color: var(--color-danger);
 }
 
 .status.single-choice,
 .status.multiple-choice,
 .status.free-text {
-  border-color: var(--color-info);
+  --status-color: var(--color-info);
+}
+
+.status.status-inline {
+  gap: 6px;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.status-inline::before {
+  content: "";
+  flex: 0 0 auto;
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--status-color, var(--color-text-muted));
 }

@@ -4,23 +4,8 @@ import { StatusBadge } from "../../shared/ui/StatusBadge.jsx";
 
 const completedTaskStatuses = new Set(["succeeded", "failed"]);
 
-const reviewStatusMessages = {
-  checked: "Проверка завершена.",
-  failed: "Не удалось завершить проверку работы.",
-  "manual-review": "Часть заданий ожидает оценки преподавателя.",
-  processing: "Проверка работы продолжается.",
-  queued: "Работа ожидает начала проверки.",
-  "retry-scheduled": "Для работы запланирована повторная проверка."
-};
-
 function getStudentName(review) {
   return review.studentName || review.studentUserId || "Студент";
-}
-
-function getReviewSummary(review) {
-  return review.summary?.trim()
-    || reviewStatusMessages[review.status]
-    || "Результат проверки ещё не сформирован.";
 }
 
 function getFindings(result) {
@@ -50,10 +35,10 @@ function ReviewTaskResult({ result, taskIndex }) {
   return (
     <article className={`teacher-review-task-result ${result.checkMode}${isFailed ? " failed" : ""}`}>
       <header className="teacher-review-task-result-header">
-        <span className="student-task-number teacher-review-task-number">{taskIndex + 1}</span>
-        <div>
-          <strong>{result.taskTitle}</strong>
-          <span>{checkModeLabel}</span>
+        <div className="task-heading">
+          <h5>Задание {taskIndex + 1}</h5>
+          <span>{result.taskTitle}</span>
+          <small>{checkModeLabel}</small>
         </div>
         <div className="teacher-review-task-score">
           <strong>{isFailed ? "—" : result.score}</strong>
@@ -101,12 +86,10 @@ function ReviewTaskResult({ result, taskIndex }) {
   );
 }
 
-export function ReviewDetailsPanel({ review }) {
+export function ReviewDetailsPanel({ review, children }) {
   const completedResults = review.taskResults
     .map((result, taskIndex) => ({ result, taskIndex }))
     .filter(({ result }) => completedTaskStatuses.has(result.status));
-  const hasFinalScore = review.status === "checked";
-
   return (
     <section
       className="teacher-review-details"
@@ -122,38 +105,29 @@ export function ReviewDetailsPanel({ review }) {
         <StatusBadge status={review.status} />
       </header>
 
-      <div className="teacher-review-details-summary">
-        <div className="teacher-review-total-score">
-          <strong>{hasFinalScore ? review.score : "—"}</strong>
-          <span>из {review.maxScore}</span>
-        </div>
-        <div>
-          <span>{hasFinalScore ? "Итог проверки" : "Состояние проверки"}</span>
-          <p>{getReviewSummary(review)}</p>
-        </div>
+      <div className="teacher-review-total-score">
+        <strong>{review.score ?? 0} из {review.maxScore}</strong>
       </div>
 
-      <div className="teacher-review-completed-results">
-        <div className="teacher-review-results-heading">
-          <h4>Завершённые задания</h4>
-          <span className="count-badge">{completedResults.length}</span>
+      {children}
+
+      {completedResults.length > 0 ? (
+        <div className="teacher-review-task-results">
+          {completedResults.map(({ result, taskIndex }) => (
+            <ReviewTaskResult
+              key={result.id ?? result.taskId}
+              result={result}
+              taskIndex={taskIndex}
+            />
+          ))}
         </div>
-        {completedResults.length === 0 ? (
+      ) : (
+        !children && (
           <p className="muted teacher-review-results-empty">
             Завершённых заданий пока нет.
           </p>
-        ) : (
-          <div className="teacher-review-task-results">
-            {completedResults.map(({ result, taskIndex }) => (
-              <ReviewTaskResult
-                key={result.id ?? result.taskId}
-                result={result}
-                taskIndex={taskIndex}
-              />
-            ))}
-          </div>
-        )}
-      </div>
+        )
+      )}
     </section>
   );
 }

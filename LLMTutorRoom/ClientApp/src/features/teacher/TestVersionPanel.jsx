@@ -65,7 +65,7 @@ export function TestVersionPanel({
             onClick={() => onSelectVersion(version.versionNumber)}
           >
             <span>Версия {version.versionNumber}</span>
-            <StatusBadge status={version.status} />
+            <StatusBadge status={version.status} variant="inline" />
           </button>
         ))}
       </div>
