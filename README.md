@@ -1,4 +1,4 @@
-# LLMGateway
+# LLMTutorRoom
 
 Микросервисная учебная система для создания версионируемых тестов, прохождения
 попыток и автоматической, ручной или LLM-проверки ответов.
@@ -162,9 +162,9 @@ OpenAI-compatible deployment, а затем выдать преподавате�
 Сборка решения:
 
 ```bash
-dotnet restore LLMGateway.sln
-dotnet build LLMGateway.sln
-dotnet test LLMGateway.sln --no-restore
+dotnet restore LLMTutorRoom.sln
+dotnet build LLMTutorRoom.sln
+dotnet test LLMTutorRoom.sln --no-restore
 ```
 
 Сборка `LLMTutorRoom` автоматически выполняет `npm ci`, ESLint и Vite build.
