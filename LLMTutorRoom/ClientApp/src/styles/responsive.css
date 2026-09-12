@@ -358,7 +358,7 @@
     flex-direction: row;
   }
 
-  .role-admin .topbar .status.admin {
+  .role-admin .topbar .role-badge {
     display: none;
   }
 

@@ -89,12 +89,17 @@
 .status.published,
 .status.checked,
 .status.available,
-.status.admin,
 .status.teacher,
 .status.student,
 .status.submitted {
   color: var(--color-success);
   background: var(--color-success-soft);
+}
+
+.status.admin {
+  border: 1px solid var(--color-border-control);
+  color: var(--color-text-secondary);
+  background: var(--color-surface);
 }
 
 .status.draft,

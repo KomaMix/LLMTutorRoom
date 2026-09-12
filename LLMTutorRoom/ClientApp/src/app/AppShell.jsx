@@ -10,8 +10,8 @@ import {
 } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext.jsx";
+import { statusText } from "../shared/config/status.js";
 import { getPageTitle } from "../shared/lib/roles.js";
-import { StatusBadge } from "../shared/ui/StatusBadge.jsx";
 import {
   NavigationGuardProvider,
   useNavigationGuard
@@ -253,7 +253,10 @@ function AppShellContent({ currentUser, role, children }) {
             <h1>{pageTitle}</h1>
           </div>
           <div className="topbar-actions">
-            <StatusBadge status={role} />
+            <span className="role-badge">
+              <RoleIcon size={22} aria-hidden="true" />
+              {statusText[role] ?? role}
+            </span>
             <button
               type="button"
               className="button secondary"
