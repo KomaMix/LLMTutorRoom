@@ -3,9 +3,10 @@
   isolation: isolate;
   overflow: hidden;
   display: grid;
-  place-items: center;
+  place-items: start center;
   min-height: 100vh;
-  padding: 32px;
+  /* Keep the top offset independent of the selected role and form height. */
+  padding: clamp(32px, 10vh, 120px) 32px 32px;
   background: var(--background-auth);
 }
 
