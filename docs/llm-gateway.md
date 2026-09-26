@@ -103,28 +103,11 @@ Content-Type: application/json
 администратор отдельно выдаёт преподавателю доступ и квоту в интерфейсе — это
 уже данные `ReviewService`, а не gateway.
 
-Если на host-машине запущен `CodexHost`, к отдельной логической модели с key
-`luna` добавляется обычный HTTP deployment:
-
-```http
-POST http://localhost:5200/api/models/luna/deployments
-Content-Type: application/json
-
-{
-  "endpoint": "http://host.docker.internal:5250/v1",
-  "apiKey": "local-codex-secret",
-  "providerModelId": "gpt-5.6-luna",
-  "isEnabled": true,
-  "priority": 0,
-  "maxConcurrentRequests": 1
-}
-```
-
 ## Данные и конфигурация
 
 [`AppDbContext`](../LLMGateway/Data/AppDbContext.cs) хранит `Models` и связанные с ними `ModelDeployments`; удаление модели каскадно удаляет deployments. Массив rate-limit rules сериализуется в одну колонку PostgreSQL `jsonb` с EF value comparer. API key сохраняется обычной строкой без прикладного шифрования, но намеренно отсутствует в response DTO. Миграция применяется автоматически при запуске для relational database.
 
-В [`appsettings.json`](../LLMGateway/appsettings.json) обязательна фактически только `ConnectionStrings:DefaultConnection`; provider endpoints и ключи создаются через model API, а не через конфигурацию. Настройки Codex находятся в отдельном `CodexHost` и в контейнер gateway не передаются. Таймаут health check зафиксирован в коде. Swagger доступен только в Development.
+В [`appsettings.json`](../LLMGateway/appsettings.json) обязательна фактически только `ConnectionStrings:DefaultConnection`; provider endpoints и ключи создаются через model API, а не через конфигурацию. Таймаут health check зафиксирован в коде. Swagger доступен только в Development.
 
 ## Ошибки и важные нюансы
 
