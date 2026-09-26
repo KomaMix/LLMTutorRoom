@@ -434,6 +434,31 @@ public sealed class ReviewPipelineTests
         Assert.Empty(dbContext.InboxMessages);
     }
 
+    [Fact]
+    public async Task UnsupportedFreeTextReviewMode_IsRejectedBeforeInboxAcknowledgement()
+    {
+        await using var dbContext = CreateDbContext();
+        var handler = CreateEventHandler(dbContext, new FakeReviewQueuePublisher());
+        var invalidPolicy = CreatePolicy(
+            new ReviewTaskPolicySnapshot
+            {
+                Id = "essay",
+                Type = ReviewTaskType.FreeText,
+                CheckMode = ReviewCheckMode.Auto,
+                Title = "Essay",
+                Prompt = "Explain.",
+                MaxPoints = 5m,
+                WrongAnswerPenalty = 0,
+                Options = []
+            });
+
+        await Assert.ThrowsAsync<InvalidDataException>(() =>
+            handler.HandleAsync(invalidPolicy, CancellationToken.None));
+
+        Assert.Empty(dbContext.TestReviewPolicies);
+        Assert.Empty(dbContext.InboxMessages);
+    }
+
     private static ReviewIntegrationEventHandler CreateEventHandler(
         ReviewDbContext dbContext,
         FakeReviewQueuePublisher queue,

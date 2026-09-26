@@ -6,7 +6,7 @@ namespace TeachingService.Contracts.Models
     {
         public string Id { get; set; } = string.Empty;
         public TestTaskType Type { get; set; } = TestTaskType.FreeText;
-        public TestTaskCheckMode CheckMode { get; set; } = TestTaskCheckMode.Auto;
+        public TestTaskCheckMode CheckMode { get; set; } = TestTaskCheckMode.Llm;
         public string Title { get; set; } = string.Empty;
         public string Prompt { get; set; } = string.Empty;
         public decimal MaxPoints { get; set; }

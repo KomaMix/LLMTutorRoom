@@ -12,6 +12,35 @@ namespace TeachingService.Tests;
 public sealed class TestVersioningTests
 {
     [Fact]
+    public async Task AddTask_FreeTextRequiresLlmOrManualReview()
+    {
+        await using var dbContext = CreateDbContext();
+        var service = CreateService(dbContext);
+        var created = await service.CreateTestAsync(
+            CreateTestRequest("Free-text modes"),
+            "teacher",
+            CancellationToken.None);
+
+        var result = await service.AddTaskAsync(
+            Guid.Parse(created.Id),
+            expectedVersionNumber: 1,
+            expectedContentRevision: 0,
+            new CreateTaskRequest
+            {
+                Type = TestTaskType.FreeText,
+                CheckMode = TestTaskCheckMode.Auto,
+                Title = "Essay",
+                Prompt = "Explain.",
+                MaxPoints = 5
+            },
+            "teacher",
+            CancellationToken.None);
+
+        Assert.Equal(CatalogOperationStatus.ValidationFailed, result.Status);
+        Assert.Empty(dbContext.TestTasks);
+    }
+
+    [Fact]
     public async Task Publish_IsTheOnlyOperationThatCreatesPolicyAndPreservesOldVersion()
     {
         await using var dbContext = CreateDbContext();
@@ -238,6 +267,61 @@ public sealed class TestVersioningTests
                     Title = "Task",
                     Prompt = "Answer.",
                     MaxPoints = 1
+                }
+            ]
+        };
+        var test = new CourseTest
+        {
+            Id = testId,
+            TeacherUserId = "teacher",
+            NextVersionNumber = 2,
+            Versions = [draft]
+        };
+        draft.CourseTest = test;
+        dbContext.Tests.Add(test);
+        await dbContext.SaveChangesAsync();
+        dbContext.ChangeTracker.Clear();
+
+        var result = await CreateService(dbContext).PublishVersionAsync(
+            testId,
+            versionNumber: 1,
+            expectedContentRevision: 0,
+            "teacher",
+            CancellationToken.None);
+
+        Assert.Equal(CatalogOperationStatus.ValidationFailed, result.Status);
+        Assert.Empty(dbContext.TestReviewPolicyRevisions);
+        Assert.Empty(dbContext.IntegrationOutboxMessages);
+    }
+
+    [Fact]
+    public async Task Publish_WithUnsupportedFreeTextReviewMode_ReturnsValidationFailure()
+    {
+        await using var dbContext = CreateDbContext();
+        var testId = Guid.NewGuid();
+        var versionId = Guid.NewGuid();
+        var draft = new CourseTestVersion
+        {
+            Id = versionId,
+            CourseTestId = testId,
+            VersionNumber = 1,
+            Status = CourseTestStatus.Draft,
+            Title = "Invalid review mode",
+            Subject = "Subject",
+            Deadline = DateTimeOffset.UtcNow.AddDays(1),
+            TimeLimitMinutes = 30,
+            LlmModelKey = "model",
+            Tasks =
+            [
+                new TestTask
+                {
+                    Id = Guid.NewGuid(),
+                    CourseTestVersionId = versionId,
+                    Type = TestTaskType.FreeText,
+                    CheckMode = TestTaskCheckMode.Auto,
+                    Title = "Essay",
+                    Prompt = "Explain.",
+                    MaxPoints = 5
                 }
             ]
         };

@@ -14,12 +14,18 @@ public sealed class ReviewScoringService : IReviewScoringService
         string studentAnswer,
         DateTimeOffset now)
     {
-        return task.CheckMode switch
+        return (task.Type, task.CheckMode) switch
         {
-            ReviewCheckMode.Auto => CreateAutoResult(task, studentAnswer, now),
-            ReviewCheckMode.Manual => CreateManualResult(task, studentAnswer),
-            ReviewCheckMode.Llm => CreatePendingLlmResult(task, studentAnswer),
-            _ => CreateManualResult(task, studentAnswer)
+            (ReviewTaskType.SingleChoice, ReviewCheckMode.Auto) =>
+                CreateSingleChoiceResult(task, studentAnswer, now),
+            (ReviewTaskType.MultipleChoice, ReviewCheckMode.Auto) =>
+                CreateMultipleChoiceResult(task, studentAnswer, now),
+            (ReviewTaskType.FreeText, ReviewCheckMode.Manual) =>
+                CreateManualResult(task, studentAnswer),
+            (ReviewTaskType.FreeText, ReviewCheckMode.Llm) =>
+                CreatePendingLlmResult(task, studentAnswer),
+            _ => throw new InvalidDataException(
+                $"Unsupported review mode '{task.CheckMode}' for task type '{task.Type}'.")
         };
     }
 
@@ -83,19 +89,6 @@ public sealed class ReviewScoringService : IReviewScoringService
         return "Работа пока не закрывает ключевые требования.";
     }
 
-    private static ReviewTask CreateAutoResult(
-        ReviewTaskPolicySnapshot task,
-        string answer,
-        DateTimeOffset now)
-    {
-        return task.Type switch
-        {
-            ReviewTaskType.SingleChoice => CreateSingleChoiceResult(task, answer, now),
-            ReviewTaskType.MultipleChoice => CreateMultipleChoiceResult(task, answer, now),
-            _ => CreateFreeTextHeuristicResult(task, answer, now)
-        };
-    }
-
     private static ReviewTask CreateSingleChoiceResult(
         ReviewTaskPolicySnapshot task,
         string answer,
@@ -153,43 +146,6 @@ public sealed class ReviewScoringService : IReviewScoringService
                 $"Правильных вариантов выбрано: {selectedCorrectCount}.",
                 $"Неверных вариантов выбрано: {selectedWrongCount}."
             ],
-            now);
-    }
-
-    private static ReviewTask CreateFreeTextHeuristicResult(
-        ReviewTaskPolicySnapshot task,
-        string answer,
-        DateTimeOffset now)
-    {
-        var normalizedAnswer = answer.Trim();
-        var score = 0m;
-        var findings = new List<string>();
-
-        if (normalizedAnswer.Length > 120)
-        {
-            score += task.MaxPoints * 0.6m;
-            findings.Add("Ответ содержит развернутое объяснение.");
-        }
-        else if (normalizedAnswer.Length > 40)
-        {
-            score += task.MaxPoints * 0.35m;
-            findings.Add("Ответ содержит базовую аргументацию.");
-        }
-        else
-        {
-            findings.Add("Ответ слишком короткий для уверенной проверки.");
-        }
-
-        score = NormalizeScore(score, task.MaxPoints);
-        return CreateResult(
-            task,
-            answer,
-            ReviewTaskStatus.Succeeded,
-            score,
-            score >= task.MaxPoints * 0.75m
-                ? "Ответ выглядит достаточно полным."
-                : "Ответ требует доработки: добавь ход рассуждения и обоснование вывода.",
-            findings,
             now);
     }
 

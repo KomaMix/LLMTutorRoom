@@ -434,6 +434,12 @@ namespace TeachingService.Services
             CancellationToken cancellationToken)
         {
             EnsureTeacherUserId(teacherUserId);
+            if (!TryNormalizeTaskCheckMode(request, out var checkMode))
+            {
+                return new(
+                    CatalogOperationStatus.ValidationFailed,
+                    error: "Free-text tasks support only LLM or manual review.");
+            }
 
             var aggregate = await GetEditableDraftAsync(testId, teacherUserId, cancellationToken);
             if (aggregate.Test is null)
@@ -457,7 +463,7 @@ namespace TeachingService.Services
                     error: "The draft content changed. Reload it before saving.");
             }
 
-            var task = CreateTask(aggregate.Draft.Id, request);
+            var task = CreateTask(aggregate.Draft.Id, request, checkMode);
             aggregate.Draft.Tasks.Add(task);
             _dbContext.TestTasks.Add(task);
             if (!await TrySaveDraftMutationAsync(aggregate.Draft, cancellationToken))
@@ -480,6 +486,12 @@ namespace TeachingService.Services
             CancellationToken cancellationToken)
         {
             EnsureTeacherUserId(teacherUserId);
+            if (!TryNormalizeTaskCheckMode(request, out var checkMode))
+            {
+                return new(
+                    CatalogOperationStatus.ValidationFailed,
+                    error: "Free-text tasks support only LLM or manual review.");
+            }
 
             var aggregate = await GetEditableDraftAsync(testId, teacherUserId, cancellationToken);
             if (aggregate.Test is null)
@@ -508,7 +520,7 @@ namespace TeachingService.Services
                 return new(CatalogOperationStatus.NotFound);
 
             task.Type = request.Type;
-            task.CheckMode = NormalizeTaskCheckMode(request);
+            task.CheckMode = checkMode;
             task.Title = request.Title.Trim();
             task.Prompt = request.Prompt.Trim();
             task.MaxPoints = request.MaxPoints;
@@ -882,7 +894,10 @@ namespace TeachingService.Services
             version.LlmModelKey = request.LlmModelKey?.Trim() ?? string.Empty;
         }
 
-        private static TestTask CreateTask(Guid versionId, CreateTaskRequest request)
+        private static TestTask CreateTask(
+            Guid versionId,
+            CreateTaskRequest request,
+            TestTaskCheckMode checkMode)
         {
             var taskId = Guid.NewGuid();
             return new TestTask
@@ -890,7 +905,7 @@ namespace TeachingService.Services
                 Id = taskId,
                 CourseTestVersionId = versionId,
                 Type = request.Type,
-                CheckMode = NormalizeTaskCheckMode(request),
+                CheckMode = checkMode,
                 Title = request.Title.Trim(),
                 Prompt = request.Prompt.Trim(),
                 MaxPoints = request.MaxPoints,
@@ -921,12 +936,18 @@ namespace TeachingService.Services
             }).ToList();
         }
 
-        private static TestTaskCheckMode NormalizeTaskCheckMode(CreateTaskRequest request)
+        private static bool TryNormalizeTaskCheckMode(
+            CreateTaskRequest request,
+            out TestTaskCheckMode checkMode)
         {
             if (request.Type != TestTaskType.FreeText)
-                return TestTaskCheckMode.Auto;
+            {
+                checkMode = TestTaskCheckMode.Auto;
+                return true;
+            }
 
-            return request.CheckMode ?? TestTaskCheckMode.Llm;
+            checkMode = request.CheckMode ?? TestTaskCheckMode.Llm;
+            return checkMode is TestTaskCheckMode.Llm or TestTaskCheckMode.Manual;
         }
 
         private static string? ValidateForPublishing(
@@ -940,8 +961,7 @@ namespace TeachingService.Services
             if (visibleTasks.Count == 0)
                 return "At least one visible task is required before publication.";
 
-            if (visibleTasks.Any(task => !Enum.IsDefined(task.Type)
-                    || !Enum.IsDefined(task.CheckMode)))
+            if (visibleTasks.Any(task => !HasSupportedReviewMode(task)))
             {
                 return "Every visible task must use a supported task type and review mode.";
             }
@@ -953,6 +973,18 @@ namespace TeachingService.Services
             }
 
             return null;
+        }
+
+        private static bool HasSupportedReviewMode(TestTask task)
+        {
+            return task.Type switch
+            {
+                TestTaskType.SingleChoice or TestTaskType.MultipleChoice =>
+                    task.CheckMode == TestTaskCheckMode.Auto,
+                TestTaskType.FreeText =>
+                    task.CheckMode is TestTaskCheckMode.Llm or TestTaskCheckMode.Manual,
+                _ => false
+            };
         }
 
         private static void EnsureTeacherUserId(string teacherUserId)

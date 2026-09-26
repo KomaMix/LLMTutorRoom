@@ -95,16 +95,16 @@ DLQ; временная ошибка повторяется через retry que
 результат строит
 [`ReviewScoringService`](../ReviewService/Services/ReviewScoringService.cs).
 
-- `Auto` завершает задание при создании проверки. `SingleChoice` требует точного
-  совпадения, `MultipleChoice` начисляет доли балла и вычитает штраф за лишние
-  варианты, а `FreeText` использует простую эвристику длины ответа. Балл
-  округляется до десятых и ограничивается диапазоном `0..MaxScore`.
+- `Auto` применяется только к заданиям с вариантами ответа и завершает их при
+  создании проверки. `SingleChoice` требует точного совпадения, а
+  `MultipleChoice` начисляет доли балла и вычитает штраф за лишние варианты.
+  Балл округляется до десятых и ограничивается диапазоном `0..MaxScore`.
 - `Manual` создаёт задачу в `ManualReview`. Изменить её может только владелец
   проверки; проверяются состояние и диапазон балла, затем пересчитываются общий
   балл и summary. Реализация —
   [`ReviewQueryService`](../ReviewService/Services/ReviewQueryService.cs).
-- `Llm` создаёт `Pending` и отправляет всю проверку в собственную processing
-  queue. [`LlmGatewayReviewClient`](../ReviewService/Services/LlmGatewayReviewClient.cs)
+- `Llm` для `FreeText` создаёт `Pending` и отправляет всю проверку в собственную
+  processing queue. [`LlmGatewayReviewClient`](../ReviewService/Services/LlmGatewayReviewClient.cs)
   вызывает `/api/chat/{modelKey}`, требует JSON с `score`, `feedback`,
   `findings`, а scoring нормализует ответ.
 

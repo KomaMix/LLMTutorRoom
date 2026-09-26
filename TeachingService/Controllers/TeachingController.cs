@@ -471,6 +471,13 @@ namespace TeachingService.Controllers
                 return false;
             }
 
+            if (request.Type == TestTaskType.FreeText
+                && request.CheckMode == TestTaskCheckMode.Auto)
+            {
+                error = "Free-text tasks support only LLM or manual review.";
+                return false;
+            }
+
             if (string.IsNullOrWhiteSpace(request.Title))
             {
                 error = "Title is required.";

@@ -283,7 +283,9 @@ public sealed class ReviewIntegrationEventHandler(
                 ReviewTaskType.MultipleChoice => task.CheckMode == ReviewCheckMode.Auto
                     && task.Options.Count >= 2
                     && correctOptionCount >= 1,
-                ReviewTaskType.FreeText => task.Options.Count == 0,
+                ReviewTaskType.FreeText => (task.CheckMode is ReviewCheckMode.Llm
+                        or ReviewCheckMode.Manual)
+                    && task.Options.Count == 0,
                 _ => false
             };
             if (!validShape)

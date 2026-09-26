@@ -66,11 +66,13 @@ export function createTestPayload(form) {
 }
 
 export function createTaskFormFromTask(task) {
+  const freeTextCheckMode = task.checkMode === "manual" ? "manual" : "llm";
+
   return {
     type: task.type,
     title: task.title,
     prompt: task.prompt,
-    checkMode: task.checkMode ?? (task.type === "free-text" ? "llm" : "auto"),
+    checkMode: task.type === "free-text" ? freeTextCheckMode : "auto",
     maxPoints: task.maxPoints,
     wrongAnswerPenalty: task.wrongAnswerPenalty ?? 0,
     options: task.options.length === 0 ? ["", ""] : task.options.map(option => option.text),
@@ -83,10 +85,11 @@ export function createTaskFormFromTask(task) {
 export function createTaskPayload(form, hasLlmModel = true) {
   const isChoiceTask = form.type !== "free-text";
   const choiceData = getChoiceTaskData(form);
+  const freeTextCheckMode = hasLlmModel && form.checkMode === "llm" ? "llm" : "manual";
 
   return {
     type: form.type,
-    checkMode: isChoiceTask ? "auto" : hasLlmModel ? form.checkMode : "manual",
+    checkMode: isChoiceTask ? "auto" : freeTextCheckMode,
     title: form.title,
     prompt: form.prompt,
     maxPoints: Number(form.maxPoints),
