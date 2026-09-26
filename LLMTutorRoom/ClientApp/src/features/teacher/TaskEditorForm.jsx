@@ -243,7 +243,10 @@ export function TaskEditorForm({
 
           <div className="option-editor-list">
             {form.options.map((option, index) => (
-              <div className="option-editor-row" key={optionKeys.current[index]}>
+              <div
+                className={`option-editor-row${form.correctOptionIndexes.includes(index) ? " correct" : ""}`}
+                key={optionKeys.current[index]}
+              >
                 <input
                   aria-label={`Отметить вариант ${index + 1} правильным`}
                   checked={form.correctOptionIndexes.includes(index)}

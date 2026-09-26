@@ -14,6 +14,7 @@ import { formatReviewAnswer } from "../../shared/lib/answers.js";
 import { formatDate } from "../../shared/lib/dates.js";
 import { parseReviewHistoryPage } from "../../shared/lib/overview.js";
 import { isTerminalReview, mergeReviews } from "../../shared/lib/reviews.js";
+import { ChoiceReviewAnswers } from "../../shared/ui/ChoiceReviewAnswers.jsx";
 import { StatusBadge } from "../../shared/ui/StatusBadge.jsx";
 import {
   getEffectiveAttemptStatus,
@@ -107,6 +108,7 @@ function ReviewProgress({ attemptStatus, isReviewDeferred, review }) {
 }
 
 function ReviewTaskDetails({ result, taskIndex }) {
+  const isAuto = result.checkMode === "auto";
   const findings = [...new Set(
     result.findings
       .filter(finding => typeof finding === "string")
@@ -122,25 +124,36 @@ function ReviewTaskDetails({ result, taskIndex }) {
         <div className="task-heading">
           <h4>Задание {taskIndex + 1}</h4>
           <span>{result.taskTitle}</span>
+          {isAuto && <small>Автопроверка</small>}
         </div>
         <strong className="student-result-task-score">
           {result.score}/{result.maxScore}
         </strong>
       </header>
 
-      <div className="student-result-copy-block">
-        <span>Ваш ответ</span>
-        <p>{studentAnswer || "Ответ не указан."}</p>
-      </div>
+      {isAuto ? (
+        <>
+          <div className="student-result-copy-block">
+            <span>Задание</span>
+            <p>{result.taskPrompt?.trim() || "Текст задания не указан."}</p>
+          </div>
+          <ChoiceReviewAnswers result={result} />
+        </>
+      ) : (
+        <div className="student-result-copy-block">
+          <span>Ваш ответ</span>
+          <p>{studentAnswer || "Ответ не указан."}</p>
+        </div>
+      )}
 
-      {result.feedback && (
+      {!isAuto && result.feedback && (
         <div className="student-result-copy-block feedback">
           <span>Комментарий к ответу</span>
           <p>{result.feedback}</p>
         </div>
       )}
 
-      {findings.length > 0 && (
+      {!isAuto && findings.length > 0 && (
         <details className="student-result-findings">
           <summary>Рекомендации по ответу · {findings.length}</summary>
           <ul>

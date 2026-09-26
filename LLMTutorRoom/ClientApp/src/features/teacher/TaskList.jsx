@@ -11,6 +11,7 @@ import {
   WandSparkles
 } from "lucide-react";
 import { formatPoints } from "../../shared/lib/points.js";
+import { AnswerOption } from "../../shared/ui/AnswerOption.jsx";
 import { StatusBadge } from "../../shared/ui/StatusBadge.jsx";
 
 export function TaskList({
@@ -129,19 +130,19 @@ export function TaskList({
               <div className="teacher-task-content">
                 <p>{task.prompt}</p>
                 {task.options.length > 0 && (
-                  <div className="answer-option-list">
-                    {task.options.map(option => (
-                      <span
-                        className={task.correctOptionIds.includes(option.id) ? "correct" : ""}
-                        key={option.id}
-                      >
-                        {task.correctOptionIds.includes(option.id) && (
-                          <small className="visually-hidden">Правильный ответ: </small>
-                        )}
-                        {option.text}
-                      </span>
-                    ))}
-                  </div>
+                  <ul className="answer-option-list" aria-label="Варианты ответа" role="list">
+                    {task.options.map(option => {
+                      const isCorrect = task.correctOptionIds.includes(option.id);
+                      return (
+                        <AnswerOption
+                          key={option.id}
+                          text={option.text}
+                          state={isCorrect ? "correct" : "incorrect"}
+                          accessibleLabel={isCorrect ? "Правильный ответ. " : "Неправильный ответ. "}
+                        />
+                      );
+                    })}
+                  </ul>
                 )}
               </div>
             </details>

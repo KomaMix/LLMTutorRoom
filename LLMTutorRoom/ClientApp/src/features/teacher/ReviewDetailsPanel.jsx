@@ -1,5 +1,6 @@
 import { formatReviewAnswer } from "../../shared/lib/answers.js";
 import { formatDate } from "../../shared/lib/dates.js";
+import { ChoiceReviewAnswers } from "../../shared/ui/ChoiceReviewAnswers.jsx";
 import { StatusBadge } from "../../shared/ui/StatusBadge.jsx";
 
 const completedTaskStatuses = new Set(["succeeded", "failed"]);
@@ -17,6 +18,7 @@ function getFindings(result) {
 }
 
 function ReviewTaskResult({ result, taskIndex }) {
+  const isAuto = result.checkMode === "auto";
   const isLlm = result.checkMode === "llm";
   const isManual = result.checkMode === "manual";
   const isFailed = result.status === "failed";
@@ -51,17 +53,21 @@ function ReviewTaskResult({ result, taskIndex }) {
         <p>{result.taskPrompt?.trim() || "Текст задания не указан."}</p>
       </div>
 
-      <div className="teacher-review-copy-block answer">
-        <span>Ответ ученика</span>
-        <p>{studentAnswer || "Ответ не указан."}</p>
-      </div>
+      {isAuto ? (
+        <ChoiceReviewAnswers result={result} />
+      ) : (
+        <div className="teacher-review-copy-block answer">
+          <span>Ответ ученика</span>
+          <p>{studentAnswer || "Ответ не указан."}</p>
+        </div>
+      )}
 
       {isFailed ? (
         <div className="teacher-review-copy-block error">
           <span>Результат проверки</span>
           <p>Автоматическую проверку этого задания завершить не удалось.</p>
         </div>
-      ) : (
+      ) : !isAuto && (
         <>
           {result.feedback?.trim() && (
             <div className={`teacher-review-copy-block feedback${isLlm ? " llm" : ""}`}>

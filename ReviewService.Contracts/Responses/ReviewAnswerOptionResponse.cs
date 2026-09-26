@@ -2,4 +2,5 @@ namespace ReviewService.Contracts.Responses;
 
 public sealed record ReviewAnswerOptionResponse(
     string Id,
-    string Text);
+    string Text,
+    bool? IsCorrect = null);

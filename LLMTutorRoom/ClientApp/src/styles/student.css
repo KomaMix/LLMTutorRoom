@@ -459,6 +459,7 @@
 }
 
 .student-result-task {
+  min-width: 0;
   padding: 16px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-card);
@@ -476,6 +477,10 @@
   color: var(--color-text-secondary);
   font-size: 15px;
   text-align: right;
+}
+
+.student-result-task > .review-choice-answers {
+  margin-top: 14px;
 }
 
 .student-result-copy-block {
@@ -497,6 +502,7 @@
   margin: 0;
   color: var(--color-text-secondary);
   line-height: 1.55;
+  overflow-wrap: anywhere;
   white-space: pre-wrap;
 }
 

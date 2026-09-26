@@ -116,6 +116,15 @@
   justify-self: center;
 }
 
+.option-editor-row.correct > .option-control {
+  accent-color: var(--color-success);
+}
+
+.option-editor-row.correct > input:not(.option-control):not(:focus):not(:disabled) {
+  border-color: var(--color-success-border);
+  background: var(--color-success-surface);
+}
+
 .icon-button:disabled {
   cursor: default;
   color: var(--color-text-disabled);

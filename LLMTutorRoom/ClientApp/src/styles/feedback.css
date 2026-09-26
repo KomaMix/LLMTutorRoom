@@ -110,6 +110,55 @@
   white-space: nowrap;
 }
 
+.review-choice-answers {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  min-width: 0;
+}
+
+.review-choice-label {
+  color: var(--color-text-muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.review-choice-options {
+  margin: 0;
+}
+
+.answer-option.selected {
+  border-color: var(--color-selection-border);
+  background: var(--color-selection-background);
+}
+
+.answer-option.correct {
+  border-color: var(--color-success-border);
+  background: var(--color-success-surface);
+}
+
+.answer-option.correct .answer-option-icon {
+  color: var(--color-success);
+}
+
+.answer-option.incorrect {
+  border-color: var(--color-danger-border);
+  background: var(--color-danger-surface);
+}
+
+.answer-option.incorrect .answer-option-icon {
+  color: var(--color-danger);
+}
+
+.review-choice-note {
+  margin: 0;
+  color: var(--color-text-muted);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
 .status {
   display: inline-flex;
   align-items: center;
