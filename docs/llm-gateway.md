@@ -53,7 +53,7 @@ sequenceDiagram
     end
 ```
 
-[`ChatExecutionService`](../LLMGateway/Services/ChatExecutionService.cs) сначала отличает неизвестный ключ (`404`) от модели без включённых deployment (`503`). Перед фактическим вызовом он резервирует лимиты и выполняет `GET /models` с таймаутом три секунды, добавляя Bearer API key, если он задан. Затем [`ChatClientFactory`](../LLMGateway/Services/ChatClientFactory.cs) создаёт OpenAI-compatible клиент, а `ProviderModelId` явно передаётся как model ID. Пустой API key заменяется техническим значением `openai-compatible`.
+[`ChatExecutionService`](../LLMGateway/Services/ChatExecutionService.cs) сначала отличает неизвестный ключ (`404`) от модели без включённых deployment (`503`). Перед фактическим вызовом он резервирует лимиты и выполняет `GET /models` с таймаутом три секунды, добавляя Bearer API key, если он задан. Проверка успешна только при успешном HTTP-статусе и точном совпадении одного из `data[].id` с `ProviderModelId`; отсутствие модели или некорректный каталог означает неуспешную проверку и переход к следующему deployment. Затем [`ChatClientFactory`](../LLMGateway/Services/ChatClientFactory.cs) создаёт OpenAI-compatible клиент, а `ProviderModelId` явно передаётся как model ID. Пустой API key заменяется техническим значением `openai-compatible`.
 
 Если попытка неуспешна, перебор продолжается. Когда исчерпаны все deployment, итоговый статус выбирается с приоритетом: ошибка provider (`502`), таймаут chat-вызова (`504`), недоступность health check (`503`), rate limit (`429`), concurrency limit (`429`).
 

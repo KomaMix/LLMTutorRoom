@@ -5,6 +5,7 @@ using LLMGateway.Enums;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.AI;
 using System.Net.Http.Headers;
+using System.Text.Json;
 
 namespace LLMGateway.Services
 {
@@ -209,14 +210,50 @@ namespace LLMGateway.Services
                     HttpCompletionOption.ResponseHeadersRead,
                     timeoutCts.Token);
 
-                if (response.IsSuccessStatusCode)
-                    return true;
+                if (!response.IsSuccessStatusCode)
+                {
+                    _logger.LogWarning(
+                        "Deployment {DeploymentId} for model {ModelKey} health check returned {StatusCode}.",
+                        deployment.Id,
+                        modelKey,
+                        response.StatusCode);
+
+                    return false;
+                }
+
+                await using var responseStream = await response.Content.ReadAsStreamAsync(timeoutCts.Token);
+                using var catalog = await JsonDocument.ParseAsync(
+                    responseStream,
+                    cancellationToken: timeoutCts.Token);
+
+                if (catalog.RootElement.ValueKind != JsonValueKind.Object
+                    || !catalog.RootElement.TryGetProperty("data", out var models)
+                    || models.ValueKind != JsonValueKind.Array)
+                {
+                    _logger.LogWarning(
+                        "Deployment {DeploymentId} for model {ModelKey} health check returned an invalid models catalog.",
+                        deployment.Id,
+                        modelKey);
+
+                    return false;
+                }
+
+                foreach (var model in models.EnumerateArray())
+                {
+                    if (model.ValueKind == JsonValueKind.Object
+                        && model.TryGetProperty("id", out var id)
+                        && id.ValueKind == JsonValueKind.String
+                        && string.Equals(id.GetString(), deployment.ProviderModelId, StringComparison.Ordinal))
+                    {
+                        return true;
+                    }
+                }
 
                 _logger.LogWarning(
-                    "Deployment {DeploymentId} for model {ModelKey} health check returned {StatusCode}.",
+                    "Deployment {DeploymentId} for model {ModelKey} health check did not find provider model {ProviderModelId} in the models catalog.",
                     deployment.Id,
                     modelKey,
-                    response.StatusCode);
+                    deployment.ProviderModelId);
 
                 return false;
             }
@@ -237,6 +274,16 @@ namespace LLMGateway.Services
                 _logger.LogWarning(
                     ex,
                     "Deployment {DeploymentId} for model {ModelKey} health check failed.",
+                    deployment.Id,
+                    modelKey);
+
+                return false;
+            }
+            catch (JsonException ex)
+            {
+                _logger.LogWarning(
+                    ex,
+                    "Deployment {DeploymentId} for model {ModelKey} health check returned an invalid models catalog.",
                     deployment.Id,
                     modelKey);
 

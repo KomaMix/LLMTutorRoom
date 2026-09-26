@@ -7,7 +7,9 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging.Abstractions;
 using System.Net;
+using System.Net.Http.Json;
 using System.Runtime.CompilerServices;
+using System.Text;
 
 namespace LLMGateway.Tests
 {
@@ -131,12 +133,125 @@ namespace LLMGateway.Tests
                 chatClientFactory,
                 request => request.RequestUri?.Host == "primary.test"
                     ? new HttpResponseMessage(HttpStatusCode.ServiceUnavailable)
-                    : new HttpResponseMessage(HttpStatusCode.OK));
+                    : CreateModelsResponse("secondary"));
 
             var result = await service.ExecuteAsync("test-model", CreateChatRequest(), CancellationToken.None);
 
             Assert.Equal(ChatExecutionStatus.Completed, result.Status);
             Assert.Equal("secondary response", result.Response?.Text);
+        }
+
+        [Fact]
+        public async Task ExecuteAsync_WhenProviderModelIsListed_ChecksCatalogBeforeEveryGeneration()
+        {
+            await using var dbContext = CreateDbContext();
+            var requests = new List<string>();
+            var chatClientFactory = new FakeChatClientFactory();
+            chatClientFactory.Register("primary", new FakeChatClient(_ =>
+            {
+                requests.Add("chat");
+                return Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant, "response")));
+            }));
+
+            await AddModelAsync(dbContext, new[] { CreateDeployment("primary", priority: 0) });
+
+            var service = CreateService(dbContext, chatClientFactory, request =>
+            {
+                requests.Add($"{request.Method} {request.RequestUri}");
+                return CreateModelsResponse("other-model", "primary");
+            });
+
+            var firstResult = await service.ExecuteAsync("test-model", CreateChatRequest(), CancellationToken.None);
+            var secondResult = await service.ExecuteAsync("test-model", CreateChatRequest(), CancellationToken.None);
+
+            Assert.Equal(ChatExecutionStatus.Completed, firstResult.Status);
+            Assert.Equal("response", firstResult.Response?.Text);
+            Assert.Equal(ChatExecutionStatus.Completed, secondResult.Status);
+            Assert.Equal("response", secondResult.Response?.Text);
+            Assert.Equal(new[]
+            {
+                "GET http://localhost:11434/v1/models",
+                "chat",
+                "GET http://localhost:11434/v1/models",
+                "chat"
+            }, requests);
+        }
+
+        [Theory]
+        [InlineData("""{"data":[{"id":"other-model"}]}""")]
+        [InlineData("""{"data":[{"id":"test-model"}]}""")]
+        [InlineData("""{"data":[{"id":"PRIMARY"}]}""")]
+        [InlineData("""{"data":[]}""")]
+        [InlineData("""{"data":null}""")]
+        [InlineData("""{"data":{"id":"primary"}}""")]
+        [InlineData("""{"data":[null,17,{}, {"id":42}]}""")]
+        [InlineData("{}")]
+        [InlineData("[]")]
+        [InlineData("invalid json")]
+        [InlineData("")]
+        public async Task ExecuteAsync_WhenCatalogDoesNotConfirmProviderModel_DoesNotGenerate(string catalogJson)
+        {
+            await using var dbContext = CreateDbContext();
+            var chatClientFactory = new FakeChatClientFactory();
+            var chatClient = new FakeChatClient(_ => Task.FromResult(new ChatResponse(
+                new ChatMessage(ChatRole.Assistant, "should not be generated"))));
+            chatClientFactory.Register("primary", chatClient);
+
+            await AddModelAsync(dbContext, new[] { CreateDeployment("primary", priority: 0) });
+
+            var service = CreateService(dbContext, chatClientFactory, _ => new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(catalogJson, Encoding.UTF8, "application/json")
+            });
+
+            var result = await service.ExecuteAsync("test-model", CreateChatRequest(), CancellationToken.None);
+
+            Assert.Equal(ChatExecutionStatus.ProviderUnavailable, result.Status);
+            Assert.Null(result.Response);
+            Assert.Equal(0, chatClient.RequestCount);
+        }
+
+        [Fact]
+        public async Task ExecuteAsync_WhenPrimaryProviderModelIsMissing_UsesNextDeployment()
+        {
+            await using var dbContext = CreateDbContext();
+            var chatClientFactory = new FakeChatClientFactory();
+            var primaryClient = new FakeChatClient(_ => Task.FromResult(new ChatResponse(
+                new ChatMessage(ChatRole.Assistant, "primary response"))));
+            var secondaryClient = new FakeChatClient(_ => Task.FromResult(new ChatResponse(
+                new ChatMessage(ChatRole.Assistant, "secondary response"))));
+            chatClientFactory.Register("primary", primaryClient);
+            chatClientFactory.Register("secondary", secondaryClient);
+
+            await AddModelAsync(dbContext, new[]
+            {
+                CreateDeployment("primary", priority: 0, endpoint: "http://primary.test:11434/v1"),
+                CreateDeployment("secondary", priority: 1, endpoint: "http://secondary.test:11434/v1")
+            });
+
+            var service = CreateService(dbContext, chatClientFactory, request =>
+                request.RequestUri?.Host == "primary.test"
+                    ? CreateModelsResponse("other-model")
+                    : CreateModelsResponse("secondary"));
+
+            var result = await service.ExecuteAsync("test-model", CreateChatRequest(), CancellationToken.None);
+
+            Assert.Equal(ChatExecutionStatus.Completed, result.Status);
+            Assert.Equal("secondary response", result.Response?.Text);
+            Assert.Equal(0, primaryClient.RequestCount);
+            Assert.Equal(1, secondaryClient.RequestCount);
+        }
+
+        private static HttpResponseMessage CreateModelsResponse(params string[] modelIds)
+        {
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = JsonContent.Create(new
+                {
+                    @object = "list",
+                    data = modelIds.Select(id => new { id }).ToArray()
+                })
+            };
         }
 
         private static ChatExecutionService CreateService(
@@ -246,7 +361,7 @@ namespace LLMGateway.Tests
 
             public FakeHttpMessageHandler(Func<HttpRequestMessage, HttpResponseMessage>? handler)
             {
-                _handler = handler ?? (_ => new HttpResponseMessage(HttpStatusCode.OK));
+                _handler = handler ?? (_ => CreateModelsResponse("primary", "secondary"));
             }
 
             protected override Task<HttpResponseMessage> SendAsync(
@@ -267,12 +382,14 @@ namespace LLMGateway.Tests
             }
 
             public bool IsDisposed { get; private set; }
+            public int RequestCount { get; private set; }
 
             public Task<ChatResponse> GetResponseAsync(
                 IEnumerable<ChatMessage> messages,
                 ChatOptions? options = null,
                 CancellationToken cancellationToken = default)
             {
+                RequestCount++;
                 return _handler(messages);
             }
 
