@@ -7,6 +7,7 @@ using TeachingService.Contracts.Enums;
 using TeachingService.Data;
 using TeachingService.Interfaces;
 using TeachingService.Models;
+using TeachingService.Helpers;
 using TeachingCheckMode = TeachingService.Contracts.Enums.TestTaskCheckMode;
 using TeachingTaskType = TeachingService.Contracts.Enums.TestTaskType;
 
@@ -52,6 +53,7 @@ namespace TeachingService.Services.IntegrationEvents
                 TeacherUserId = test.TeacherUserId,
                 TestTitle = version.Title,
                 ModelKey = version.LlmModelKey,
+                GradingExamples = ToGradingExamples(version.GradingExamplesJson),
                 Tasks = version.Tasks
                     .Where(task => !task.IsHidden)
                     .OrderBy(task => task.CreatedAt)
@@ -89,6 +91,7 @@ namespace TeachingService.Services.IntegrationEvents
                 Prompt = task.Prompt,
                 MaxPoints = task.MaxPoints,
                 WrongAnswerPenalty = task.WrongAnswerPenalty,
+                GradingExamples = ToGradingExamples(task.GradingExamplesJson),
                 Options = task.Options
                     .OrderBy(option => option.Id)
                     .Select(option => new ReviewAnswerOptionSnapshot
@@ -99,6 +102,18 @@ namespace TeachingService.Services.IntegrationEvents
                     })
                     .ToList()
             };
+        }
+
+        private static List<GradingExampleSnapshot> ToGradingExamples(string json)
+        {
+            return GradingExamples.Deserialize(json).Select(example => new GradingExampleSnapshot
+            {
+                TaskPrompt = example.TaskPrompt,
+                StudentAnswer = example.StudentAnswer,
+                Score = example.Score,
+                MaxScore = example.MaxScore,
+                Feedback = example.Feedback
+            }).ToList();
         }
 
         private static ReviewTaskType ToReviewTaskType(TeachingTaskType taskType)

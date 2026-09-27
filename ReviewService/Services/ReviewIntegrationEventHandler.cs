@@ -92,6 +92,7 @@ public sealed class ReviewIntegrationEventHandler(
                     TestTitle = message.TestTitle,
                     ModelKeySnapshot = message.ModelKey?.Trim() ?? string.Empty,
                     TasksJson = JsonSerializer.Serialize(message.Tasks, JsonHelper.Options),
+                    GradingExamplesJson = JsonSerializer.Serialize(message.GradingExamples, JsonHelper.Options),
                     PublishedAt = message.PublishedAt,
                     ReceivedAt = DateTimeOffset.UtcNow
                 };
@@ -236,6 +237,29 @@ public sealed class ReviewIntegrationEventHandler(
         }
     }
 
+    private static void ValidateGradingExamples(
+        IReadOnlyList<GradingExampleSnapshot>? examples,
+        bool requireTaskPrompt)
+    {
+        if (examples is null || examples.Count > 5)
+            throw new InvalidDataException("The policy must contain at most five grading examples at each level.");
+
+        foreach (var example in examples)
+        {
+            if (example is null
+                || (requireTaskPrompt && string.IsNullOrWhiteSpace(example.TaskPrompt))
+                || string.IsNullOrWhiteSpace(example.StudentAnswer)
+                || string.IsNullOrWhiteSpace(example.Feedback)
+                || example.MaxScore <= 0
+                || example.Score < 0
+                || example.Score > example.MaxScore
+                || (example.TaskPrompt?.Length ?? 0) > 4000
+                || example.StudentAnswer.Length > 8000
+                || example.Feedback.Length > 4000)
+                throw new InvalidDataException("The policy contains an invalid grading example.");
+        }
+    }
+
     private static void Validate(TestReviewPolicyPublishedV1 message)
     {
         if (message.EventId == Guid.Empty
@@ -247,6 +271,8 @@ public sealed class ReviewIntegrationEventHandler(
         {
             throw new InvalidDataException("TestReviewPolicyPublishedV1 contains invalid required values.");
         }
+
+        ValidateGradingExamples(message.GradingExamples, requireTaskPrompt: true);
 
         var taskIds = new HashSet<string>(StringComparer.Ordinal);
         foreach (var task in message.Tasks)
@@ -264,6 +290,10 @@ public sealed class ReviewIntegrationEventHandler(
                 throw new InvalidDataException(
                     "TestReviewPolicyPublishedV1 contains an invalid task snapshot.");
             }
+
+            ValidateGradingExamples(task.GradingExamples, requireTaskPrompt: false);
+            if (task.Type != ReviewTaskType.FreeText && task.GradingExamples.Count > 0)
+                throw new InvalidDataException("Grading examples are supported only for free-text tasks.");
 
             var optionIds = new HashSet<string>(StringComparer.Ordinal);
             if (task.Options.Any(option => string.IsNullOrWhiteSpace(option.Id)

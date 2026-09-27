@@ -1,4 +1,5 @@
 import { useId, useRef } from "react";
+import { GradingExamplesEditor } from "./GradingExamplesEditor.jsx";
 import {
   AlignLeft,
   Bot,
@@ -277,6 +278,15 @@ export function TaskEditorForm({
             ))}
           </div>
         </div>
+      )}
+
+      {form.type === "free-text" && (
+        <GradingExamplesEditor
+          examples={form.gradingExamples}
+          defaultMaxScore={form.maxPoints}
+          disabled={controlsDisabled}
+          onChange={examples => updateForm("gradingExamples", examples)}
+        />
       )}
 
       <div role="status" aria-atomic="true" aria-live="polite">

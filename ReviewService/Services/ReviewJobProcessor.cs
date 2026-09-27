@@ -1,8 +1,11 @@
 using System.Data;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using ReviewService.Options;
 using ReviewService.Contracts.Enums;
+using ReviewService.Contracts.Events;
+using ReviewService.Helpers;
 using ReviewService.Data;
 using ReviewService.Enums;
 using ReviewService.Interfaces;
@@ -96,6 +99,8 @@ public sealed class ReviewJobProcessor(
                 var llmResult = await llmGatewayReviewClient.ReviewFreeTextAnswerAsync(
                     review.ModelKeySnapshot,
                     task,
+                    JsonSerializer.Deserialize<List<GradingExampleSnapshot>>(
+                        review.GradingExamplesJson, JsonHelper.Options) ?? [],
                     cancellationToken);
                 scoringService.ApplyLlmResult(task, llmResult, DateTimeOffset.UtcNow);
             }

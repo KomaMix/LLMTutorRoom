@@ -7,6 +7,7 @@ using TeachingService.Enums;
 using TeachingService.Interfaces;
 using TeachingService.Mappers;
 using TeachingService.Models;
+using TeachingService.Helpers;
 
 namespace TeachingService.Services
 {
@@ -135,6 +136,9 @@ namespace TeachingService.Services
             CancellationToken cancellationToken)
         {
             EnsureTeacherUserId(teacherUserId);
+            var examplesError = GradingExamples.Validate(request.GradingExamples, requireTaskPrompt: true);
+            if (examplesError is not null)
+                throw new ArgumentException(examplesError, nameof(request));
 
             var testId = Guid.NewGuid();
             var version = CreateVersion(
@@ -261,6 +265,10 @@ namespace TeachingService.Services
                     CatalogOperationStatus.Conflict,
                     error: "The draft content changed. Reload it before saving.");
             }
+
+            var examplesError = GradingExamples.Validate(request.GradingExamples, requireTaskPrompt: true);
+            if (examplesError is not null)
+                return new(CatalogOperationStatus.ValidationFailed, error: examplesError);
 
             ApplyTestDetails(draft, request);
             if (!await TrySaveDraftMutationAsync(draft, cancellationToken))
@@ -434,6 +442,10 @@ namespace TeachingService.Services
             CancellationToken cancellationToken)
         {
             EnsureTeacherUserId(teacherUserId);
+            var examplesError = ValidateTaskExamples(request);
+            if (examplesError is not null)
+                return new(CatalogOperationStatus.ValidationFailed, error: examplesError);
+
             if (!TryNormalizeTaskCheckMode(request, out var checkMode))
             {
                 return new(
@@ -486,6 +498,10 @@ namespace TeachingService.Services
             CancellationToken cancellationToken)
         {
             EnsureTeacherUserId(teacherUserId);
+            var examplesError = ValidateTaskExamples(request);
+            if (examplesError is not null)
+                return new(CatalogOperationStatus.ValidationFailed, error: examplesError);
+
             if (!TryNormalizeTaskCheckMode(request, out var checkMode))
             {
                 return new(
@@ -524,6 +540,7 @@ namespace TeachingService.Services
             task.Title = request.Title.Trim();
             task.Prompt = request.Prompt.Trim();
             task.MaxPoints = request.MaxPoints;
+            task.GradingExamplesJson = GradingExamples.Serialize(request.GradingExamples);
             task.WrongAnswerPenalty = request.Type == TestTaskType.MultipleChoice
                 ? request.WrongAnswerPenalty
                 : 0;
@@ -846,6 +863,7 @@ namespace TeachingService.Services
                 TimeLimitMinutes = source.TimeLimitMinutes,
                 Summary = source.Summary,
                 LlmModelKey = source.LlmModelKey,
+                GradingExamplesJson = source.GradingExamplesJson,
                 CreatedAt = createdAt
             };
 
@@ -864,6 +882,7 @@ namespace TeachingService.Services
                     Prompt = sourceTask.Prompt,
                     MaxPoints = sourceTask.MaxPoints,
                     WrongAnswerPenalty = sourceTask.WrongAnswerPenalty,
+                    GradingExamplesJson = sourceTask.GradingExamplesJson,
                     IsHidden = sourceTask.IsHidden,
                     CreatedAt = sourceTask.CreatedAt,
                     Options = sourceTask.Options
@@ -892,6 +911,7 @@ namespace TeachingService.Services
             version.TimeLimitMinutes = request.TimeLimitMinutes;
             version.Summary = request.Summary?.Trim() ?? string.Empty;
             version.LlmModelKey = request.LlmModelKey?.Trim() ?? string.Empty;
+            version.GradingExamplesJson = GradingExamples.Serialize(request.GradingExamples);
         }
 
         private static TestTask CreateTask(
@@ -909,6 +929,7 @@ namespace TeachingService.Services
                 Title = request.Title.Trim(),
                 Prompt = request.Prompt.Trim(),
                 MaxPoints = request.MaxPoints,
+                GradingExamplesJson = GradingExamples.Serialize(request.GradingExamples),
                 CreatedAt = DateTimeOffset.UtcNow,
                 WrongAnswerPenalty = request.Type == TestTaskType.MultipleChoice
                     ? request.WrongAnswerPenalty
@@ -934,6 +955,17 @@ namespace TeachingService.Services
                 Text = option.Trim(),
                 IsCorrect = correctOptionIndexes.Contains(index)
             }).ToList();
+        }
+
+        private static string? ValidateTaskExamples(CreateTaskRequest request)
+        {
+            var error = GradingExamples.Validate(request.GradingExamples, requireTaskPrompt: false);
+            if (error is not null)
+                return error;
+
+            return request.Type != TestTaskType.FreeText && request.GradingExamples.Count > 0
+                ? "Grading examples are supported only for free-text tasks."
+                : null;
         }
 
         private static bool TryNormalizeTaskCheckMode(
@@ -964,6 +996,21 @@ namespace TeachingService.Services
             if (visibleTasks.Any(task => !HasSupportedReviewMode(task)))
             {
                 return "Every visible task must use a supported task type and review mode.";
+            }
+
+            var examplesError = GradingExamples.Validate(
+                GradingExamples.Deserialize(version.GradingExamplesJson), requireTaskPrompt: true);
+            if (examplesError is not null)
+                return examplesError;
+
+            foreach (var task in visibleTasks)
+            {
+                var examples = GradingExamples.Deserialize(task.GradingExamplesJson);
+                examplesError = GradingExamples.Validate(examples, requireTaskPrompt: false);
+                if (examplesError is not null)
+                    return examplesError;
+                if (task.Type != TestTaskType.FreeText && examples.Count > 0)
+                    return "Grading examples are supported only for free-text tasks.";
             }
 
             if (visibleTasks.Any(task => task.CheckMode == TestTaskCheckMode.Llm)

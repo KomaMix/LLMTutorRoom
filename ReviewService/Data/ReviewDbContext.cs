@@ -26,6 +26,7 @@ public sealed class ReviewDbContext(DbContextOptions<ReviewDbContext> options) :
             entity.Property(item => item.ModelKeySnapshot).HasMaxLength(300);
             entity.Property(item => item.Status).HasConversion<string>().HasMaxLength(40);
             entity.Property(item => item.ProcessingGeneration).IsConcurrencyToken();
+            entity.Property(item => item.GradingExamplesJson).HasColumnName("GradingExamples").HasColumnType("jsonb");
             entity.HasIndex(item => item.AttemptId).IsUnique();
             entity.HasIndex(item => item.TeacherUserId);
             entity.HasIndex(item => item.StudentUserId);
@@ -69,6 +70,7 @@ public sealed class ReviewDbContext(DbContextOptions<ReviewDbContext> options) :
             entity.Property(item => item.CheckMode).HasConversion<string>().HasMaxLength(40);
             entity.Property(item => item.Status).HasConversion<string>().HasMaxLength(40);
             entity.Property(item => item.AnswerOptionsJson).HasColumnName("AnswerOptions").HasColumnType("jsonb");
+            entity.Property(item => item.GradingExamplesJson).HasColumnName("GradingExamples").HasColumnType("jsonb");
             entity.Property(item => item.FindingsJson).HasColumnName("Findings").HasColumnType("jsonb");
             entity.HasIndex(item => new { item.ReviewId, item.TaskId }).IsUnique();
         });
@@ -80,6 +82,7 @@ public sealed class ReviewDbContext(DbContextOptions<ReviewDbContext> options) :
             entity.Property(item => item.TestTitle).HasMaxLength(500);
             entity.Property(item => item.ModelKeySnapshot).HasMaxLength(300);
             entity.Property(item => item.TasksJson).HasColumnName("Tasks").HasColumnType("jsonb");
+            entity.Property(item => item.GradingExamplesJson).HasColumnName("GradingExamples").HasColumnType("jsonb");
             entity.HasIndex(item => new { item.TestId, item.Revision }).IsUnique();
         });
 

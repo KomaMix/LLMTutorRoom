@@ -12,6 +12,7 @@ namespace TeachingService.Models
         public string Prompt { get; set; } = string.Empty;
         public decimal MaxPoints { get; set; }
         public decimal WrongAnswerPenalty { get; set; }
+        public string GradingExamplesJson { get; set; } = "[]";
         public bool IsHidden { get; set; }
         public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
         public List<AnswerOption> Options { get; set; } = new();

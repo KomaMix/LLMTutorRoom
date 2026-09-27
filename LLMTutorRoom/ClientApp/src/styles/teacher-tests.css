@@ -263,7 +263,7 @@
   margin: 13px 0 0;
 }
 
-.role-teacher .teacher-task-disclosure summary {
+.role-teacher .teacher-task-disclosure > summary {
   display: inline-flex;
   align-items: center;
   gap: 7px;
@@ -274,15 +274,15 @@
   cursor: pointer;
 }
 
-.role-teacher .teacher-task-disclosure summary::-webkit-details-marker {
+.role-teacher .teacher-task-disclosure > summary::-webkit-details-marker {
   display: none;
 }
 
-.role-teacher .teacher-task-disclosure summary svg {
+.role-teacher .teacher-task-disclosure > summary svg {
   transition: transform 160ms ease;
 }
 
-.role-teacher .teacher-task-disclosure[open] summary svg {
+.role-teacher .teacher-task-disclosure[open] > summary svg {
   transform: rotate(180deg);
 }
 

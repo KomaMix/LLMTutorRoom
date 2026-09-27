@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { getOverview } from "../api/classroomApi.js";
 import { parseOverview } from "../shared/lib/overview.js";
 
-export function useOverview({ enabled, identityKey }) {
+export function useOverview({ enabled, identityKey, role }) {
   const [data, setData] = useState(null);
   const [isLoading, setIsLoading] = useState(enabled);
   const [error, setError] = useState("");
@@ -28,7 +28,7 @@ export function useOverview({ enabled, identityKey }) {
     setError("");
 
     try {
-      const overview = parseOverview(await getOverview({ signal: controller.signal }));
+      const overview = parseOverview(await getOverview({ signal: controller.signal }), role);
       if (requestId !== latestRequestId.current
         || controller.signal.aborted
         || !lifecycle.current.active
@@ -57,7 +57,7 @@ export function useOverview({ enabled, identityKey }) {
         activeController.current = null;
       }
     }
-  }, [enabled, identityKey]);
+  }, [enabled, identityKey, role]);
 
   useEffect(() => {
     lifecycle.current = { active: enabled, identityKey };

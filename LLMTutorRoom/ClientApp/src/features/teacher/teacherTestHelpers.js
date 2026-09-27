@@ -3,6 +3,11 @@ import {
   toInputDate
 } from "../../shared/lib/dates.js";
 import { getRussianPluralForm } from "../../shared/lib/russianPlural.js";
+import {
+  copyGradingExamples,
+  createGradingExamplesPayload,
+  validateGradingExamples
+} from "./gradingExamples.js";
 
 export const taskTypes = [
   { value: "single-choice", label: "Один ответ" },
@@ -22,7 +27,8 @@ export function createInitialTestForm(defaultModelKey = "") {
     summary: "",
     deadline: toInputDate(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)),
     timeLimitMinutes: 45,
-    llmModelKey: defaultModelKey
+    llmModelKey: defaultModelKey,
+    gradingExamples: []
   };
 }
 
@@ -34,6 +40,7 @@ export function createInitialTaskForm() {
     checkMode: "auto",
     maxPoints: 1,
     wrongAnswerPenalty: 0,
+    gradingExamples: [],
     options: ["", "", "", ""],
     correctOptionIndexes: []
   };
@@ -50,7 +57,8 @@ export function createTestFormFromTest(test) {
     summary: test.summary,
     deadline: toInputDate(test.deadline),
     timeLimitMinutes: test.timeLimitMinutes,
-    llmModelKey: test.llmModelKey ?? ""
+    llmModelKey: test.llmModelKey ?? "",
+    gradingExamples: copyGradingExamples(test.gradingExamples)
   };
 }
 
@@ -61,7 +69,8 @@ export function createTestPayload(form) {
     summary: form.summary,
     deadline: endOfLocalDayToIso(form.deadline),
     timeLimitMinutes: Number(form.timeLimitMinutes),
-    llmModelKey: form.llmModelKey
+    llmModelKey: form.llmModelKey,
+    gradingExamples: createGradingExamplesPayload(form.gradingExamples)
   };
 }
 
@@ -75,6 +84,7 @@ export function createTaskFormFromTask(task) {
     checkMode: task.type === "free-text" ? freeTextCheckMode : "auto",
     maxPoints: task.maxPoints,
     wrongAnswerPenalty: task.wrongAnswerPenalty ?? 0,
+    gradingExamples: copyGradingExamples(task.gradingExamples),
     options: task.options.length === 0 ? ["", ""] : task.options.map(option => option.text),
     correctOptionIndexes: task.options
       .map((option, index) => task.correctOptionIds.includes(option.id) ? index : -1)
@@ -93,6 +103,7 @@ export function createTaskPayload(form, hasLlmModel = true) {
     title: form.title,
     prompt: form.prompt,
     maxPoints: Number(form.maxPoints),
+    gradingExamples: isChoiceTask ? [] : createGradingExamplesPayload(form.gradingExamples),
     wrongAnswerPenalty: form.type === "multiple-choice"
       ? Number(form.wrongAnswerPenalty || 0)
       : 0,
@@ -146,7 +157,7 @@ export function validateTaskForm(form) {
   }
 
   if (form.type === "free-text") {
-    return "";
+    return validateGradingExamples(form.gradingExamples);
   }
 
   if (choiceData.options.length < 2) {

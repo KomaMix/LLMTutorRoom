@@ -15,6 +15,7 @@ public sealed class ReviewTask
     public string StudentAnswer { get; set; } = string.Empty;
     public decimal WrongAnswerPenalty { get; set; }
     public string AnswerOptionsJson { get; set; } = "[]";
+    public string GradingExamplesJson { get; set; } = "[]";
     public int Attempts { get; set; }
     public DateTimeOffset? NextRetryAt { get; set; }
     public DateTimeOffset? CompletedAt { get; set; }

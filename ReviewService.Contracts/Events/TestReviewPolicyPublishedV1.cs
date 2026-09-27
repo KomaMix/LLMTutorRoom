@@ -8,6 +8,7 @@ public sealed class TestReviewPolicyPublishedV1
     public string TeacherUserId { get; set; } = string.Empty;
     public string TestTitle { get; set; } = string.Empty;
     public string ModelKey { get; set; } = string.Empty;
+    public List<GradingExampleSnapshot> GradingExamples { get; set; } = new();
     public List<ReviewTaskPolicySnapshot> Tasks { get; set; } = new();
     public DateTimeOffset PublishedAt { get; set; }
 }

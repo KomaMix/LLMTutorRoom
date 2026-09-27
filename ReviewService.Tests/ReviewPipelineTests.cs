@@ -21,6 +21,80 @@ public sealed class ReviewPipelineTests
 {
     private static readonly DateTimeOffset Now = new(2026, 8, 15, 12, 0, 0, TimeSpan.Zero);
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task GradingExamples_AreCapturedForTheSubmittedRevision(bool attemptArrivesFirst)
+    {
+        await using var dbContext = CreateDbContext();
+        var handler = CreateEventHandler(dbContext, new FakeReviewQueuePublisher());
+        var generalExample = new GradingExampleSnapshot
+        {
+            TaskPrompt = "A general example task.",
+            StudentAnswer = "Example answer.",
+            Score = 3,
+            MaxScore = 5,
+            Feedback = "General feedback."
+        };
+        var taskExample = generalExample with { TaskPrompt = "", Score = 4, Feedback = "Task feedback." };
+        var policy = CreatePolicy(new ReviewTaskPolicySnapshot
+        {
+            Id = "essay",
+            Type = ReviewTaskType.FreeText,
+            CheckMode = ReviewCheckMode.Llm,
+            Title = "Essay",
+            Prompt = "Explain.",
+            MaxPoints = 10,
+            GradingExamples = [taskExample]
+        });
+        policy.GradingExamples = [generalExample];
+        var attempt = CreateAttempt(answers: new Dictionary<string, string> { ["essay"] = "Current student answer." });
+
+        if (attemptArrivesFirst)
+            await handler.HandleAsync(attempt, CancellationToken.None);
+        await handler.HandleAsync(policy, CancellationToken.None);
+        if (!attemptArrivesFirst)
+            await handler.HandleAsync(attempt, CancellationToken.None);
+
+        policy.EventId = Guid.NewGuid();
+        policy.Revision = 2;
+        policy.GradingExamples = [generalExample with { Score = 5 }];
+        policy.Tasks[0].GradingExamples = [taskExample with { Score = 1 }];
+        await handler.HandleAsync(policy, CancellationToken.None);
+        dbContext.ChangeTracker.Clear();
+
+        var review = await dbContext.Reviews.Include(item => item.TaskResults).SingleAsync();
+        var task = Assert.Single(review.TaskResults);
+        Assert.Equal(1, review.TestRevision);
+        Assert.Equal("Current student answer.", task.StudentAnswer);
+        Assert.Equal(generalExample, Assert.Single(JsonSerializer.Deserialize<List<GradingExampleSnapshot>>(
+            review.GradingExamplesJson, JsonHelper.Options)!));
+        Assert.Equal(taskExample, Assert.Single(JsonSerializer.Deserialize<List<GradingExampleSnapshot>>(
+            task.GradingExamplesJson, JsonHelper.Options)!));
+        var oldPolicy = await dbContext.TestReviewPolicies.SingleAsync(item => item.Revision == 1);
+        Assert.Equal(oldPolicy.GradingExamplesJson, review.GradingExamplesJson);
+        Assert.Empty(dbContext.PendingSubmissions);
+    }
+
+    [Fact]
+    public async Task InvalidGradingExample_IsRejectedBeforeInboxAcknowledgement()
+    {
+        await using var dbContext = CreateDbContext();
+        var policy = CreatePolicy();
+        policy.GradingExamples =
+        [
+            new GradingExampleSnapshot
+            {
+                TaskPrompt = "Task", StudentAnswer = "Answer", Score = 6, MaxScore = 5, Feedback = "Feedback"
+            }
+        ];
+
+        await Assert.ThrowsAsync<InvalidDataException>(() =>
+            CreateEventHandler(dbContext, new FakeReviewQueuePublisher()).HandleAsync(policy, CancellationToken.None));
+        Assert.Empty(dbContext.TestReviewPolicies);
+        Assert.Empty(dbContext.InboxMessages);
+    }
+
     [Fact]
     public async Task AttemptBeforePolicy_IsHeldAndReviewedWhenPolicyArrives()
     {

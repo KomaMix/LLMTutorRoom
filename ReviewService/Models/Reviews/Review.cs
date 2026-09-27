@@ -14,6 +14,7 @@ public sealed class Review
     public string? StudentName { get; set; }
     public ReviewStatus Status { get; set; } = ReviewStatus.Checked;
     public string ModelKeySnapshot { get; set; } = string.Empty;
+    public string GradingExamplesJson { get; set; } = "[]";
     public DateTimeOffset SubmittedAt { get; set; }
     public DateTimeOffset? QueuedAt { get; set; }
     public DateTimeOffset? StartedAt { get; set; }

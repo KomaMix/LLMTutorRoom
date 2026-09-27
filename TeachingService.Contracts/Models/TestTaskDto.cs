@@ -11,6 +11,7 @@ namespace TeachingService.Contracts.Models
         public string Prompt { get; set; } = string.Empty;
         public decimal MaxPoints { get; set; }
         public decimal WrongAnswerPenalty { get; set; }
+        public List<GradingExampleDto> GradingExamples { get; set; } = new();
         public bool IsHidden { get; set; }
         public DateTimeOffset CreatedAt { get; set; }
         public List<AnswerOptionDto> Options { get; set; } = new();

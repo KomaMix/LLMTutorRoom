@@ -1,6 +1,7 @@
 using TeachingService.Contracts.Enums;
 using TeachingService.Contracts.Models;
 using TeachingService.Models;
+using TeachingService.Helpers;
 
 namespace TeachingService.Mappers
 {
@@ -26,6 +27,7 @@ namespace TeachingService.Mappers
                 TimeLimitMinutes = version.TimeLimitMinutes,
                 Summary = version.Summary,
                 LlmModelKey = version.LlmModelKey,
+                GradingExamples = GradingExamples.Deserialize(version.GradingExamplesJson),
                 VersionNumber = version.VersionNumber,
                 ContentRevision = version.ContentRevision,
                 PublishedVersionNumber = test.Versions
@@ -68,6 +70,7 @@ namespace TeachingService.Mappers
                 Prompt = task.Prompt,
                 MaxPoints = task.MaxPoints,
                 WrongAnswerPenalty = task.WrongAnswerPenalty,
+                GradingExamples = GradingExamples.Deserialize(task.GradingExamplesJson),
                 IsHidden = task.IsHidden,
                 CreatedAt = task.CreatedAt,
                 Options = task.Options

@@ -1,4 +1,5 @@
 using TeachingService.Contracts.Enums;
+using TeachingService.Contracts.Models;
 
 namespace TeachingService.Contracts.Requests
 {
@@ -10,6 +11,7 @@ namespace TeachingService.Contracts.Requests
         public string Prompt { get; set; } = string.Empty;
         public decimal MaxPoints { get; set; } = 1;
         public decimal WrongAnswerPenalty { get; set; }
+        public List<GradingExampleDto> GradingExamples { get; set; } = new();
         public List<string> Options { get; set; } = new();
         public List<int> CorrectOptionIndexes { get; set; } = new();
     }

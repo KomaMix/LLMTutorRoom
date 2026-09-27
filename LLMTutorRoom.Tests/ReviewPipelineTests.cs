@@ -1,4 +1,5 @@
 using System.Net;
+using System.Text.Json;
 using AttemptService.Contracts.Enums;
 using AttemptService.Contracts.Responses;
 using LLMTutorRoom.Interfaces;
@@ -14,11 +15,21 @@ namespace LLMTutorRoom.Tests;
 public sealed class ReviewPipelineTests
 {
     [Fact]
-    public async Task GetStudentOverview_RedactsCorrectAnswersAndUsesReviewFacade()
+    public async Task GetStudentOverview_UsesStudentContractWithoutTeacherGradingData()
     {
         var test = CreateTest(
             versionNumber: 3,
             CreateSingleChoiceTask());
+        var example = new GradingExampleDto
+        {
+            TaskPrompt = "Private teacher prompt",
+            StudentAnswer = "Private example answer",
+            Score = 1,
+            MaxScore = 2,
+            Feedback = "Private grading explanation"
+        };
+        test.GradingExamples = [example];
+        test.Tasks[0].GradingExamples = [example];
         var review = CreateReview(test);
         var reviewClient = new FakeReviewServiceClient
         {
@@ -30,9 +41,16 @@ public sealed class ReviewPipelineTests
             "student",
             CancellationToken.None);
 
-        var task = Assert.Single(Assert.Single(overview.Tests).Tasks);
-        Assert.All(task.Options, option => Assert.False(option.IsCorrect));
-        Assert.Empty(task.CorrectOptionIds);
+        var studentTest = Assert.Single(overview.Tests);
+        var task = Assert.Single(studentTest.Tasks);
+        Assert.Equal(["option-correct", "option-wrong"], task.Options.Select(option => option.Id));
+        var studentJson = JsonSerializer.Serialize(studentTest, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        Assert.DoesNotContain("gradingExamples", studentJson);
+        Assert.DoesNotContain("correctOptionIds", studentJson);
+        Assert.DoesNotContain("isCorrect", studentJson);
+        Assert.DoesNotContain("Private", studentJson);
+        Assert.Equal(example, Assert.Single(test.GradingExamples));
+        Assert.Equal(example, Assert.Single(test.Tasks[0].GradingExamples));
         Assert.Same(review, Assert.Single(overview.Reviews));
     }
 
@@ -137,15 +155,28 @@ public sealed class ReviewPipelineTests
         var test = CreateTest(
             versionNumber: 3,
             CreateSingleChoiceTask());
+        var example = new GradingExampleDto
+        {
+            TaskPrompt = "Teacher prompt",
+            StudentAnswer = "Teacher example answer",
+            Score = 1,
+            MaxScore = 2,
+            Feedback = "Teacher feedback"
+        };
+        test.GradingExamples = [example];
+        test.Tasks[0].GradingExamples = [example];
         var service = CreateClassroomService(test);
 
         var overview = await service.GetTeacherOverviewAsync(
             "teacher",
             CancellationToken.None);
 
-        var task = Assert.Single(Assert.Single(overview.Tests).Tasks);
+        var returnedTest = Assert.Single(overview.Tests);
+        var task = Assert.Single(returnedTest.Tasks);
         Assert.Contains(task.Options, option => option.IsCorrect);
         Assert.Equal(["option-correct"], task.CorrectOptionIds);
+        Assert.Equal(example, Assert.Single(returnedTest.GradingExamples));
+        Assert.Equal(example, Assert.Single(task.GradingExamples));
     }
 
     [Fact]

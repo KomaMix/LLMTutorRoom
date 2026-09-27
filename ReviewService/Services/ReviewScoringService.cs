@@ -14,7 +14,7 @@ public sealed class ReviewScoringService : IReviewScoringService
         string studentAnswer,
         DateTimeOffset now)
     {
-        return (task.Type, task.CheckMode) switch
+        var result = (task.Type, task.CheckMode) switch
         {
             (ReviewTaskType.SingleChoice, ReviewCheckMode.Auto) =>
                 CreateSingleChoiceResult(task, studentAnswer, now),
@@ -27,6 +27,9 @@ public sealed class ReviewScoringService : IReviewScoringService
             _ => throw new InvalidDataException(
                 $"Unsupported review mode '{task.CheckMode}' for task type '{task.Type}'.")
         };
+
+        result.GradingExamplesJson = JsonSerializer.Serialize(task.GradingExamples, JsonHelper.Options);
+        return result;
     }
 
     public void ApplyLlmResult(

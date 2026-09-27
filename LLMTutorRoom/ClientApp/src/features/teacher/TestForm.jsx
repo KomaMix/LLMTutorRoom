@@ -1,4 +1,5 @@
 import { Loader2, Plus, Save } from "lucide-react";
+import { GradingExamplesEditor } from "./GradingExamplesEditor.jsx";
 import {
   getModelOptionLabel,
   getModelOptions
@@ -135,6 +136,13 @@ export function TestForm({
           onChange={event => updateForm("summary", event.target.value)}
         />
       </div>
+
+      <GradingExamplesEditor
+        examples={form.gradingExamples}
+        scope="test"
+        disabled={controlsDisabled}
+        onChange={examples => updateForm("gradingExamples", examples)}
+      />
 
       <div role="status" aria-atomic="true" aria-live="polite">
         {message && <p className="form-note">{message}</p>}

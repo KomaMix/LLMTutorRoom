@@ -46,6 +46,8 @@ namespace TeachingService.Data
                     .HasConversion<string>();
                 entity.Ignore(version => version.Status);
                 entity.Property(version => version.ContentRevision).IsConcurrencyToken();
+                entity.Property(version => version.GradingExamplesJson)
+                    .HasColumnName("GradingExamples").HasColumnType("jsonb");
                 entity.HasOne(version => version.CourseTest)
                     .WithMany(test => test.Versions)
                     .HasForeignKey(version => version.CourseTestId)
@@ -61,6 +63,8 @@ namespace TeachingService.Data
                 entity.HasKey(task => task.Id);
                 entity.Property(task => task.Type).HasConversion<string>();
                 entity.Property(task => task.CheckMode).HasConversion<string>();
+                entity.Property(task => task.GradingExamplesJson)
+                    .HasColumnName("GradingExamples").HasColumnType("jsonb");
                 entity.HasMany(task => task.Options)
                     .WithOne()
                     .HasForeignKey(option => option.TestTaskId)

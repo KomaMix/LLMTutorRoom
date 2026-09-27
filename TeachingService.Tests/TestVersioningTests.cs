@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 using TeachingService.Contracts.Enums;
+using TeachingService.Contracts.Models;
 using TeachingService.Contracts.Requests;
 using TeachingService.Data;
 using TeachingService.Enums;
@@ -11,6 +13,132 @@ namespace TeachingService.Tests;
 
 public sealed class TestVersioningTests
 {
+    [Fact]
+    public async Task GradingExamples_AreClonedPublishedAndKeptWithTheirOriginalVersion()
+    {
+        await using var dbContext = CreateDbContext();
+        var service = CreateService(dbContext);
+        var generalExample = new GradingExampleDto
+        {
+            TaskPrompt = "Explain an algorithm.",
+            StudentAnswer = "A general example answer.",
+            Score = 3,
+            MaxScore = 5,
+            Feedback = "General grading explanation."
+        };
+        var taskExample = generalExample with
+        {
+            TaskPrompt = "",
+            StudentAnswer = "A task-specific example answer.",
+            Score = 6,
+            MaxScore = 10,
+            Feedback = "Task grading explanation."
+        };
+        var testRequest = CreateTestRequest("Examples v1");
+        testRequest.GradingExamples = [generalExample];
+        var created = await service.CreateTestAsync(testRequest, "teacher", CancellationToken.None);
+        var testId = Guid.Parse(created.Id);
+        dbContext.ChangeTracker.Clear();
+        var taskRequest = new CreateTaskRequest
+        {
+            Type = TestTaskType.FreeText,
+            CheckMode = TestTaskCheckMode.Llm,
+            Title = "Explain binary search",
+            Prompt = "Explain the algorithm and its complexity.",
+            MaxPoints = 10,
+            GradingExamples = [taskExample]
+        };
+        var added = await service.AddTaskAsync(testId, 1, 0, taskRequest, "teacher", CancellationToken.None);
+        Assert.Equal(CatalogOperationStatus.Success, added.Status);
+        dbContext.ChangeTracker.Clear();
+        var published = await service.PublishVersionAsync(testId, 1, 1, "teacher", CancellationToken.None);
+        Assert.Equal(CatalogOperationStatus.Success, published.Status);
+        dbContext.ChangeTracker.Clear();
+
+        var draft = await service.CreateDraftVersionAsync(testId, 1, "teacher", CancellationToken.None);
+        Assert.Equal(CatalogOperationStatus.Success, draft.Status);
+        Assert.Equal(generalExample, Assert.Single(draft.Value!.GradingExamples!));
+        var draftTask = Assert.Single(draft.Value.Tasks);
+        Assert.Equal(taskExample, Assert.Single(draftTask.GradingExamples!));
+        dbContext.ChangeTracker.Clear();
+
+        testRequest.GradingExamples = [generalExample with { Score = 4, Feedback = "Updated general example." }];
+        var updatedTest = await service.UpdateTestAsync(testId, 2, 0, testRequest, "teacher", CancellationToken.None);
+        Assert.Equal(CatalogOperationStatus.Success, updatedTest.Status);
+        dbContext.ChangeTracker.Clear();
+        taskRequest.GradingExamples = [taskExample with { Score = 7, Feedback = "Updated task example." }];
+        var updatedTask = await service.UpdateTaskAsync(
+            testId, 2, 1, Guid.Parse(draftTask.Id), taskRequest, "teacher", CancellationToken.None);
+        Assert.Equal(CatalogOperationStatus.Success, updatedTask.Status);
+        dbContext.ChangeTracker.Clear();
+        var publishedV2 = await service.PublishVersionAsync(testId, 2, 2, "teacher", CancellationToken.None);
+        Assert.Equal(CatalogOperationStatus.Success, publishedV2.Status);
+        dbContext.ChangeTracker.Clear();
+
+        var oldVersion = await service.GetTeacherTestVersionAsync(testId, 1, "teacher", true, CancellationToken.None);
+        Assert.Equal(generalExample, Assert.Single(oldVersion!.GradingExamples!));
+        Assert.Equal(taskExample, Assert.Single(Assert.Single(oldVersion.Tasks).GradingExamples!));
+        Assert.Equal(testRequest.GradingExamples, publishedV2.Value!.GradingExamples);
+        Assert.Equal(taskRequest.GradingExamples, Assert.Single(publishedV2.Value.Tasks).GradingExamples);
+
+        var policies = await dbContext.TestReviewPolicyRevisions.OrderBy(policy => policy.Revision).ToListAsync();
+        Assert.Equal(2, policies.Count);
+        using var oldPolicy = JsonDocument.Parse(policies[0].Payload);
+        using var newPolicy = JsonDocument.Parse(policies[1].Payload);
+        Assert.Equal(3m, oldPolicy.RootElement.GetProperty("gradingExamples")[0].GetProperty("score").GetDecimal());
+        Assert.Equal(6m, oldPolicy.RootElement.GetProperty("tasks")[0].GetProperty("gradingExamples")[0].GetProperty("score").GetDecimal());
+        Assert.Equal(4m, newPolicy.RootElement.GetProperty("gradingExamples")[0].GetProperty("score").GetDecimal());
+        Assert.Equal(7m, newPolicy.RootElement.GetProperty("tasks")[0].GetProperty("gradingExamples")[0].GetProperty("score").GetDecimal());
+        Assert.Equal(policies[0].Payload,
+            (await dbContext.IntegrationOutboxMessages.SingleAsync(message => message.Id == policies[0].EventId)).Payload);
+    }
+
+    [Theory]
+    [InlineData(-1, 5)]
+    [InlineData(6, 5)]
+    [InlineData(0, 0)]
+    public async Task AddTask_RejectsInvalidExampleScoresWithoutChangingDraft(int score, int maxScore)
+    {
+        await using var dbContext = CreateDbContext();
+        var service = CreateService(dbContext);
+        var test = await service.CreateTestAsync(CreateTestRequest("Examples"), "teacher", CancellationToken.None);
+        var result = await service.AddTaskAsync(Guid.Parse(test.Id), 1, 0, new CreateTaskRequest
+        {
+            Type = TestTaskType.FreeText,
+            Title = "Task",
+            Prompt = "Explain.",
+            GradingExamples =
+            [
+                new GradingExampleDto
+                {
+                    StudentAnswer = "Example answer.",
+                    Score = score,
+                    MaxScore = maxScore,
+                    Feedback = "Teacher feedback."
+                }
+            ]
+        }, "teacher", CancellationToken.None);
+
+        Assert.Equal(CatalogOperationStatus.ValidationFailed, result.Status);
+        Assert.Empty(dbContext.TestTasks);
+        Assert.Equal(0, (await dbContext.TestVersions.SingleAsync()).ContentRevision);
+    }
+
+    [Fact]
+    public async Task CreateTest_RequiresTaskPromptInGeneralExamples()
+    {
+        await using var dbContext = CreateDbContext();
+        var request = CreateTestRequest("Examples");
+        request.GradingExamples =
+        [
+            new GradingExampleDto { StudentAnswer = "Answer", Score = 1, MaxScore = 2, Feedback = "Feedback" }
+        ];
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            CreateService(dbContext).CreateTestAsync(request, "teacher", CancellationToken.None));
+        Assert.Empty(dbContext.Tests);
+    }
+
     [Fact]
     public async Task AddTask_FreeTextRequiresLlmOrManualReview()
     {

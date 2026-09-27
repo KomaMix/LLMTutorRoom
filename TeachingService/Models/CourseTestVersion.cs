@@ -27,6 +27,7 @@ namespace TeachingService.Models
         public int TimeLimitMinutes { get; set; }
         public string Summary { get; set; } = string.Empty;
         public string LlmModelKey { get; set; } = string.Empty;
+        public string GradingExamplesJson { get; set; } = "[]";
         public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
         public DateTimeOffset? PublishedAt { get; set; }
         public List<TestTask> Tasks { get; set; } = new();

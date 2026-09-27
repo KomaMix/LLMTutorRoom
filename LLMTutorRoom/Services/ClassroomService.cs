@@ -24,7 +24,7 @@ namespace LLMTutorRoom.Services
             _reviewServiceClient = reviewServiceClient;
         }
 
-        public async Task<ClassroomOverview> GetTeacherOverviewAsync(
+        public async Task<TeacherClassroomOverviewResponse> GetTeacherOverviewAsync(
             string teacherUserId,
             CancellationToken cancellationToken)
         {
@@ -44,22 +44,20 @@ namespace LLMTutorRoom.Services
                 includeDisabled: false,
                 cancellationToken);
 
-            return new ClassroomOverview
-            {
-                Tests = tests
+            return new TeacherClassroomOverviewResponse(
+                Tests: tests
                     .OrderByDescending(test => test.Deadline)
                     .ToList(),
-                Models = modelAccess
+                Models: modelAccess
                     .Select(ToLanguageModel)
                     .ToList(),
-                Reviews = reviews,
-                Attempts = [],
-                Metrics = CreateMetrics(tests, reviewPage.Aggregate),
-                TerminalReviewsNextCursor = reviewPage.NextCursor
-            };
+                Reviews: reviews,
+                Attempts: [],
+                Metrics: CreateMetrics(tests, reviewPage.Aggregate),
+                TerminalReviewsNextCursor: reviewPage.NextCursor);
         }
 
-        public async Task<ClassroomOverview> GetStudentOverviewAsync(
+        public async Task<StudentClassroomOverviewResponse> GetStudentOverviewAsync(
             string studentUserId,
             CancellationToken cancellationToken)
         {
@@ -70,24 +68,25 @@ namespace LLMTutorRoom.Services
                 publishedOnly: true,
                 includeHidden: false,
                 cancellationToken);
-            var studentTests = await BindTestsToAttemptVersionsAsync(
+            var testVersions = await BindTestsToAttemptVersionsAsync(
                 tests,
                 attempts,
                 cancellationToken);
+            var studentTests = testVersions
+                .Select(CreateStudentTestResponse)
+                .ToList();
             var reviewPage = await _reviewServiceClient.GetStudentReviewsAsync(
                 studentUserId,
                 cancellationToken);
             var reviews = MergeReviewPage(reviewPage);
 
-            return new ClassroomOverview
-            {
-                Tests = studentTests,
-                Models = [],
-                Reviews = reviews,
-                Attempts = attempts,
-                Metrics = CreateMetrics(studentTests, reviewPage.Aggregate),
-                TerminalReviewsNextCursor = reviewPage.NextCursor
-            };
+            return new StudentClassroomOverviewResponse(
+                Tests: studentTests,
+                Models: [],
+                Reviews: reviews,
+                Attempts: attempts,
+                Metrics: CreateMetrics(studentTests, reviewPage.Aggregate),
+                TerminalReviewsNextCursor: reviewPage.NextCursor);
         }
 
         public async Task<ReviewServiceResult<ReviewHistoryPageResponse>> GetReviewHistoryAsync(
@@ -158,7 +157,6 @@ namespace LLMTutorRoom.Services
             }
 
             return testsById.Values
-                .Select(CreateStudentTestResponse)
                 .OrderBy(test => test.Deadline)
                 .ToList();
         }
@@ -178,6 +176,20 @@ namespace LLMTutorRoom.Services
             };
         }
 
+        private static DashboardMetrics CreateMetrics(
+            List<StudentCourseTestResponse> tests,
+            ReviewAggregateResponse reviewAggregate)
+        {
+            return new DashboardMetrics
+            {
+                ActiveTests = tests.Count(test =>
+                    test.Status == TeachingService.Contracts.Enums.CourseTestStatus.Published),
+                Tasks = tests.Sum(test => test.Tasks.Count(task => !task.IsHidden)),
+                PendingReviews = reviewAggregate.PendingReviews,
+                AverageScore = reviewAggregate.AverageScorePercentage
+            };
+        }
+
         private static List<ReviewResponse> MergeReviewPage(ReviewPageResponse page)
         {
             return page.NonTerminalReviews
@@ -188,41 +200,33 @@ namespace LLMTutorRoom.Services
                 .ToList();
         }
 
-        private static CourseTestDto CreateStudentTestResponse(CourseTestDto test)
+        private static StudentCourseTestResponse CreateStudentTestResponse(CourseTestDto test)
         {
-            return new CourseTestDto
-            {
-                Id = test.Id,
-                TeacherUserId = test.TeacherUserId,
-                Title = test.Title,
-                Subject = test.Subject,
-                Status = test.Status,
-                Deadline = test.Deadline,
-                TimeLimitMinutes = test.TimeLimitMinutes,
-                Summary = test.Summary,
-                LlmModelKey = test.LlmModelKey,
-                VersionNumber = test.VersionNumber,
-                TotalPoints = test.TotalPoints,
-                Tasks = test.Tasks.Select(task => new TestTaskDto
-                {
-                    Id = task.Id,
-                    Type = task.Type,
-                    CheckMode = task.CheckMode,
-                    Title = task.Title,
-                    Prompt = task.Prompt,
-                    MaxPoints = task.MaxPoints,
-                    WrongAnswerPenalty = task.WrongAnswerPenalty,
-                    IsHidden = task.IsHidden,
-                    CreatedAt = task.CreatedAt,
-                    Options = task.Options.Select(option => new AnswerOptionDto
-                    {
-                        Id = option.Id,
-                        Text = option.Text,
-                        IsCorrect = false
-                    }).ToList(),
-                    CorrectOptionIds = []
-                }).ToList()
-            };
+            return new StudentCourseTestResponse(
+                Id: test.Id,
+                TeacherUserId: test.TeacherUserId,
+                Title: test.Title,
+                Subject: test.Subject,
+                Status: test.Status,
+                Deadline: test.Deadline,
+                TimeLimitMinutes: test.TimeLimitMinutes,
+                Summary: test.Summary,
+                LlmModelKey: test.LlmModelKey,
+                VersionNumber: test.VersionNumber,
+                TotalPoints: test.TotalPoints,
+                Tasks: test.Tasks.Select(task => new StudentTestTaskResponse(
+                    Id: task.Id,
+                    Type: task.Type,
+                    CheckMode: task.CheckMode,
+                    Title: task.Title,
+                    Prompt: task.Prompt,
+                    MaxPoints: task.MaxPoints,
+                    WrongAnswerPenalty: task.WrongAnswerPenalty,
+                    IsHidden: task.IsHidden,
+                    CreatedAt: task.CreatedAt,
+                    Options: task.Options.Select(option => new StudentAnswerOptionResponse(
+                        Id: option.Id,
+                        Text: option.Text)).ToList())).ToList());
         }
 
         private static LanguageModel ToLanguageModel(ReviewTeacherModelAccessResponse access)

@@ -4,6 +4,7 @@ import { ConfirmDialog } from "../../shared/ui/ConfirmDialog.jsx";
 import { InfoTile } from "../../shared/ui/InfoTile.jsx";
 import { StatusBadge } from "../../shared/ui/StatusBadge.jsx";
 import { TaskPanel } from "./TaskPanel.jsx";
+import { GradingExamplesList } from "./GradingExamplesList.jsx";
 import { TestForm } from "./TestForm.jsx";
 import { TestVersionPanel } from "./TestVersionPanel.jsx";
 import { createTaskCountSummary } from "./teacherTestHelpers.js";
@@ -107,6 +108,13 @@ export function TestDetails({
             onSubmit={onUpdateTest}
           />
         </section>
+      )}
+
+      {!isDraft && (
+        <GradingExamplesList
+          examples={selectedTest.gradingExamples}
+          title="Общие примеры оценивания"
+        />
       )}
 
       <TaskPanel

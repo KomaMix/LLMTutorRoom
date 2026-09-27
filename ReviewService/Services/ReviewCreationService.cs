@@ -50,6 +50,7 @@ public sealed class ReviewCreationService(
             StudentUserId = studentUserId,
             StudentName = string.IsNullOrWhiteSpace(studentName) ? null : studentName.Trim(),
             ModelKeySnapshot = policy.ModelKeySnapshot,
+            GradingExamplesJson = policy.GradingExamplesJson,
             SubmittedAt = submittedAt,
             MaxScore = policyTasks.Sum(task => task.MaxPoints),
             TaskResults = policyTasks

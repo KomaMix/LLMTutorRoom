@@ -1,8 +1,11 @@
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 using Microsoft.Extensions.Logging.Abstractions;
 using OptionsFactory = Microsoft.Extensions.Options.Options;
 using ReviewService.Options;
 using ReviewService.Contracts.Enums;
+using ReviewService.Contracts.Events;
+using ReviewService.Helpers;
 using ReviewService.Data;
 using ReviewService.Enums;
 using ReviewService.Interfaces;
@@ -16,6 +19,55 @@ namespace ReviewService.Tests;
 public sealed class ReviewJobProcessorTests
 {
     private static readonly DateTimeOffset Now = new(2026, 8, 15, 12, 0, 0, TimeSpan.Zero);
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(2)]
+    public async Task Processing_UsesCapturedExamplesForInitialAndRetriedChecks(int previousAttempts)
+    {
+        await using var dbContext = CreateDbContext();
+        var generalExample = new GradingExampleSnapshot
+        {
+            TaskPrompt = "General example task.",
+            StudentAnswer = "General example answer.",
+            Score = 3,
+            MaxScore = 5,
+            Feedback = "General feedback."
+        };
+        var taskExample = generalExample with
+        {
+            TaskPrompt = "",
+            StudentAnswer = "Task-specific example answer.",
+            Score = 4,
+            Feedback = "Task feedback."
+        };
+        var review = CreateReview(previousAttempts);
+        review.GradingExamplesJson = JsonSerializer.Serialize(new[] { generalExample }, JsonHelper.Options);
+        var taskExamplesJson = JsonSerializer.Serialize(new[] { taskExample }, JsonHelper.Options);
+        review.TaskResults[0].GradingExamplesJson = taskExamplesJson;
+        dbContext.Reviews.Add(review);
+        await dbContext.SaveChangesAsync();
+        dbContext.ChangeTracker.Clear();
+        var llmClient = new SuccessfulLlmReviewClient();
+        var processor = CreateProcessor(dbContext, llmClient, retryDelaysSeconds: [30]);
+
+        var outcome = await processor.ProcessAsync(new ReviewQueueMessage
+        {
+            ReviewId = review.Id,
+            AttemptId = review.AttemptId,
+            ModelKey = review.ModelKeySnapshot,
+            RequestedAt = Now
+        }, CancellationToken.None);
+
+        Assert.Equal(ReviewProcessingOutcomeType.Completed, outcome.Type);
+        Assert.Equal(1, llmClient.CallCount);
+        Assert.Equal(generalExample, Assert.Single(llmClient.TestGradingExamples));
+        Assert.Equal(taskExamplesJson, llmClient.TaskGradingExamplesJson);
+        dbContext.ChangeTracker.Clear();
+        var stored = await dbContext.Reviews.Include(item => item.TaskResults).SingleAsync();
+        Assert.Equal(review.GradingExamplesJson, stored.GradingExamplesJson);
+        Assert.Equal(taskExamplesJson, Assert.Single(stored.TaskResults).GradingExamplesJson);
+    }
 
     [Theory]
     [InlineData(2)]
@@ -423,13 +475,18 @@ public sealed class ReviewJobProcessorTests
     private sealed class SuccessfulLlmReviewClient : ILlmGatewayReviewClient
     {
         public int CallCount { get; private set; }
+        public IReadOnlyList<GradingExampleSnapshot> TestGradingExamples { get; private set; } = [];
+        public string TaskGradingExamplesJson { get; private set; } = "[]";
 
         public Task<LlmTaskReviewResult> ReviewFreeTextAnswerAsync(
             string modelKey,
             ReviewTask task,
+            IReadOnlyList<GradingExampleSnapshot> testGradingExamples,
             CancellationToken cancellationToken)
         {
             CallCount++;
+            TestGradingExamples = testGradingExamples.ToList();
+            TaskGradingExamplesJson = task.GradingExamplesJson;
             return Task.FromResult(new LlmTaskReviewResult(
                 task.MaxScore,
                 "Checked.",
@@ -458,6 +515,7 @@ public sealed class ReviewJobProcessorTests
         public async Task<LlmTaskReviewResult> ReviewFreeTextAnswerAsync(
             string modelKey,
             ReviewTask task,
+            IReadOnlyList<GradingExampleSnapshot> testGradingExamples,
             CancellationToken cancellationToken)
         {
             CallCount++;

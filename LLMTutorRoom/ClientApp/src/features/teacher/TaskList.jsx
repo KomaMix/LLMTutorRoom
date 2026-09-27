@@ -13,6 +13,7 @@ import {
 import { formatPoints } from "../../shared/lib/points.js";
 import { AnswerOption } from "../../shared/ui/AnswerOption.jsx";
 import { StatusBadge } from "../../shared/ui/StatusBadge.jsx";
+import { GradingExamplesList } from "./GradingExamplesList.jsx";
 
 export function TaskList({
   tasks,
@@ -129,6 +130,7 @@ export function TaskList({
               </summary>
               <div className="teacher-task-content">
                 <p>{task.prompt}</p>
+                <GradingExamplesList examples={task.gradingExamples} />
                 {task.options.length > 0 && (
                   <ul className="answer-option-list" aria-label="Варианты ответа" role="list">
                     {task.options.map(option => {

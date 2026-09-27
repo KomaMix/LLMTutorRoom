@@ -23,7 +23,7 @@ function validateReviewTaskResult(taskResult, fieldName) {
   });
 }
 
-export function parseOverview(data) {
+export function parseOverview(data, role) {
   if (!data || typeof data !== "object") {
     throw new Error("Overview response must be an object.");
   }
@@ -43,35 +43,41 @@ export function parseOverview(data) {
   }
 
   data.tests.forEach((test, testIndex) => {
-    if (!Number.isInteger(test.contentRevision) || test.contentRevision < 0) {
-      throw new Error(`tests[${testIndex}].contentRevision must be a non-negative integer.`);
-    }
+    if (role === "teacher") {
+      if (!Number.isInteger(test.contentRevision) || test.contentRevision < 0) {
+        throw new Error(`tests[${testIndex}].contentRevision must be a non-negative integer.`);
+      }
 
-    if (typeof test.llmModelKey !== "string") {
-      throw new Error(`tests[${testIndex}].llmModelKey must be a string.`);
+      if (typeof test.llmModelKey !== "string") {
+        throw new Error(`tests[${testIndex}].llmModelKey must be a string.`);
+      }
     }
 
     requireArray(test.tasks, `tests[${testIndex}].tasks`);
 
     test.tasks.forEach((task, taskIndex) => {
-      if (typeof task.isHidden !== "boolean") {
-        throw new Error(`tests[${testIndex}].tasks[${taskIndex}].isHidden must be a boolean.`);
-      }
+      if (role === "teacher") {
+        if (typeof task.isHidden !== "boolean") {
+          throw new Error(`tests[${testIndex}].tasks[${taskIndex}].isHidden must be a boolean.`);
+        }
 
-      if (typeof task.wrongAnswerPenalty !== "number") {
-        throw new Error(`tests[${testIndex}].tasks[${taskIndex}].wrongAnswerPenalty must be a number.`);
-      }
+        if (typeof task.wrongAnswerPenalty !== "number") {
+          throw new Error(`tests[${testIndex}].tasks[${taskIndex}].wrongAnswerPenalty must be a number.`);
+        }
 
-      if (typeof task.createdAt !== "string") {
-        throw new Error(`tests[${testIndex}].tasks[${taskIndex}].createdAt must be a string.`);
-      }
+        if (typeof task.createdAt !== "string") {
+          throw new Error(`tests[${testIndex}].tasks[${taskIndex}].createdAt must be a string.`);
+        }
 
-      if (typeof task.checkMode !== "string") {
-        throw new Error(`tests[${testIndex}].tasks[${taskIndex}].checkMode must be a string.`);
+        if (typeof task.checkMode !== "string") {
+          throw new Error(`tests[${testIndex}].tasks[${taskIndex}].checkMode must be a string.`);
+        }
       }
 
       requireArray(task.options, `tests[${testIndex}].tasks[${taskIndex}].options`);
-      requireArray(task.correctOptionIds, `tests[${testIndex}].tasks[${taskIndex}].correctOptionIds`);
+      if (role === "teacher") {
+        requireArray(task.correctOptionIds, `tests[${testIndex}].tasks[${taskIndex}].correctOptionIds`);
+      }
     });
   });
 

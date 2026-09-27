@@ -22,7 +22,7 @@ namespace LLMTutorRoom.Controllers
         }
 
         [HttpGet("overview")]
-        public async Task<ActionResult<ClassroomOverview>> GetOverview(CancellationToken cancellationToken)
+        public async Task<IActionResult> GetOverview(CancellationToken cancellationToken)
         {
             if (User.IsInRole("Teacher"))
                 return Ok(await _classroomService.GetTeacherOverviewAsync(

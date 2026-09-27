@@ -104,6 +104,48 @@
   gap: 8px;
 }
 
+.grading-examples .panel-header {
+  flex-wrap: wrap;
+  margin-bottom: 0;
+}
+
+.grading-examples .panel-header h3 {
+  margin: 0;
+}
+
+.grading-examples .form-row {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
+}
+
+.grading-examples .field {
+  min-width: 0;
+}
+
+.grading-examples > p,
+.grading-examples .grading-example-card p {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.grading-example-card {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.grading-example-card h4 {
+  margin: 0;
+}
+
+.grading-example-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.grading-examples-content {
+  padding-top: 12px;
+}
+
 .option-editor-row {
   display: grid;
   grid-template-columns: 28px minmax(0, 1fr) var(--control-height);

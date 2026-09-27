@@ -64,7 +64,8 @@ function AuthenticatedApp() {
   const role = normalizeRole(currentUser?.role);
   const overview = useOverview({
     enabled: role === "teacher" || role === "student",
-    identityKey: `${currentUser?.id ?? ""}:${role ?? ""}`
+    identityKey: `${currentUser?.id ?? ""}:${role ?? ""}`,
+    role
   });
 
   if (!role) {

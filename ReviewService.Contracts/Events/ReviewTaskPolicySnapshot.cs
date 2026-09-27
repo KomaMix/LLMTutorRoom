@@ -11,5 +11,6 @@ public sealed class ReviewTaskPolicySnapshot
     public string Prompt { get; set; } = string.Empty;
     public decimal MaxPoints { get; set; }
     public decimal WrongAnswerPenalty { get; set; }
+    public List<GradingExampleSnapshot> GradingExamples { get; set; } = new();
     public List<ReviewAnswerOptionSnapshot> Options { get; set; } = new();
 }

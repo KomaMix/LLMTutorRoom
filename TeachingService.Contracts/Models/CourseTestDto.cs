@@ -13,6 +13,7 @@ namespace TeachingService.Contracts.Models
         public int TimeLimitMinutes { get; set; }
         public string Summary { get; set; } = string.Empty;
         public string LlmModelKey { get; set; } = string.Empty;
+        public List<GradingExampleDto> GradingExamples { get; set; } = new();
         public int VersionNumber { get; set; }
         public int ContentRevision { get; set; }
         public int? PublishedVersionNumber { get; set; }

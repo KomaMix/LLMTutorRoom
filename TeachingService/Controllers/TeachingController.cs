@@ -6,6 +6,7 @@ using TeachingService.Contracts.Models;
 using TeachingService.Contracts.Requests;
 using TeachingService.Enums;
 using TeachingService.Services;
+using TeachingService.Helpers;
 
 namespace TeachingService.Controllers
 {
@@ -361,6 +362,13 @@ namespace TeachingService.Controllers
             CreateTestRequest request,
             out string error)
         {
+            var examplesError = GradingExamples.Validate(request.GradingExamples, requireTaskPrompt: true);
+            if (examplesError is not null)
+            {
+                error = examplesError;
+                return false;
+            }
+
             if (string.IsNullOrWhiteSpace(request.Title))
             {
                 error = "Title is required.";
@@ -459,6 +467,18 @@ namespace TeachingService.Controllers
             CreateTaskRequest request,
             out string error)
         {
+            var examplesError = GradingExamples.Validate(request.GradingExamples, requireTaskPrompt: false);
+            if (examplesError is not null)
+            {
+                error = examplesError;
+                return false;
+            }
+            if (request.Type != TestTaskType.FreeText && request.GradingExamples.Count > 0)
+            {
+                error = "Grading examples are supported only for free-text tasks.";
+                return false;
+            }
+
             if (!Enum.IsDefined(request.Type))
             {
                 error = "Type contains an unsupported value.";

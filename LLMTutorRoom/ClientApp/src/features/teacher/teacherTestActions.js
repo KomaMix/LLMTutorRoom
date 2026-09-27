@@ -7,6 +7,7 @@ import {
   createTestPayload
 } from "./teacherTestHelpers.js";
 import { getApiErrorMessage } from "./teacherTestControllerHelpers.js";
+import { validateGradingExamples } from "./gradingExamples.js";
 
 export function createTeacherTestActions({
   activeTest,
@@ -36,6 +37,12 @@ export function createTeacherTestActions({
     event.preventDefault();
 
     if (hasMutationInProgress) {
+      return;
+    }
+
+    const validationError = validateGradingExamples(testForm.gradingExamples, true);
+    if (validationError) {
+      setTestMessage(validationError);
       return;
     }
 
@@ -74,6 +81,12 @@ export function createTeacherTestActions({
       || isCreatingTask
       || isSavingTask
       || Boolean(busyTaskId)) {
+      return;
+    }
+
+    const validationError = validateGradingExamples(testEditForm.gradingExamples, true);
+    if (validationError) {
+      setTestEditMessage(validationError);
       return;
     }
 
