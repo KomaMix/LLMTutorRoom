@@ -18,8 +18,6 @@ namespace TeachingService.Data
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
-            var jsonColumnType = Database.IsNpgsql() ? "jsonb" : "TEXT";
-
             modelBuilder.Entity<CourseTest>(entity =>
             {
                 entity.HasKey(test => test.Id);
@@ -51,7 +49,7 @@ namespace TeachingService.Data
                 entity.OwnsMany(version => version.GradingExamples, examples =>
                 {
                     ConfigureGradingExamples(examples);
-                    examples.ToJson("GradingExamples").HasColumnType(jsonColumnType);
+                    examples.ToJson("GradingExamples");
                 });
                 entity.HasOne(version => version.CourseTest)
                     .WithMany(test => test.Versions)
@@ -71,7 +69,7 @@ namespace TeachingService.Data
                 entity.OwnsMany(task => task.GradingExamples, examples =>
                 {
                     ConfigureGradingExamples(examples);
-                    examples.ToJson("GradingExamples").HasColumnType(jsonColumnType);
+                    examples.ToJson("GradingExamples");
                 });
                 entity.HasMany(task => task.Options)
                     .WithOne()

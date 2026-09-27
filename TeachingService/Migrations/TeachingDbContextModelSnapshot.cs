@@ -292,9 +292,7 @@ namespace TeachingService.Migrations
 
                             b1.ToTable("TestVersions");
 
-                            b1
-                                .ToJson("GradingExamples")
-                                .HasColumnType("jsonb");
+                            b1.ToJson("GradingExamples");
 
                             b1.WithOwner()
                                 .HasForeignKey("CourseTestVersionId");
@@ -356,9 +354,7 @@ namespace TeachingService.Migrations
 
                             b1.ToTable("TestTasks");
 
-                            b1
-                                .ToJson("GradingExamples")
-                                .HasColumnType("jsonb");
+                            b1.ToJson("GradingExamples");
 
                             b1.WithOwner()
                                 .HasForeignKey("TestTaskId");
