@@ -27,7 +27,7 @@ namespace TeachingService.Mappers
                 TimeLimitMinutes = version.TimeLimitMinutes,
                 Summary = version.Summary,
                 LlmModelKey = version.LlmModelKey,
-                GradingExamples = GradingExamples.Deserialize(version.GradingExamplesJson),
+                GradingExamples = GradingExamples.ToDtos(version.GradingExamples),
                 VersionNumber = version.VersionNumber,
                 ContentRevision = version.ContentRevision,
                 PublishedVersionNumber = test.Versions
@@ -70,7 +70,7 @@ namespace TeachingService.Mappers
                 Prompt = task.Prompt,
                 MaxPoints = task.MaxPoints,
                 WrongAnswerPenalty = task.WrongAnswerPenalty,
-                GradingExamples = GradingExamples.Deserialize(task.GradingExamplesJson),
+                GradingExamples = GradingExamples.ToDtos(task.GradingExamples),
                 IsHidden = task.IsHidden,
                 CreatedAt = task.CreatedAt,
                 Options = task.Options

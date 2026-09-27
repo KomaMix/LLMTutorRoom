@@ -1,5 +1,5 @@
-using System.Text.Json;
 using TeachingService.Contracts.Models;
+using GradingExampleModel = TeachingService.Models.GradingExample;
 
 namespace TeachingService.Helpers;
 
@@ -9,8 +9,6 @@ public static class GradingExamples
     public const int MaxPromptLength = 4000;
     public const int MaxAnswerLength = 8000;
     public const int MaxFeedbackLength = 4000;
-
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     public static string? Validate(IReadOnlyList<GradingExampleDto>? examples, bool requireTaskPrompt)
     {
@@ -39,18 +37,39 @@ public static class GradingExamples
         return null;
     }
 
-    public static string Serialize(IEnumerable<GradingExampleDto> examples)
+    public static List<GradingExampleModel> ToModels(IEnumerable<GradingExampleDto> examples)
     {
-        return JsonSerializer.Serialize(examples.Select(example => example with
+        return examples.Select(example => new GradingExampleModel
         {
             TaskPrompt = example.TaskPrompt?.Trim() ?? string.Empty,
             StudentAnswer = example.StudentAnswer.Trim(),
+            Score = example.Score,
+            MaxScore = example.MaxScore,
             Feedback = example.Feedback.Trim()
-        }), JsonOptions);
+        }).ToList();
     }
 
-    public static List<GradingExampleDto> Deserialize(string json)
+    public static List<GradingExampleDto> ToDtos(IEnumerable<GradingExampleModel> examples)
     {
-        return JsonSerializer.Deserialize<List<GradingExampleDto>>(json, JsonOptions) ?? [];
+        return examples.Select(example => new GradingExampleDto
+        {
+            TaskPrompt = example.TaskPrompt,
+            StudentAnswer = example.StudentAnswer,
+            Score = example.Score,
+            MaxScore = example.MaxScore,
+            Feedback = example.Feedback
+        }).ToList();
+    }
+
+    public static List<GradingExampleModel> Clone(IEnumerable<GradingExampleModel> examples)
+    {
+        return examples.Select(example => new GradingExampleModel
+        {
+            TaskPrompt = example.TaskPrompt,
+            StudentAnswer = example.StudentAnswer,
+            Score = example.Score,
+            MaxScore = example.MaxScore,
+            Feedback = example.Feedback
+        }).ToList();
     }
 }

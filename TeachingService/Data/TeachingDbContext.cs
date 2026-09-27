@@ -18,6 +18,8 @@ namespace TeachingService.Data
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
+            var jsonColumnType = Database.IsNpgsql() ? "jsonb" : "TEXT";
+
             modelBuilder.Entity<CourseTest>(entity =>
             {
                 entity.HasKey(test => test.Id);
@@ -46,8 +48,11 @@ namespace TeachingService.Data
                     .HasConversion<string>();
                 entity.Ignore(version => version.Status);
                 entity.Property(version => version.ContentRevision).IsConcurrencyToken();
-                entity.Property(version => version.GradingExamplesJson)
-                    .HasColumnName("GradingExamples").HasColumnType("jsonb");
+                entity.OwnsMany(version => version.GradingExamples, examples =>
+                {
+                    ConfigureGradingExamples(examples);
+                    examples.ToJson("GradingExamples").HasColumnType(jsonColumnType);
+                });
                 entity.HasOne(version => version.CourseTest)
                     .WithMany(test => test.Versions)
                     .HasForeignKey(version => version.CourseTestId)
@@ -63,8 +68,11 @@ namespace TeachingService.Data
                 entity.HasKey(task => task.Id);
                 entity.Property(task => task.Type).HasConversion<string>();
                 entity.Property(task => task.CheckMode).HasConversion<string>();
-                entity.Property(task => task.GradingExamplesJson)
-                    .HasColumnName("GradingExamples").HasColumnType("jsonb");
+                entity.OwnsMany(task => task.GradingExamples, examples =>
+                {
+                    ConfigureGradingExamples(examples);
+                    examples.ToJson("GradingExamples").HasColumnType(jsonColumnType);
+                });
                 entity.HasMany(task => task.Options)
                     .WithOne()
                     .HasForeignKey(option => option.TestTaskId)
@@ -100,6 +108,17 @@ namespace TeachingService.Data
                 entity.Property(message => message.Payload).HasColumnType("jsonb");
                 entity.Property(message => message.LastError).HasMaxLength(2000);
             });
+        }
+
+        private static void ConfigureGradingExamples<TOwner>(
+            Microsoft.EntityFrameworkCore.Metadata.Builders.OwnedNavigationBuilder<TOwner, GradingExample> examples)
+            where TOwner : class
+        {
+            examples.Property(example => example.TaskPrompt).HasJsonPropertyName("taskPrompt");
+            examples.Property(example => example.StudentAnswer).HasJsonPropertyName("studentAnswer");
+            examples.Property(example => example.Score).HasJsonPropertyName("score");
+            examples.Property(example => example.MaxScore).HasJsonPropertyName("maxScore");
+            examples.Property(example => example.Feedback).HasJsonPropertyName("feedback");
         }
     }
 }

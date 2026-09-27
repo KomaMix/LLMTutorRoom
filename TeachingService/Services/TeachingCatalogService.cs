@@ -540,7 +540,7 @@ namespace TeachingService.Services
             task.Title = request.Title.Trim();
             task.Prompt = request.Prompt.Trim();
             task.MaxPoints = request.MaxPoints;
-            task.GradingExamplesJson = GradingExamples.Serialize(request.GradingExamples);
+            task.GradingExamples = GradingExamples.ToModels(request.GradingExamples);
             task.WrongAnswerPenalty = request.Type == TestTaskType.MultipleChoice
                 ? request.WrongAnswerPenalty
                 : 0;
@@ -863,7 +863,7 @@ namespace TeachingService.Services
                 TimeLimitMinutes = source.TimeLimitMinutes,
                 Summary = source.Summary,
                 LlmModelKey = source.LlmModelKey,
-                GradingExamplesJson = source.GradingExamplesJson,
+                GradingExamples = GradingExamples.Clone(source.GradingExamples),
                 CreatedAt = createdAt
             };
 
@@ -882,7 +882,7 @@ namespace TeachingService.Services
                     Prompt = sourceTask.Prompt,
                     MaxPoints = sourceTask.MaxPoints,
                     WrongAnswerPenalty = sourceTask.WrongAnswerPenalty,
-                    GradingExamplesJson = sourceTask.GradingExamplesJson,
+                    GradingExamples = GradingExamples.Clone(sourceTask.GradingExamples),
                     IsHidden = sourceTask.IsHidden,
                     CreatedAt = sourceTask.CreatedAt,
                     Options = sourceTask.Options
@@ -911,7 +911,7 @@ namespace TeachingService.Services
             version.TimeLimitMinutes = request.TimeLimitMinutes;
             version.Summary = request.Summary?.Trim() ?? string.Empty;
             version.LlmModelKey = request.LlmModelKey?.Trim() ?? string.Empty;
-            version.GradingExamplesJson = GradingExamples.Serialize(request.GradingExamples);
+            version.GradingExamples = GradingExamples.ToModels(request.GradingExamples);
         }
 
         private static TestTask CreateTask(
@@ -929,7 +929,7 @@ namespace TeachingService.Services
                 Title = request.Title.Trim(),
                 Prompt = request.Prompt.Trim(),
                 MaxPoints = request.MaxPoints,
-                GradingExamplesJson = GradingExamples.Serialize(request.GradingExamples),
+                GradingExamples = GradingExamples.ToModels(request.GradingExamples),
                 CreatedAt = DateTimeOffset.UtcNow,
                 WrongAnswerPenalty = request.Type == TestTaskType.MultipleChoice
                     ? request.WrongAnswerPenalty
@@ -999,13 +999,13 @@ namespace TeachingService.Services
             }
 
             var examplesError = GradingExamples.Validate(
-                GradingExamples.Deserialize(version.GradingExamplesJson), requireTaskPrompt: true);
+                GradingExamples.ToDtos(version.GradingExamples), requireTaskPrompt: true);
             if (examplesError is not null)
                 return examplesError;
 
             foreach (var task in visibleTasks)
             {
-                var examples = GradingExamples.Deserialize(task.GradingExamplesJson);
+                var examples = GradingExamples.ToDtos(task.GradingExamples);
                 examplesError = GradingExamples.Validate(examples, requireTaskPrompt: false);
                 if (examplesError is not null)
                     return examplesError;

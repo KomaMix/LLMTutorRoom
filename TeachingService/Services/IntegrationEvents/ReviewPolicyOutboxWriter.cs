@@ -53,7 +53,7 @@ namespace TeachingService.Services.IntegrationEvents
                 TeacherUserId = test.TeacherUserId,
                 TestTitle = version.Title,
                 ModelKey = version.LlmModelKey,
-                GradingExamples = ToGradingExamples(version.GradingExamplesJson),
+                GradingExamples = ToGradingExamples(version.GradingExamples),
                 Tasks = version.Tasks
                     .Where(task => !task.IsHidden)
                     .OrderBy(task => task.CreatedAt)
@@ -91,7 +91,7 @@ namespace TeachingService.Services.IntegrationEvents
                 Prompt = task.Prompt,
                 MaxPoints = task.MaxPoints,
                 WrongAnswerPenalty = task.WrongAnswerPenalty,
-                GradingExamples = ToGradingExamples(task.GradingExamplesJson),
+                GradingExamples = ToGradingExamples(task.GradingExamples),
                 Options = task.Options
                     .OrderBy(option => option.Id)
                     .Select(option => new ReviewAnswerOptionSnapshot
@@ -104,9 +104,10 @@ namespace TeachingService.Services.IntegrationEvents
             };
         }
 
-        private static List<GradingExampleSnapshot> ToGradingExamples(string json)
+        private static List<GradingExampleSnapshot> ToGradingExamples(
+            IEnumerable<TeachingService.Models.GradingExample> examples)
         {
-            return GradingExamples.Deserialize(json).Select(example => new GradingExampleSnapshot
+            return examples.Select(example => new GradingExampleSnapshot
             {
                 TaskPrompt = example.TaskPrompt,
                 StudentAnswer = example.StudentAnswer,
