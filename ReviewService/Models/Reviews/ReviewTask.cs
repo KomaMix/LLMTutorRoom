@@ -16,6 +16,11 @@ public sealed class ReviewTask
     public decimal WrongAnswerPenalty { get; set; }
     public string AnswerOptionsJson { get; set; } = "[]";
     public string GradingExamplesJson { get; set; } = "[]";
+    public int? LlmDeploymentId { get; set; }
+    public string? LlmDeploymentName { get; set; }
+    public string? LlmProviderModelId { get; set; }
+    public string? LlmModelDisplayName { get; set; }
+    public DateTimeOffset? LlmDeploymentUpdatedAt { get; set; }
     public int Attempts { get; set; }
     public DateTimeOffset? NextRetryAt { get; set; }
     public DateTimeOffset? CompletedAt { get; set; }

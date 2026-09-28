@@ -31,17 +31,17 @@ public sealed class TeacherModelAccessService(
             query = query.Where(access => access.IsEnabled);
 
         var accesses = await query
-            .OrderBy(access => access.ModelKey)
+            .OrderBy(access => access.ModelId)
             .ToListAsync(cancellationToken);
         var catalog = (await GetModelCatalogAsync(cancellationToken))
-            .ToDictionary(model => model.Key, StringComparer.Ordinal);
+            .ToDictionary(model => model.Id);
         var responses = new List<TeacherModelAccessResponse>();
 
         foreach (var access in accesses)
         {
             if (!includeDisabled
-                && (!catalog.TryGetValue(access.ModelKey, out var model)
-                    || !model.HasEnabledDeployment))
+                && (!catalog.TryGetValue(access.ModelId, out var model)
+                    || model.IsArchived || !model.HasEnabledDeployment))
             {
                 continue;
             }
@@ -54,24 +54,25 @@ public sealed class TeacherModelAccessService(
 
     public async Task<TeacherModelAccessResponse?> UpsertTeacherAccessAsync(
         string teacherUserId,
-        string modelKey,
+        int modelId,
         UpsertTeacherModelAccessRequest request,
         CancellationToken cancellationToken)
     {
-        modelKey = modelKey.Trim();
         var catalog = (await GetModelCatalogAsync(cancellationToken))
-            .ToDictionary(model => model.Key, StringComparer.Ordinal);
-        if (!catalog.ContainsKey(modelKey))
+            .ToDictionary(model => model.Id);
+        if (!catalog.TryGetValue(modelId, out var selectedModel))
             return null;
 
         var now = DateTimeOffset.UtcNow;
         var access = await dbContext.TeacherModelAccesses.SingleOrDefaultAsync(
-            item => item.TeacherUserId == teacherUserId && item.ModelKey == modelKey,
+            item => item.TeacherUserId == teacherUserId && item.ModelId == modelId,
             cancellationToken);
         var isNew = access is null;
+        if (isNew && selectedModel.IsArchived)
+            return null;
         if (access is null)
         {
-            access = CreateAccess(teacherUserId, modelKey, now);
+            access = CreateAccess(teacherUserId, modelId, now);
             dbContext.TeacherModelAccesses.Add(access);
         }
 
@@ -86,11 +87,11 @@ public sealed class TeacherModelAccessService(
             dbContext.Entry(access).State = EntityState.Detached;
             now = DateTimeOffset.UtcNow;
             access = await dbContext.TeacherModelAccesses.SingleOrDefaultAsync(
-                item => item.TeacherUserId == teacherUserId && item.ModelKey == modelKey,
+                item => item.TeacherUserId == teacherUserId && item.ModelId == modelId,
                 cancellationToken);
             if (access is null)
             {
-                access = CreateAccess(teacherUserId, modelKey, now);
+                access = CreateAccess(teacherUserId, modelId, now);
                 dbContext.TeacherModelAccesses.Add(access);
             }
 
@@ -103,11 +104,11 @@ public sealed class TeacherModelAccessService(
 
     public async Task<bool> DeleteTeacherAccessAsync(
         string teacherUserId,
-        string modelKey,
+        int modelId,
         CancellationToken cancellationToken)
     {
         var access = await dbContext.TeacherModelAccesses.SingleOrDefaultAsync(
-            item => item.TeacherUserId == teacherUserId && item.ModelKey == modelKey,
+            item => item.TeacherUserId == teacherUserId && item.ModelId == modelId,
             cancellationToken);
         if (access is null)
             return false;
@@ -119,7 +120,7 @@ public sealed class TeacherModelAccessService(
 
     public async Task<ModelQuotaConsumptionResult> TryConsumeChecksAsync(
         string teacherUserId,
-        string modelKey,
+        int modelId,
         int checkCount,
         CancellationToken cancellationToken)
     {
@@ -134,7 +135,7 @@ public sealed class TeacherModelAccessService(
                 : null;
 
         var access = await dbContext.TeacherModelAccesses.SingleOrDefaultAsync(
-            item => item.TeacherUserId == teacherUserId && item.ModelKey == modelKey,
+            item => item.TeacherUserId == teacherUserId && item.ModelId == modelId,
             cancellationToken);
         if (access is null || !access.IsEnabled || access.PeriodSeconds <= 0 || access.MaxChecks <= 0)
             return InvalidResult(ModelQuotaConsumptionStatus.AccessNotFound, checkCount);
@@ -143,7 +144,7 @@ public sealed class TeacherModelAccessService(
         var periodStart = GetPeriodStart(now, access.PeriodSeconds);
         var usage = await dbContext.TeacherModelUsages.SingleOrDefaultAsync(
             item => item.TeacherUserId == teacherUserId
-                && item.ModelKey == modelKey
+                && item.ModelId == modelId
                 && item.PeriodStart == periodStart
                 && item.PeriodSeconds == access.PeriodSeconds,
             cancellationToken);
@@ -164,7 +165,7 @@ public sealed class TeacherModelAccessService(
             usage = new TeacherModelUsage
             {
                 TeacherUserId = teacherUserId,
-                ModelKey = modelKey,
+                ModelId = modelId,
                 PeriodStart = periodStart,
                 PeriodSeconds = access.PeriodSeconds,
                 CreatedAt = now,
@@ -195,13 +196,13 @@ public sealed class TeacherModelAccessService(
 
     private static TeacherModelAccess CreateAccess(
         string teacherUserId,
-        string modelKey,
+        int modelId,
         DateTimeOffset now)
     {
         return new TeacherModelAccess
         {
             TeacherUserId = teacherUserId,
-            ModelKey = modelKey,
+            ModelId = modelId,
             CreatedAt = now
         };
     }
@@ -219,7 +220,7 @@ public sealed class TeacherModelAccessService(
 
     private async Task<TeacherModelAccessResponse> ToResponseAsync(
         TeacherModelAccess access,
-        Dictionary<string, LlmModelCatalogItemResponse> catalog,
+        Dictionary<int, LlmModelCatalogItemResponse> catalog,
         CancellationToken cancellationToken)
     {
         var periodStart = GetPeriodStart(DateTimeOffset.UtcNow, access.PeriodSeconds);
@@ -227,19 +228,19 @@ public sealed class TeacherModelAccessService(
             .AsNoTracking()
             .SingleOrDefaultAsync(
                 item => item.TeacherUserId == access.TeacherUserId
-                    && item.ModelKey == access.ModelKey
+                    && item.ModelId == access.ModelId
                     && item.PeriodStart == periodStart
                     && item.PeriodSeconds == access.PeriodSeconds,
                 cancellationToken);
         var usedChecks = usage?.UsedChecks ?? 0;
-        catalog.TryGetValue(access.ModelKey, out var model);
+        catalog.TryGetValue(access.ModelId, out var model);
 
         return new TeacherModelAccessResponse(
             access.TeacherUserId,
-            access.ModelKey,
-            model?.DisplayName ?? access.ModelKey,
+            access.ModelId,
+            model?.DisplayName ?? $"Модель #{access.ModelId}",
             access.IsEnabled,
-            model?.HasEnabledDeployment ?? false,
+            model is { IsArchived: false, HasEnabledDeployment: true },
             access.PeriodSeconds,
             access.MaxChecks,
             usedChecks,

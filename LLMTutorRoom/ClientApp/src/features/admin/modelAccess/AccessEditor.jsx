@@ -4,7 +4,7 @@ import { getPeriodSeconds } from "./accessForm.js";
 
 export function AccessEditor({
   canMutateAccess,
-  editingModelKey,
+  editingModelId,
   editorRef,
   form,
   isAccessLoading,
@@ -27,14 +27,14 @@ export function AccessEditor({
           <ShieldCheck size={19} aria-hidden="true" />
         </span>
         <div>
-          <h2>{editingModelKey ? "Изменить доступ" : "Настроить доступ"}</h2>
+          <h2>{editingModelId ? "Изменить доступ" : "Настроить доступ"}</h2>
           <p>
-            {editingModelKey
+            {editingModelId
               ? "Параметры выбранной модели загружены в форму."
               : "Выберите модель и задайте квоту проверок."}
           </p>
         </div>
-        {editingModelKey && (
+        {editingModelId && (
           <button
             type="button"
             className="icon-button admin-editor-close"
@@ -53,17 +53,17 @@ export function AccessEditor({
           <label htmlFor="access-model">Модель</label>
           <select
             id="access-model"
-            value={form.modelKey}
-            onChange={event => onSelectModel(event.target.value)}
+            value={form.modelId}
+            onChange={event => onSelectModel(event.target.value ? Number(event.target.value) : "")}
             disabled={isModelSelectDisabled}
           >
             <option value="">
               {models.length === 0 ? "Каталог моделей пуст" : "Выберите модель"}
             </option>
             {models.map(model => (
-              <option key={model.key} value={model.key}>
-                {model.displayName || model.key}
-                {model.hasEnabledDeployment ? "" : " — недоступна"}
+              <option key={model.id} value={model.id} disabled={model.isArchived}>
+                {model.displayName || model.id}
+                {model.isArchived ? " – в архиве" : model.hasEnabledDeployment ? "" : " – нет активного деплоймента"}
               </option>
             ))}
           </select>
@@ -112,21 +112,21 @@ export function AccessEditor({
         <label className="admin-switch">
           <input
             type="checkbox"
-            checked={Boolean(form.modelKey) && form.isEnabled}
+            checked={Boolean(form.modelId) && form.isEnabled}
             onChange={event => onUpdateForm("isEnabled", event.target.checked)}
             disabled={isAccessPayloadDisabled}
           />
           <span aria-hidden="true" />
           <div>
             <strong>
-              {!form.modelKey
+              {!form.modelId
                 ? "Состояние доступа"
                 : form.isEnabled
                   ? "Доступ включён"
                   : "Доступ выключен"}
             </strong>
             <small>
-              {!form.modelKey
+              {!form.modelId
                 ? "Сначала выберите модель."
                 : !form.isEnabled
                 ? "Модель будет скрыта в кабинете преподавателя."
@@ -147,7 +147,7 @@ export function AccessEditor({
         <button
           type="submit"
           className="button primary admin-submit"
-          disabled={!canMutateAccess || !form.modelKey}
+          disabled={!canMutateAccess || !form.modelId}
         >
           {isSaving
             ? <Loader2 className="spin" size={16} aria-hidden="true" />
@@ -156,7 +156,7 @@ export function AccessEditor({
             ? "Сохранение..."
             : isAccessLoading
               ? "Загрузка доступов..."
-              : editingModelKey
+              : editingModelId
                 ? "Сохранить изменения"
                 : "Выдать доступ"}
         </button>

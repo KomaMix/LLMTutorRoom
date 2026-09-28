@@ -1,6 +1,5 @@
 namespace ReviewService.Contracts.Events;
 
-/// <summary>A teacher-graded answer captured in an immutable review policy.</summary>
 public sealed record GradingExampleSnapshot
 {
     public string TaskPrompt { get; init; } = string.Empty;

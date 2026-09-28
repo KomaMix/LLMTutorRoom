@@ -335,9 +335,6 @@ namespace TeachingService.Services
                 cancellationToken);
             try
             {
-                // The active-status unique index permits only one Published version. Persist the
-                // old status first, but keep both saves in one transaction so consumers can
-                // never observe a test without its new policy event.
                 var previouslyPublished = GetPublishedVersion(test);
                 if (previouslyPublished is not null)
                 {
@@ -862,7 +859,7 @@ namespace TeachingService.Services
                 Deadline = source.Deadline,
                 TimeLimitMinutes = source.TimeLimitMinutes,
                 Summary = source.Summary,
-                LlmModelKey = source.LlmModelKey,
+                LlmModelId = source.LlmModelId,
                 GradingExamples = GradingExamples.Clone(source.GradingExamples),
                 CreatedAt = createdAt
             };
@@ -910,7 +907,7 @@ namespace TeachingService.Services
             version.Deadline = GetRequiredDeadline(request);
             version.TimeLimitMinutes = request.TimeLimitMinutes;
             version.Summary = request.Summary?.Trim() ?? string.Empty;
-            version.LlmModelKey = request.LlmModelKey?.Trim() ?? string.Empty;
+            version.LlmModelId = request.LlmModelId;
             version.GradingExamples = GradingExamples.ToModels(request.GradingExamples);
         }
 
@@ -1014,9 +1011,9 @@ namespace TeachingService.Services
             }
 
             if (visibleTasks.Any(task => task.CheckMode == TestTaskCheckMode.Llm)
-                && string.IsNullOrWhiteSpace(version.LlmModelKey))
+                && (version.LlmModelId is null or <= 0))
             {
-                return "LlmModelKey is required when a visible task uses LLM review.";
+                return "LlmModelId is required when a visible task uses LLM review.";
             }
 
             return null;

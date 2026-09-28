@@ -1,0 +1,95 @@
+@baseUrl = http://localhost:5200
+@adminToken = replace-with-admin-jwt
+@modelId = 1
+@deploymentId = 1
+@ruleId = 1
+
+###
+GET {{baseUrl}}/api/models
+Authorization: Bearer {{adminToken}}
+
+###
+POST {{baseUrl}}/api/models
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{ "key": "gemma-12b", "displayName": "Gemma 3 12B", "description": "Local grading model", "isArchived": false }
+
+###
+GET {{baseUrl}}/api/models/{{modelId}}
+Authorization: Bearer {{adminToken}}
+
+###
+PUT {{baseUrl}}/api/models/{{modelId}}
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{ "key": "gemma-grading", "displayName": "Gemma 3 12B", "description": "Grading", "isArchived": false }
+
+###
+POST {{baseUrl}}/api/models/{{modelId}}/deployments
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{ "name": "Local Ollama", "endpoint": "http://host.docker.internal:11434/v1", "providerModelId": "gemma3:12b", "apiKey": null, "isEnabled": true, "priority": 0, "maxConcurrentRequests": 2 }
+
+###
+GET {{baseUrl}}/api/models/deployments/{{deploymentId}}
+Authorization: Bearer {{adminToken}}
+
+###
+PUT {{baseUrl}}/api/models/deployments/{{deploymentId}}
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{ "name": "Local Ollama", "endpoint": "http://host.docker.internal:11434/v1", "providerModelId": "gemma3:12b", "apiKey": null, "clearApiKey": false, "isEnabled": true, "priority": 0, "maxConcurrentRequests": 2 }
+
+###
+POST {{baseUrl}}/api/models/deployments/{{deploymentId}}/check
+Authorization: Bearer {{adminToken}}
+
+###
+POST {{baseUrl}}/api/models/deployments/{{deploymentId}}/rate-limits
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{ "windowSeconds": 60, "maxRequests": 10 }
+
+###
+GET {{baseUrl}}/api/models/rate-limits/{{ruleId}}
+Authorization: Bearer {{adminToken}}
+
+###
+PUT {{baseUrl}}/api/models/rate-limits/{{ruleId}}
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{ "windowSeconds": 60, "maxRequests": 20 }
+
+###
+DELETE {{baseUrl}}/api/models/rate-limits/{{ruleId}}
+Authorization: Bearer {{adminToken}}
+
+###
+DELETE {{baseUrl}}/api/models/deployments/{{deploymentId}}
+Authorization: Bearer {{adminToken}}
+
+###
+GET {{baseUrl}}/internal/models/catalog
+
+###
+POST {{baseUrl}}/internal/chat/{{modelId}}
+Content-Type: application/json
+
+{ "messages": [{ "role": "user", "content": "Say hello." }], "temperature": 0.1 }
+
+###
+GET {{baseUrl}}/api/models/2147483647
+Authorization: Bearer {{adminToken}}
+
+###
+POST {{baseUrl}}/api/models/deployments/{{deploymentId}}/rate-limits
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{ "windowSeconds": 0, "maxRequests": 0 }

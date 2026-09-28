@@ -27,6 +27,7 @@ const roleIcons = {
 const rolePageTitles = {
   admin: {
     "/admin/teachers": "Преподаватели",
+    "/admin/models": "Модели и подключения",
     "/admin/model-access": "Доступ к моделям"
   },
   teacher: {

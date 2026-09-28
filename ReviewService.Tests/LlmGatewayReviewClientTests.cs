@@ -55,9 +55,9 @@ public sealed class LlmGatewayReviewClientTests
         }));
 
         var result = await client.ReviewFreeTextAnswerAsync(
-            "grading-model", task, generalExamples, CancellationToken.None);
+            7, task, generalExamples, CancellationToken.None);
 
-        Assert.Equal("/api/chat/grading-model", handler.RequestUri?.AbsolutePath);
+        Assert.Equal("/internal/chat/7", handler.RequestUri?.AbsolutePath);
         var messages = handler.Request.GetProperty("messages");
         Assert.Equal(3, messages.GetArrayLength());
         Assert.Equal("system", messages[0].GetProperty("role").GetString());
@@ -85,6 +85,10 @@ public sealed class LlmGatewayReviewClientTests
         Assert.False(payload.TryGetProperty("taskGradingExamples", out _));
         Assert.Equal(originalExamplesJson, task.GradingExamplesJson);
         Assert.Equal(12m, result.Score);
+        Assert.NotNull(result.Execution);
+        Assert.Equal(7, result.Execution.ModelId);
+        Assert.Equal(12, result.Execution.DeploymentId);
+        Assert.Equal("gemma3:12b", result.Execution.ProviderModelId);
         Assert.Equal("Checked current answer.", result.Feedback);
         Assert.Equal(new[] { "Missing a requirement." }, result.Findings);
     }
@@ -105,7 +109,12 @@ public sealed class LlmGatewayReviewClientTests
             {
                 Content = JsonContent.Create(new
                 {
-                    model = "grading-model",
+                    modelId = 7,
+                    modelDisplayName = "Grading model",
+                    deploymentId = 12,
+                    deploymentName = "Local provider",
+                    providerModelId = "gemma3:12b",
+                    deploymentUpdatedAt = new DateTimeOffset(2026, 9, 27, 10, 0, 0, TimeSpan.Zero),
                     text = """{"score":12,"feedback":"Checked current answer.","findings":["Missing a requirement."]}"""
                 })
             };

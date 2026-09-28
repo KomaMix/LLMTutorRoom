@@ -71,7 +71,7 @@ flowchart LR
 версия, удаляется и логический тест.
 
 Публикация проверяет будущий дедлайн, наличие хотя бы одного видимого задания,
-поддерживаемые enum и наличие `LlmModelKey`, если видимое задание использует LLM.
+поддерживаемые enum и наличие `LlmModelId`, если видимое задание использует LLM.
 Предыдущий `Published` становится `Superseded`, черновик — `Published`; обе записи,
 снимок политики и outbox-сообщение сохраняются одной транзакцией. Обычное
 редактирование или сохранение черновика событий не создаёт. Основная реализация
@@ -135,7 +135,7 @@ TeachingService как типизированные коллекции `GradingE
 
 [`ReviewPolicyOutboxWriter`](../TeachingService/Services/IntegrationEvents/ReviewPolicyOutboxWriter.cs)
 при публикации сериализует `TestReviewPolicyPublishedV1`: `EventId`, идентификатор
-и номер версии теста (это `Revision`), владельца, заголовок, снимок ключа модели и
+и номер версии теста (это `Revision`), владельца, заголовок, постоянный ID модели и
 видимые задания с критериями и вариантами. Один payload сохраняется и как
 [`TestReviewPolicyRevision`](../TeachingService/Models/TestReviewPolicyRevision.cs),
 и как [`IntegrationOutboxMessage`](../TeachingService/Models/IntegrationOutboxMessage.cs).

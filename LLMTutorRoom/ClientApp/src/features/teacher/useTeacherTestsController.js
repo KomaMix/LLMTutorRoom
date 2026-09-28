@@ -36,7 +36,7 @@ export function useTeacherTestsController({
   currentSelectedTestKeyRef.current = currentSelectedTestKey;
 
   const [testForm, setTestForm] = useState(() =>
-    createInitialTestForm(models[0]?.key ?? ""));
+    createInitialTestForm(models[0]?.id ?? ""));
   const [testEditForm, setTestEditForm] = useState(() => createTestFormFromTest(activeTest));
   const [taskForm, setTaskForm] = useState(createInitialTaskForm);
   const [taskEditForm, setTaskEditForm] = useState(createInitialTaskForm);
@@ -223,14 +223,14 @@ export function useTeacherTestsController({
 
     hasInitializedDefaultModel.current = true;
     setTestForm(current => {
-      if (current.llmModelKey) {
+      if (current.llmModelId) {
         return current;
       }
 
-      const next = { ...current, llmModelKey: models[0].key };
+      const next = { ...current, llmModelId: models[0].id };
       createTestBaselineRef.current = {
         ...createTestBaselineRef.current,
-        llmModelKey: models[0].key
+        llmModelId: models[0].id
       };
       return next;
     });

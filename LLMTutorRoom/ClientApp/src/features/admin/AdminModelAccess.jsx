@@ -44,9 +44,9 @@ export function AdminModelAccess() {
               <AccessDirectory
                 accessError={modelAccess.accessError}
                 accessList={modelAccess.accessList}
-                busyModelKey={modelAccess.busyModelKey}
+                busyModelId={modelAccess.busyModelId}
                 canMutateAccess={modelAccess.canMutateAccess}
-                editingModelKey={modelAccess.editingModelKey}
+                editingModelId={modelAccess.editingModelId}
                 isAccessCurrent={modelAccess.isAccessCurrent}
                 isAccessLoading={modelAccess.isAccessLoading}
                 onEdit={modelAccess.editAccess}
@@ -58,7 +58,7 @@ export function AdminModelAccess() {
 
               <AccessEditor
                 canMutateAccess={modelAccess.canMutateAccess}
-                editingModelKey={modelAccess.editingModelKey}
+                editingModelId={modelAccess.editingModelId}
                 editorRef={modelAccess.editorRef}
                 form={modelAccess.form}
                 isAccessLoading={modelAccess.isAccessLoading}
@@ -82,9 +82,9 @@ export function AdminModelAccess() {
       {modelAccess.pendingDeleteAccess && (
         <ConfirmDialog
           title="Удалить доступ к модели?"
-          description={`Доступ «${modelAccess.pendingDeleteAccess.displayName || modelAccess.pendingDeleteAccess.modelKey}» для ${modelAccess.selectedTeacher?.userName ?? "преподавателя"} будет удалён.`}
+          description={`Доступ «${modelAccess.pendingDeleteAccess.displayName || modelAccess.pendingDeleteAccess.modelId}» для ${modelAccess.selectedTeacher?.userName ?? "преподавателя"} будет удалён.`}
           confirmLabel="Удалить доступ"
-          isBusy={modelAccess.busyModelKey === modelAccess.pendingDeleteAccess.modelKey}
+          isBusy={modelAccess.busyModelId === modelAccess.pendingDeleteAccess.modelId}
           onCancel={modelAccess.cancelDelete}
           onConfirm={modelAccess.confirmRemoveAccess}
         />

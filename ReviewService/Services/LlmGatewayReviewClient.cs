@@ -1,3 +1,4 @@
+using ReviewService.Contracts.Responses;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
@@ -16,7 +17,7 @@ public sealed class LlmGatewayReviewClient(
     private readonly ReviewProcessingOptions _options = options.Value;
 
     public async Task<LlmTaskReviewResult> ReviewFreeTextAnswerAsync(
-        string modelKey,
+        int modelId,
         ReviewTask task,
         IReadOnlyList<GradingExampleSnapshot> testGradingExamples,
         CancellationToken cancellationToken)
@@ -24,8 +25,8 @@ public sealed class LlmGatewayReviewClient(
         if (!_options.LlmGatewayEnabled)
             throw new InvalidOperationException("LLMGateway review processing is disabled.");
 
-        if (string.IsNullOrWhiteSpace(modelKey))
-            throw new InvalidOperationException("Model key is required for LLM task checks.");
+        if (modelId <= 0)
+            throw new InvalidOperationException("Model ID is required for LLM task checks.");
 
         var taskGradingExamples = (JsonSerializer.Deserialize<List<GradingExampleSnapshot>>(
                 task.GradingExamplesJson, JsonHelper.Options) ?? [])
@@ -78,11 +79,21 @@ public sealed class LlmGatewayReviewClient(
             0.1f);
 
         using var response = await httpClient.PostAsJsonAsync(
-            $"/api/chat/{Uri.EscapeDataString(modelKey)}",
+            $"/internal/chat/{modelId}",
             request,
             JsonHelper.Options,
             cancellationToken);
-        response.EnsureSuccessStatusCode();
+        if (!response.IsSuccessStatusCode)
+        {
+            var message = response.StatusCode switch
+            {
+                System.Net.HttpStatusCode.NotFound => "Выбранная модель не найдена в каталоге.",
+                System.Net.HttpStatusCode.TooManyRequests => "Достигнут лимит запросов деплойментов. Проверка будет повторена.",
+                System.Net.HttpStatusCode.ServiceUnavailable => "Нет доступного деплоймента модели. Проверка ожидает восстановления подключения.",
+                _ => "Не удалось выполнить запрос к модели. Проверка будет повторена."
+            };
+            throw new HttpRequestException(message, null, response.StatusCode);
+        }
 
         var gatewayResponse = await response.Content.ReadFromJsonAsync<LlmGatewayChatResponse>(
             JsonHelper.Options,
@@ -90,7 +101,15 @@ public sealed class LlmGatewayReviewClient(
         if (gatewayResponse is null || string.IsNullOrWhiteSpace(gatewayResponse.Text))
             throw new InvalidOperationException("LLMGateway returned an empty review response.");
 
-        return ParseReviewJson(gatewayResponse.Text);
+        if (gatewayResponse.ModelId != modelId || gatewayResponse.DeploymentId <= 0)
+            throw new InvalidOperationException("LLMGateway returned invalid execution metadata.");
+
+        return ParseReviewJson(gatewayResponse.Text) with
+        {
+            Execution = new LlmExecutionResponse(gatewayResponse.ModelId, gatewayResponse.ModelDisplayName,
+                gatewayResponse.DeploymentId, gatewayResponse.DeploymentName,
+                gatewayResponse.ProviderModelId, gatewayResponse.DeploymentUpdatedAt)
+        };
     }
 
     private static LlmTaskReviewResult ParseReviewJson(string text)
@@ -112,5 +131,7 @@ public sealed class LlmGatewayReviewClient(
         float? Temperature);
 
     private sealed record LlmGatewayChatMessage(string Role, string Content);
-    private sealed record LlmGatewayChatResponse(string Model, string Text);
+    private sealed record LlmGatewayChatResponse(
+        int ModelId, string ModelDisplayName, int DeploymentId, string DeploymentName,
+        string ProviderModelId, DateTimeOffset DeploymentUpdatedAt, string Text);
 }

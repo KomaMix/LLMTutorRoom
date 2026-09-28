@@ -126,12 +126,12 @@ public sealed class ReviewApiControllerTests
         AssertMethodRoute<HttpPutAttribute>(
             typeof(ModelAccessController),
             nameof(ModelAccessController.UpsertTeacherAccess),
-            "models/{modelKey}/teachers/{teacherId}",
+            "models/{modelId:int}/teachers/{teacherId}",
             "Admin");
         AssertMethodRoute<HttpDeleteAttribute>(
             typeof(ModelAccessController),
             nameof(ModelAccessController.DeleteTeacherAccess),
-            "models/{modelKey}/teachers/{teacherId}",
+            "models/{modelId:int}/teachers/{teacherId}",
             "Admin");
     }
 
@@ -264,7 +264,7 @@ public sealed class ReviewApiControllerTests
 
         public Task<TeacherModelAccessResponse?> UpsertTeacherAccessAsync(
             string teacherUserId,
-            string modelKey,
+            int modelId,
             UpsertTeacherModelAccessRequest request,
             CancellationToken cancellationToken)
         {
@@ -273,7 +273,7 @@ public sealed class ReviewApiControllerTests
 
         public Task<bool> DeleteTeacherAccessAsync(
             string teacherUserId,
-            string modelKey,
+            int modelId,
             CancellationToken cancellationToken)
         {
             throw new NotSupportedException();
@@ -281,7 +281,7 @@ public sealed class ReviewApiControllerTests
 
         public Task<ModelQuotaConsumptionResult> TryConsumeChecksAsync(
             string teacherUserId,
-            string modelKey,
+            int modelId,
             int checkCount,
             CancellationToken cancellationToken)
         {

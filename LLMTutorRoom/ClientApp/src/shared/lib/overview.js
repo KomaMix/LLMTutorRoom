@@ -48,8 +48,8 @@ export function parseOverview(data, role) {
         throw new Error(`tests[${testIndex}].contentRevision must be a non-negative integer.`);
       }
 
-      if (typeof test.llmModelKey !== "string") {
-        throw new Error(`tests[${testIndex}].llmModelKey must be a string.`);
+      if (test.llmModelId != null && (!Number.isInteger(test.llmModelId) || test.llmModelId <= 0)) {
+        throw new Error(`tests[${testIndex}].llmModelId must be a positive integer or null.`);
       }
     }
 

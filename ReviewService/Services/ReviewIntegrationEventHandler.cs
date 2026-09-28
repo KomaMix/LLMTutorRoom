@@ -90,7 +90,7 @@ public sealed class ReviewIntegrationEventHandler(
                     Revision = message.Revision,
                     TeacherUserId = message.TeacherUserId,
                     TestTitle = message.TestTitle,
-                    ModelKeySnapshot = message.ModelKey?.Trim() ?? string.Empty,
+                    ModelId = message.ModelId,
                     TasksJson = JsonSerializer.Serialize(message.Tasks, JsonHelper.Options),
                     GradingExamplesJson = JsonSerializer.Serialize(message.GradingExamples, JsonHelper.Options),
                     PublishedAt = message.PublishedAt,
@@ -149,7 +149,6 @@ public sealed class ReviewIntegrationEventHandler(
                     {
                         ReviewId = review.Id,
                         AttemptId = review.AttemptId,
-                        ModelKey = review.ModelKeySnapshot,
                         RequestedAt = DateTimeOffset.UtcNow
                     },
                     retryDelaySeconds: null,
@@ -271,6 +270,10 @@ public sealed class ReviewIntegrationEventHandler(
         {
             throw new InvalidDataException("TestReviewPolicyPublishedV1 contains invalid required values.");
         }
+
+        if (message.ModelId is <= 0
+            || (message.Tasks.Any(task => task.CheckMode == ReviewCheckMode.Llm) && message.ModelId is null))
+            throw new InvalidDataException("An LLM review policy must reference a positive model ID.");
 
         ValidateGradingExamples(message.GradingExamples, requireTaskPrompt: true);
 

@@ -211,7 +211,7 @@ namespace LLMTutorRoom.Services
                 Deadline: test.Deadline,
                 TimeLimitMinutes: test.TimeLimitMinutes,
                 Summary: test.Summary,
-                LlmModelKey: test.LlmModelKey,
+                LlmModelId: test.LlmModelId,
                 VersionNumber: test.VersionNumber,
                 TotalPoints: test.TotalPoints,
                 Tasks: test.Tasks.Select(task => new StudentTestTaskResponse(
@@ -233,7 +233,7 @@ namespace LLMTutorRoom.Services
         {
             return new LanguageModel
             {
-                Key = access.ModelKey,
+                Id = access.ModelId,
                 DisplayName = access.DisplayName,
                 Status = access.RemainingChecks > 0 ? "available" : "standby",
                 Priority = 0,

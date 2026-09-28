@@ -18,7 +18,7 @@ export function TestForm({
   const isEditing = mode === "edit";
   const controlsDisabled = isDisabled || isSubmitting;
   const idPrefix = isEditing ? "edit-test" : "test";
-  const modelOptions = getModelOptions(models, form.llmModelKey);
+  const modelOptions = getModelOptions(models, form.llmModelId);
 
   function updateForm(field, value) {
     onChange(current => ({ ...current, [field]: value }));
@@ -112,13 +112,13 @@ export function TestForm({
           <label htmlFor={`${idPrefix}-llm-model`}>LLM-модель проверки</label>
           <select
             id={`${idPrefix}-llm-model`}
-            value={form.llmModelKey}
+            value={form.llmModelId}
             disabled={controlsDisabled}
-            onChange={event => updateForm("llmModelKey", event.target.value)}
+            onChange={event => updateForm("llmModelId", event.target.value ? Number(event.target.value) : "")}
           >
             <option value="">Без LLM-модели</option>
             {modelOptions.map(model => (
-              <option key={model.key} value={model.key}>
+              <option key={model.id} value={model.id}>
                 {getModelOptionLabel(model)}
               </option>
             ))}

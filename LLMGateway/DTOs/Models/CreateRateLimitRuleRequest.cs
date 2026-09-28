@@ -1,13 +1,11 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace LLMGateway.DTOs.Models
-{
-    public class CreateRateLimitRuleRequest
-    {
-        [Range(1, 86400)]
-        public int WindowSeconds { get; set; }
+namespace LLMGateway.DTOs.Models;
 
-        [Range(1, 1000000)]
-        public int MaxRequests { get; set; }
-    }
+public sealed record CreateRateLimitRuleRequest
+{
+    [Range(1, 86400)]
+    public int WindowSeconds { get; init; }
+    [Range(1, 1000000)]
+    public int MaxRequests { get; init; }
 }

@@ -54,20 +54,18 @@ export function ModelPanel({ models, onRefresh }) {
           const remainingChecks = Math.max(0, Number(model.remainingChecks) || 0);
 
           return (
-            <article className="model-card teacher-model-card" key={model.key}>
+            <article className="model-card teacher-model-card" key={model.id}>
               <header className="teacher-model-header">
                 <div className="teacher-model-identity">
                   <span className="model-icon">
                     <Sparkles size={18} aria-hidden="true" />
                   </span>
                   <div>
-                    <strong>{model.displayName || model.key}</strong>
+                    <strong>{model.displayName || model.id}</strong>
                   </div>
                 </div>
                 <StatusBadge status={model.status} />
               </header>
-
-              <div className="teacher-model-key">{model.key}</div>
 
               <section className="teacher-model-quota">
                 <div>

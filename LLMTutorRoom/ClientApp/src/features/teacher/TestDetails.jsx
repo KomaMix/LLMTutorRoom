@@ -56,9 +56,9 @@ export function TestDetails({
   }
 
   const isDraft = selectedTest.status === "draft";
-  const selectedModel = models.find(model => model.key === selectedTest.llmModelKey);
+  const selectedModel = models.find(model => model.id === selectedTest.llmModelId);
   const modelDisplayName = selectedModel?.displayName
-    || selectedTest.llmModelKey
+    || (selectedTest.llmModelId ? `Модель #${selectedTest.llmModelId}` : null)
     || "не выбрана";
 
   return (
@@ -124,7 +124,7 @@ export function TestDetails({
         editForm={taskEditForm}
         editMessage={taskEditMessage}
         editingTaskId={editingTaskId}
-        hasLlmModel={Boolean(selectedTest.llmModelKey)}
+        hasLlmModel={Boolean(selectedTest.llmModelId)}
         isDisabled={areDraftControlsDisabled}
         isCreating={isCreatingTask}
         isSaving={isSavingTask}

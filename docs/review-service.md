@@ -35,7 +35,7 @@ flowchart LR
 Маршруты direct exchange заданы в
 [`ReviewIntegrationRoutes`](../ReviewService.Contracts/Messaging/ReviewIntegrationRoutes.cs).
 [`TestReviewPolicyPublishedV1`](../ReviewService.Contracts/Events/TestReviewPolicyPublishedV1.cs)
-несёт `TestId + Revision`, владельца, заголовок, снимок `ModelKey` и видимые
+несёт `TestId + Revision`, владельца, заголовок, `ModelId` и видимые
 задания с критериями и вариантами ответа.
 [`AttemptSubmittedV1`](../ReviewService.Contracts/Events/AttemptSubmittedV1.cs)
 несёт точную `TestRevision`, ученика, ответы и время отправки. Проверка создаётся
@@ -105,7 +105,7 @@ DLQ; временная ошибка повторяется через retry que
   [`ReviewQueryService`](../ReviewService/Services/ReviewQueryService.cs).
 - `Llm` для `FreeText` создаёт `Pending` и отправляет всю проверку в собственную
   processing queue. [`LlmGatewayReviewClient`](../ReviewService/Services/LlmGatewayReviewClient.cs)
-  вызывает `/api/chat/{modelKey}`, требует JSON с `score`, `feedback`,
+  вызывает `/internal/chat/{modelId}`, требует JSON с `score`, `feedback`,
   `findings`, а scoring нормализует ответ.
 
 ## Примеры преподавателя в LLM-проверке
@@ -183,8 +183,11 @@ Malformed или несовместимое work message попадает в pro
 ## Доступ к моделям и квота
 
 [`TeacherModelAccessService`](../ReviewService/Services/TeacherModelAccessService.cs)
-при выдаче и чтении grant сверяет ключ с живым каталогом `LLMGateway`, но сам
-хранит настройки преподавателя: `IsEnabled`, `PeriodSeconds`, `MaxChecks`.
+при выдаче и чтении grant сверяет ID с живым каталогом `LLMGateway`, но сам
+хранит настройки преподавателя: `ModelId`, `IsEnabled`, `PeriodSeconds`, `MaxChecks`.
+Архивные модели скрыты из нового выбора, но существующие проверки продолжают
+использовать назначенный ID. Каталог и генерация запрашиваются через внутренний
+API LLMGateway без аутентификации.
 Usage учитывается по выровненным к Unix epoch периодам для пары
 преподаватель–модель. Перед LLM-вызовами сервис одной
 serializable-транзакцией списывает число LLM-заданий и ставит на `Review`
@@ -198,10 +201,12 @@ serializable-транзакцией списывает число LLM-задан
 Основные таблицы: [`Review`](../ReviewService/Models/Reviews/Review.cs) и дочерние
 [`ReviewTask`](../ReviewService/Models/Reviews/ReviewTask.cs), versioned policy,
 pending submissions, inbox, model access и usage. В результате сохраняются
-снимки названия теста, модели, prompt, ответа ученика и вариантов;
+снимки названия теста, prompt, ответа ученика и вариантов, а также постоянный ID модели;
 [`ReviewResponse`](../ReviewService.Contracts/Responses/ReviewResponse.cs)
 возвращает времена обработки, число попыток, ошибки, баллы, feedback и до пяти
-findings.
+findings. У успешно проверенного LLM-задания дополнительно сохраняются фактические
+ID и названия модели и деплоймента, `ProviderModelId` и дата использованных настроек.
+Эти данные выдаются как `LlmExecution` и не меняются при редактировании каталога.
 
 Read API отделяет все non-terminal проверки от terminal (`Checked`, `Failed`).
 Пагинация применяется только к terminal-части: keyset по `SubmittedAt + Id`,
@@ -231,7 +236,7 @@ Cleanup удаляет только старый inbox по retention. `PendingS
   доступы текущего преподавателя;
 - `GET /api/model-access/models`,
   `GET /api/model-access/teachers/{teacherUserId}` и PUT/DELETE
-  `/api/model-access/models/{modelKey}/teachers/{teacherUserId}` требуют роль
+  `/api/model-access/models/{modelId}/teachers/{teacherUserId}` требуют роль
   `Admin`.
 
 Для сборки overview и истории остаются отдельные internal-контроллеры:

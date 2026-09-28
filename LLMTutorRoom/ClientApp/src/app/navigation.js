@@ -11,6 +11,7 @@ import {
 export const navigation = {
   admin: [
     { path: "/admin/teachers", label: "Преподаватели", icon: UsersRound },
+    { path: "/admin/models", label: "Модели и подключения", icon: Server },
     { path: "/admin/model-access", label: "Доступ к моделям", icon: Server }
   ],
   teacher: [

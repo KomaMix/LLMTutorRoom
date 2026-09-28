@@ -2,7 +2,7 @@ namespace ReviewService.Contracts.Responses;
 
 public sealed record TeacherModelAccessResponse(
     string TeacherUserId,
-    string ModelKey,
+    int ModelId,
     string DisplayName,
     bool IsEnabled,
     bool HasEnabledDeployment,

@@ -23,11 +23,11 @@ export function useAdminModelAccess() {
   const [selectedTeacherId, setSelectedTeacherId] = useState("");
   const [loadedTeacherId, setLoadedTeacherId] = useState("");
   const [form, setForm] = useState(initialAccessForm);
-  const [editingModelKey, setEditingModelKey] = useState("");
+  const [editingModelId, setEditingModelId] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isAccessLoading, setIsAccessLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [busyModelKey, setBusyModelKey] = useState("");
+  const [busyModelId, setBusyModelId] = useState("");
   const [pendingDeleteAccess, setPendingDeleteAccess] = useState(null);
   const [initialError, setInitialError] = useState("");
   const [accessError, setAccessError] = useState("");
@@ -71,10 +71,10 @@ export function useAdminModelAccess() {
     setAccessList([]);
     setAccessError("");
     setActionMessage(null);
-    setEditingModelKey("");
+    setEditingModelId("");
     const nextForm = {
       ...initialAccessForm,
-      modelKey: ""
+      modelId: ""
     };
     formBaselineRef.current = nextForm;
     setForm(nextForm);
@@ -113,8 +113,8 @@ export function useAdminModelAccess() {
         setForm(current => {
           const nextForm = {
             ...current,
-            modelKey: modelsData.some(model => model.key === current.modelKey)
-              ? current.modelKey
+            modelId: modelsData.some(model => model.id === current.modelId)
+              ? current.modelId
               : ""
           };
           formBaselineRef.current = nextForm;
@@ -162,25 +162,25 @@ export function useAdminModelAccess() {
         if (isCurrentSelection(teacherId, requestVersion)) {
           setAccessList(data);
           setLoadedTeacherId(teacherId);
-          const selectedAccess = data.find(access => access.modelKey === formRef.current.modelKey);
+          const selectedAccess = data.find(access => access.modelId === formRef.current.modelId);
           if (selectedAccess) {
             const nextForm = {
-              modelKey: selectedAccess.modelKey,
+              modelId: selectedAccess.modelId,
               isEnabled: selectedAccess.isEnabled,
               ...createPeriodForm(selectedAccess.periodSeconds),
               maxChecks: selectedAccess.maxChecks
             };
             formBaselineRef.current = nextForm;
             setForm(nextForm);
-            setEditingModelKey(selectedAccess.modelKey);
+            setEditingModelId(selectedAccess.modelId);
           } else {
             const nextForm = {
               ...initialAccessForm,
-              modelKey: ""
+              modelId: ""
             };
             formBaselineRef.current = nextForm;
             setForm(nextForm);
-            setEditingModelKey("");
+            setEditingModelId("");
           }
         }
       } catch (error) {
@@ -225,7 +225,7 @@ export function useAdminModelAccess() {
 
     const teacherId = selectedTeacherId;
     const requestVersion = accessRequestVersionRef.current;
-    if (!canMutateAccess || !teacherId || !form.modelKey) {
+    if (!canMutateAccess || !teacherId || !form.modelId) {
       return;
     }
 
@@ -241,12 +241,12 @@ export function useAdminModelAccess() {
       return;
     }
 
-    const modelKey = form.modelKey;
+    const modelId = form.modelId;
     setIsSaving(true);
     setActionMessage(null);
 
     try {
-      const access = await saveTeacherModelAccess(teacherId, modelKey, {
+      const access = await saveTeacherModelAccess(teacherId, modelId, {
         isEnabled: form.isEnabled,
         periodSeconds,
         maxChecks
@@ -255,17 +255,17 @@ export function useAdminModelAccess() {
       if (isCurrentSelection(teacherId, requestVersion)) {
         setAccessList(current => [
           access,
-          ...current.filter(item => item.modelKey !== access.modelKey)
-        ].sort((left, right) => left.modelKey.localeCompare(right.modelKey)));
+          ...current.filter(item => item.modelId !== access.modelId)
+        ].sort((left, right) => left.displayName.localeCompare(right.displayName, "ru")));
         const savedForm = {
-          modelKey: access.modelKey,
+          modelId: access.modelId,
           isEnabled: access.isEnabled,
           ...createPeriodForm(access.periodSeconds),
           maxChecks: access.maxChecks
         };
         formBaselineRef.current = savedForm;
         setForm(savedForm);
-        setEditingModelKey(access.modelKey);
+        setEditingModelId(access.modelId);
         setActionMessage({ type: "success", text: "Доступ сохранён." });
       }
     } catch (error) {
@@ -292,25 +292,25 @@ export function useAdminModelAccess() {
     const access = pendingDeleteAccess;
     const teacherId = selectedTeacherId;
     const requestVersion = accessRequestVersionRef.current;
-    if (!access || !isAccessCurrent || isSaving || busyModelKey || !teacherId) {
+    if (!access || !isAccessCurrent || isSaving || busyModelId || !teacherId) {
       return;
     }
 
-    setBusyModelKey(access.modelKey);
+    setBusyModelId(access.modelId);
     setActionMessage(null);
 
     try {
-      await deleteTeacherModelAccess(teacherId, access.modelKey);
+      await deleteTeacherModelAccess(teacherId, access.modelId);
 
       if (isCurrentSelection(teacherId, requestVersion)) {
-        setAccessList(current => current.filter(item => item.modelKey !== access.modelKey));
-        if (editingModelKey === access.modelKey) {
+        setAccessList(current => current.filter(item => item.modelId !== access.modelId));
+        if (editingModelId === access.modelId) {
           const nextForm = {
             ...initialAccessForm,
-            modelKey: ""
+            modelId: ""
           };
           formBaselineRef.current = nextForm;
-          setEditingModelKey("");
+          setEditingModelId("");
           setForm(nextForm);
         }
         focusActionBannerAfterDeleteRef.current = true;
@@ -324,7 +324,7 @@ export function useAdminModelAccess() {
         });
       }
     } finally {
-      setBusyModelKey("");
+      setBusyModelId("");
       setPendingDeleteAccess(null);
     }
   }
@@ -334,32 +334,32 @@ export function useAdminModelAccess() {
     setActionMessage(null);
   }
 
-  function selectModel(modelKey) {
-    if (modelKey !== formRef.current.modelKey
+  function selectModel(modelId) {
+    if (modelId !== formRef.current.modelId
       && hasUnsavedAccessChangesRef.current
       && !window.confirm(unsavedAccessPrompt)) {
       return;
     }
 
-    const existingAccess = accessList.find(access => access.modelKey === modelKey);
+    const existingAccess = accessList.find(access => access.modelId === modelId);
     if (existingAccess) {
       const nextForm = {
-        modelKey: existingAccess.modelKey,
+        modelId: existingAccess.modelId,
         isEnabled: existingAccess.isEnabled,
         ...createPeriodForm(existingAccess.periodSeconds),
         maxChecks: existingAccess.maxChecks
       };
       formBaselineRef.current = nextForm;
       setForm(nextForm);
-      setEditingModelKey(existingAccess.modelKey);
+      setEditingModelId(existingAccess.modelId);
     } else {
       const nextForm = {
         ...initialAccessForm,
-        modelKey
+        modelId
       };
       formBaselineRef.current = nextForm;
       setForm(nextForm);
-      setEditingModelKey("");
+      setEditingModelId("");
     }
     setActionMessage(null);
   }
@@ -369,21 +369,21 @@ export function useAdminModelAccess() {
       return;
     }
 
-    if (access.modelKey !== formRef.current.modelKey
+    if (access.modelId !== formRef.current.modelId
       && hasUnsavedAccessChangesRef.current
       && !window.confirm(unsavedAccessPrompt)) {
       return;
     }
 
     const nextForm = {
-      modelKey: access.modelKey,
+      modelId: access.modelId,
       isEnabled: access.isEnabled,
       ...createPeriodForm(access.periodSeconds),
       maxChecks: access.maxChecks
     };
     formBaselineRef.current = nextForm;
     setForm(nextForm);
-    setEditingModelKey(access.modelKey);
+    setEditingModelId(access.modelId);
     setActionMessage(null);
     window.requestAnimationFrame(() => {
       const editor = editorRef.current;
@@ -396,10 +396,10 @@ export function useAdminModelAccess() {
   function cancelEdit() {
     const nextForm = {
       ...initialAccessForm,
-      modelKey: ""
+      modelId: ""
     };
     formBaselineRef.current = nextForm;
-    setEditingModelKey("");
+    setEditingModelId("");
     setForm(nextForm);
     setActionMessage(null);
   }
@@ -409,28 +409,28 @@ export function useAdminModelAccess() {
     && !isAccessLoading
     && !accessError;
   const isMutationLocked = isSaving
-    || Boolean(busyModelKey)
+    || Boolean(busyModelId)
     || Boolean(pendingDeleteAccess);
   const isModelSelectDisabled = isMutationLocked
     || !isAccessCurrent
     || models.length === 0;
-  const isAccessPayloadDisabled = isModelSelectDisabled || !form.modelKey;
+  const isAccessPayloadDisabled = isModelSelectDisabled || !form.modelId;
   const canMutateAccess = isAccessCurrent
     && !isMutationLocked;
   const selectedTeacher = teachers.find(teacher => teacher.id === selectedTeacherId);
-  const selectedModel = models.find(model => model.key === form.modelKey);
+  const selectedModel = models.find(model => model.id === form.modelId);
 
   return {
     accessError,
     accessList,
     actionBannerRef,
     actionMessage,
-    busyModelKey,
+    busyModelId,
     cancelDelete,
     cancelEdit,
     canMutateAccess,
     confirmRemoveAccess,
-    editingModelKey,
+    editingModelId,
     editorRef,
     form,
     initialError,

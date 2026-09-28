@@ -49,16 +49,16 @@ public sealed class ModelAccessController(
     }
 
     [Authorize(Roles = "Admin")]
-    [HttpPut("models/{modelKey}/teachers/{teacherId}")]
+    [HttpPut("models/{modelId:int}/teachers/{teacherId}")]
     public async Task<ActionResult<TeacherModelAccessResponse>> UpsertTeacherAccess(
-        [FromRoute] string modelKey,
+        [FromRoute] int modelId,
         [FromRoute] string teacherId,
         [FromBody] UpsertTeacherModelAccessRequest request,
         CancellationToken cancellationToken)
     {
         var response = await modelAccessService.UpsertTeacherAccessAsync(
             teacherId,
-            modelKey,
+            modelId,
             request,
             cancellationToken);
         return response is null
@@ -69,15 +69,15 @@ public sealed class ModelAccessController(
     }
 
     [Authorize(Roles = "Admin")]
-    [HttpDelete("models/{modelKey}/teachers/{teacherId}")]
+    [HttpDelete("models/{modelId:int}/teachers/{teacherId}")]
     public async Task<IActionResult> DeleteTeacherAccess(
-        [FromRoute] string modelKey,
+        [FromRoute] int modelId,
         [FromRoute] string teacherId,
         CancellationToken cancellationToken)
     {
         return await modelAccessService.DeleteTeacherAccessAsync(
             teacherId,
-            modelKey,
+            modelId,
             cancellationToken)
             ? NoContent()
             : Problem(

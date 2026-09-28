@@ -383,7 +383,7 @@ public sealed class TestVersioningTests
             Subject = "Subject",
             Deadline = DateTimeOffset.UtcNow.AddDays(1),
             TimeLimitMinutes = 30,
-            LlmModelKey = "model",
+            LlmModelId = 1,
             Tasks =
             [
                 new TestTask
@@ -438,7 +438,7 @@ public sealed class TestVersioningTests
             Subject = "Subject",
             Deadline = DateTimeOffset.UtcNow.AddDays(1),
             TimeLimitMinutes = 30,
-            LlmModelKey = "model",
+            LlmModelId = 1,
             Tasks =
             [
                 new TestTask
@@ -505,7 +505,7 @@ public sealed class TestVersioningTests
             Deadline = DateTimeOffset.UtcNow.AddDays(7),
             TimeLimitMinutes = 45,
             Summary = "Summary",
-            LlmModelKey = "model"
+            LlmModelId = 1
         };
     }
 

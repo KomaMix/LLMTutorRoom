@@ -32,12 +32,19 @@ namespace LLMGateway.Tests
                 CreateDeployment("secondary", priority: 1)
             });
 
+            var model = await dbContext.Models.SingleAsync();
+            model.Key = "renamed-model";
+            await dbContext.SaveChangesAsync();
             var service = CreateService(dbContext, chatClientFactory);
 
-            var result = await service.ExecuteAsync("test-model", CreateChatRequest(), CancellationToken.None);
+            var result = await service.ExecuteAsync(1, CreateChatRequest(), CancellationToken.None);
 
             Assert.Equal(ChatExecutionStatus.Completed, result.Status);
             Assert.Equal("secondary response", result.Response?.Text);
+            Assert.Equal(1, result.Response?.ModelId);
+            Assert.Equal("secondary", result.Response?.ProviderModelId);
+            Assert.Equal("secondary", result.Response?.DeploymentName);
+            Assert.Equal(await dbContext.ModelDeployments.Where(item => item.ProviderModelId == "secondary").Select(item => item.Id).SingleAsync(), result.Response?.DeploymentId);
             Assert.True(primaryClient.IsDisposed);
             Assert.True(secondaryClient.IsDisposed);
         }
@@ -63,8 +70,8 @@ namespace LLMGateway.Tests
 
             var service = CreateService(dbContext, chatClientFactory);
 
-            var firstResult = await service.ExecuteAsync("test-model", CreateChatRequest(), CancellationToken.None);
-            var secondResult = await service.ExecuteAsync("test-model", CreateChatRequest(), CancellationToken.None);
+            var firstResult = await service.ExecuteAsync(1, CreateChatRequest(), CancellationToken.None);
+            var secondResult = await service.ExecuteAsync(1, CreateChatRequest(), CancellationToken.None);
 
             Assert.Equal(ChatExecutionStatus.Completed, firstResult.Status);
             Assert.Equal("primary response", firstResult.Response?.Text);
@@ -99,10 +106,10 @@ namespace LLMGateway.Tests
 
             var service = CreateService(dbContext, chatClientFactory);
 
-            var firstTask = service.ExecuteAsync("test-model", CreateChatRequest(), CancellationToken.None);
+            var firstTask = service.ExecuteAsync(1, CreateChatRequest(), CancellationToken.None);
             await primaryStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
 
-            var secondResult = await service.ExecuteAsync("test-model", CreateChatRequest(), CancellationToken.None);
+            var secondResult = await service.ExecuteAsync(1, CreateChatRequest(), CancellationToken.None);
 
             releasePrimary.SetResult(null);
             var firstResult = await firstTask;
@@ -135,7 +142,7 @@ namespace LLMGateway.Tests
                     ? new HttpResponseMessage(HttpStatusCode.ServiceUnavailable)
                     : CreateModelsResponse("secondary"));
 
-            var result = await service.ExecuteAsync("test-model", CreateChatRequest(), CancellationToken.None);
+            var result = await service.ExecuteAsync(1, CreateChatRequest(), CancellationToken.None);
 
             Assert.Equal(ChatExecutionStatus.Completed, result.Status);
             Assert.Equal("secondary response", result.Response?.Text);
@@ -161,8 +168,8 @@ namespace LLMGateway.Tests
                 return CreateModelsResponse("other-model", "primary");
             });
 
-            var firstResult = await service.ExecuteAsync("test-model", CreateChatRequest(), CancellationToken.None);
-            var secondResult = await service.ExecuteAsync("test-model", CreateChatRequest(), CancellationToken.None);
+            var firstResult = await service.ExecuteAsync(1, CreateChatRequest(), CancellationToken.None);
+            var secondResult = await service.ExecuteAsync(1, CreateChatRequest(), CancellationToken.None);
 
             Assert.Equal(ChatExecutionStatus.Completed, firstResult.Status);
             Assert.Equal("response", firstResult.Response?.Text);
@@ -204,7 +211,7 @@ namespace LLMGateway.Tests
                 Content = new StringContent(catalogJson, Encoding.UTF8, "application/json")
             });
 
-            var result = await service.ExecuteAsync("test-model", CreateChatRequest(), CancellationToken.None);
+            var result = await service.ExecuteAsync(1, CreateChatRequest(), CancellationToken.None);
 
             Assert.Equal(ChatExecutionStatus.ProviderUnavailable, result.Status);
             Assert.Null(result.Response);
@@ -234,7 +241,7 @@ namespace LLMGateway.Tests
                     ? CreateModelsResponse("other-model")
                     : CreateModelsResponse("secondary"));
 
-            var result = await service.ExecuteAsync("test-model", CreateChatRequest(), CancellationToken.None);
+            var result = await service.ExecuteAsync(1, CreateChatRequest(), CancellationToken.None);
 
             Assert.Equal(ChatExecutionStatus.Completed, result.Status);
             Assert.Equal("secondary response", result.Response?.Text);
@@ -263,7 +270,7 @@ namespace LLMGateway.Tests
                 dbContext,
                 chatClientFactory,
                 new RateLimitService(),
-                new FakeHttpClientFactory(new FakeHttpMessageHandler(healthCheckHandler)),
+                new DeploymentProbe(new FakeHttpClientFactory(new FakeHttpMessageHandler(healthCheckHandler))),
                 NullLogger<ChatExecutionService>.Instance);
         }
 
@@ -282,6 +289,7 @@ namespace LLMGateway.Tests
         {
             dbContext.Models.Add(new Model
             {
+                Id = 1,
                 Key = "test-model",
                 DisplayName = "Test model",
                 Deployments = deployments.ToList()
@@ -299,6 +307,7 @@ namespace LLMGateway.Tests
         {
             var deployment = new ModelDeployment
             {
+                Name = providerModelId,
                 Endpoint = endpoint,
                 ProviderModelId = providerModelId,
                 Priority = priority,
@@ -342,16 +351,16 @@ namespace LLMGateway.Tests
 
         private sealed class FakeHttpClientFactory : IHttpClientFactory
         {
-            private readonly HttpClient _client;
+            private readonly HttpMessageHandler _handler;
 
             public FakeHttpClientFactory(HttpMessageHandler handler)
             {
-                _client = new HttpClient(handler);
+                _handler = handler;
             }
 
             public HttpClient CreateClient(string name)
             {
-                return _client;
+                return new HttpClient(_handler, disposeHandler: false);
             }
         }
 

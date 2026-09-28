@@ -18,6 +18,7 @@ namespace LLMGateway.Migrations
                         .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
                     Key = table.Column<string>(type: "text", nullable: false),
                     DisplayName = table.Column<string>(type: "text", nullable: false),
+                    IsArchived = table.Column<bool>(type: "boolean", nullable: false),
                     Description = table.Column<string>(type: "text", nullable: true),
                     CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
                     UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
@@ -34,13 +35,13 @@ namespace LLMGateway.Migrations
                     Id = table.Column<int>(type: "integer", nullable: false)
                         .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
                     ModelId = table.Column<int>(type: "integer", nullable: false),
+                    Name = table.Column<string>(type: "text", nullable: false),
                     Endpoint = table.Column<string>(type: "text", nullable: false),
                     ApiKey = table.Column<string>(type: "text", nullable: true),
                     ProviderModelId = table.Column<string>(type: "text", nullable: false),
                     IsEnabled = table.Column<bool>(type: "boolean", nullable: false),
                     Priority = table.Column<int>(type: "integer", nullable: false),
                     MaxConcurrentRequests = table.Column<int>(type: "integer", nullable: true),
-                    RateLimitRules = table.Column<string>(type: "jsonb", nullable: false),
                     CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
                     UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
                 },
@@ -54,6 +55,24 @@ namespace LLMGateway.Migrations
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                 });
+
+            migrationBuilder.CreateTable(
+                name: "ModelRateLimitRules",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    DeploymentId = table.Column<int>(type: "integer", nullable: false),
+                    WindowSeconds = table.Column<int>(type: "integer", nullable: false),
+                    MaxRequests = table.Column<int>(type: "integer", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_ModelRateLimitRules", x => x.Id);
+                    table.ForeignKey("FK_ModelRateLimitRules_ModelDeployments_DeploymentId", x => x.DeploymentId,
+                        "ModelDeployments", "Id", onDelete: ReferentialAction.Cascade);
+                });
+            migrationBuilder.CreateIndex("IX_ModelRateLimitRules_DeploymentId", "ModelRateLimitRules", "DeploymentId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_ModelDeployments_ModelId",
@@ -69,6 +88,7 @@ namespace LLMGateway.Migrations
 
         protected override void Down(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.DropTable(name: "ModelRateLimitRules");
             migrationBuilder.DropTable(
                 name: "ModelDeployments");
 

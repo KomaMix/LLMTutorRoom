@@ -1,3 +1,4 @@
+using ReviewService.Contracts.Responses;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -55,7 +56,6 @@ public sealed class ReviewJobProcessorTests
         {
             ReviewId = review.Id,
             AttemptId = review.AttemptId,
-            ModelKey = review.ModelKeySnapshot,
             RequestedAt = Now
         }, CancellationToken.None);
 
@@ -66,7 +66,13 @@ public sealed class ReviewJobProcessorTests
         dbContext.ChangeTracker.Clear();
         var stored = await dbContext.Reviews.Include(item => item.TaskResults).SingleAsync();
         Assert.Equal(review.GradingExamplesJson, stored.GradingExamplesJson);
-        Assert.Equal(taskExamplesJson, Assert.Single(stored.TaskResults).GradingExamplesJson);
+        var storedTask = Assert.Single(stored.TaskResults);
+        Assert.Equal(taskExamplesJson, storedTask.GradingExamplesJson);
+        Assert.Equal(12, storedTask.LlmDeploymentId);
+        Assert.Equal("gemma3:12b", storedTask.LlmProviderModelId);
+        var returnedTask = Assert.Single(ReviewQueryService.ToResponse(stored).TaskResults);
+        Assert.Equal(new LlmExecutionResponse(1, "Grading model", 12, "Primary deployment",
+            "gemma3:12b", new DateTimeOffset(2026, 9, 27, 10, 0, 0, TimeSpan.Zero)), returnedTask.LlmExecution);
     }
 
     [Theory]
@@ -94,7 +100,6 @@ public sealed class ReviewJobProcessorTests
             {
                 ReviewId = reviewId,
                 AttemptId = review.AttemptId,
-                ModelKey = "model",
                 RequestedAt = Now
             },
             CancellationToken.None);
@@ -147,7 +152,6 @@ public sealed class ReviewJobProcessorTests
             {
                 ReviewId = reviewId,
                 AttemptId = review.AttemptId,
-                ModelKey = "model",
                 RequestedAt = Now
             },
             CancellationToken.None);
@@ -202,7 +206,6 @@ public sealed class ReviewJobProcessorTests
             {
                 ReviewId = reviewId,
                 AttemptId = review.AttemptId,
-                ModelKey = "model",
                 RequestedAt = Now
             },
             CancellationToken.None);
@@ -238,7 +241,6 @@ public sealed class ReviewJobProcessorTests
             {
                 ReviewId = reviewId,
                 AttemptId = review.AttemptId,
-                ModelKey = "model",
                 RequestedAt = Now
             },
             CancellationToken.None);
@@ -277,7 +279,6 @@ public sealed class ReviewJobProcessorTests
             {
                 ReviewId = reviewId,
                 AttemptId = review.AttemptId,
-                ModelKey = "model",
                 RequestedAt = Now
             },
             CancellationToken.None);
@@ -305,7 +306,6 @@ public sealed class ReviewJobProcessorTests
         dbContext.TeacherModelAccesses.Add(new TeacherModelAccess
         {
             TeacherUserId = review.TeacherUserId,
-            ModelKey = review.ModelKeySnapshot,
             IsEnabled = true,
             PeriodSeconds = 3600,
             MaxChecks = 1,
@@ -327,7 +327,6 @@ public sealed class ReviewJobProcessorTests
             {
                 ReviewId = reviewId,
                 AttemptId = review.AttemptId,
-                ModelKey = "model",
                 RequestedAt = Now
             },
             CancellationToken.None);
@@ -369,7 +368,6 @@ public sealed class ReviewJobProcessorTests
             {
                 ReviewId = reviewId,
                 AttemptId = review.AttemptId,
-                ModelKey = "model",
                 RequestedAt = Now
             },
             CancellationToken.None);
@@ -445,7 +443,7 @@ public sealed class ReviewJobProcessorTests
             Status = taskAttempts == 0
                 ? ReviewStatus.Queued
                 : ReviewStatus.RetryScheduled,
-            ModelKeySnapshot = "model",
+            ModelId = 1,
             LlmQuotaReservedAt = Now.AddMinutes(-5),
             SubmittedAt = Now.AddMinutes(-5),
             QueuedAt = Now.AddMinutes(-4),
@@ -479,7 +477,7 @@ public sealed class ReviewJobProcessorTests
         public string TaskGradingExamplesJson { get; private set; } = "[]";
 
         public Task<LlmTaskReviewResult> ReviewFreeTextAnswerAsync(
-            string modelKey,
+            int modelId,
             ReviewTask task,
             IReadOnlyList<GradingExampleSnapshot> testGradingExamples,
             CancellationToken cancellationToken)
@@ -490,7 +488,11 @@ public sealed class ReviewJobProcessorTests
             return Task.FromResult(new LlmTaskReviewResult(
                 task.MaxScore,
                 "Checked.",
-                ["No issues."]));
+                ["No issues."])
+            {
+                Execution = new LlmExecutionResponse(modelId, "Grading model", 12, "Primary deployment",
+                    "gemma3:12b", new DateTimeOffset(2026, 9, 27, 10, 0, 0, TimeSpan.Zero))
+            });
         }
     }
 
@@ -513,7 +515,7 @@ public sealed class ReviewJobProcessorTests
         public DateTimeOffset? FailedAt { get; private set; }
 
         public async Task<LlmTaskReviewResult> ReviewFreeTextAnswerAsync(
-            string modelKey,
+            int modelId,
             ReviewTask task,
             IReadOnlyList<GradingExampleSnapshot> testGradingExamples,
             CancellationToken cancellationToken)

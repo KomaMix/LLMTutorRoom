@@ -1,5 +1,5 @@
 export const initialAccessForm = {
-  modelKey: "",
+  modelId: "",
   isEnabled: true,
   periodValue: 30,
   periodUnit: "days",
@@ -32,7 +32,7 @@ export function getPeriodSeconds(form) {
 
 export function serializeAccessForm(form) {
   return JSON.stringify({
-    modelKey: form.modelKey,
+    modelId: form.modelId,
     isEnabled: form.isEnabled,
     periodSeconds: getPeriodSeconds(form),
     maxChecks: Number(form.maxChecks)

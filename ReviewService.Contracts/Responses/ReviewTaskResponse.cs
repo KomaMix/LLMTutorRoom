@@ -18,4 +18,5 @@ public sealed record ReviewTaskResponse(
     decimal Score,
     decimal MaxScore,
     string Feedback,
-    List<string> Findings);
+    List<string> Findings,
+    LlmExecutionResponse? LlmExecution = null);

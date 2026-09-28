@@ -227,7 +227,7 @@ public sealed class ReviewQueryService(
             review.StudentUserId,
             review.StudentName,
             review.Status,
-            review.ModelKeySnapshot,
+            review.ModelId,
             review.SubmittedAt,
             review.QueuedAt,
             review.StartedAt,
@@ -240,11 +240,11 @@ public sealed class ReviewQueryService(
             review.Summary,
             review.TaskResults
                 .OrderBy(task => task.Id)
-                .Select(ToResponse)
+                .Select(task => ToResponse(task, review.ModelId))
                 .ToList());
     }
 
-    private static ReviewTaskResponse ToResponse(ReviewTask task)
+    private static ReviewTaskResponse ToResponse(ReviewTask task, int? modelId)
     {
         var answerOptions = DeserializeAnswerOptions(task.AnswerOptionsJson);
         var feedback = task.Feedback;
@@ -282,7 +282,12 @@ public sealed class ReviewQueryService(
             task.Score,
             task.MaxScore,
             feedback,
-            findings);
+            findings,
+            modelId.HasValue && task.LlmDeploymentId.HasValue && task.LlmDeploymentUpdatedAt.HasValue
+                ? new LlmExecutionResponse(modelId.Value, task.LlmModelDisplayName ?? string.Empty,
+                    task.LlmDeploymentId.Value, task.LlmDeploymentName ?? string.Empty,
+                    task.LlmProviderModelId ?? string.Empty, task.LlmDeploymentUpdatedAt.Value)
+                : null);
     }
 
     private static List<ReviewAnswerOptionResponse> DeserializeAnswerOptions(string json)

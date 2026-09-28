@@ -1,3 +1,5 @@
+using LLMGateway.Middleware;
+using Shared.Auth;
 using LLMGateway.Data;
 using LLMGateway.Services;
 using Microsoft.EntityFrameworkCore;
@@ -14,6 +16,10 @@ builder.Services.AddSingleton<RateLimitService>();
 builder.Services.AddHttpClient();
 builder.Services.AddScoped<ChatExecutionService>();
 builder.Services.AddProblemDetails();
+builder.Services.AddExceptionHandler<GatewayExceptionHandler>();
+builder.Services.AddScoped<IModelManagementService, ModelManagementService>();
+builder.Services.AddScoped<IDeploymentProbe, DeploymentProbe>();
+builder.Services.AddJwtAuthentication(builder.Configuration);
 
 builder.Services.AddControllers()
     .AddJsonOptions(options =>
@@ -37,21 +43,12 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-app.UseExceptionHandler(exceptionHandlerApp =>
-{
-    exceptionHandlerApp.Run(async context =>
-    {
-        context.Response.StatusCode = StatusCodes.Status500InternalServerError;
-        await Results.Problem(
-            statusCode: StatusCodes.Status500InternalServerError,
-            title: "Unexpected error",
-            detail: "An unexpected server error occurred.")
-            .ExecuteAsync(context);
-    });
-});
+app.UseExceptionHandler();
+app.UseStatusCodePages();
 
 app.UseHttpsRedirection();
 
+app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();

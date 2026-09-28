@@ -5,7 +5,6 @@
   display: grid;
   place-items: start center;
   min-height: 100vh;
-  /* Keep the top offset independent of the selected role and form height. */
   padding: clamp(32px, 10vh, 120px) 32px 32px;
   background: var(--background-auth);
 }

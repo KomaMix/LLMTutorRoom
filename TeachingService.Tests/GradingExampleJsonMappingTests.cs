@@ -10,7 +10,6 @@ public sealed class GradingExampleJsonMappingTests
     {
         using var dbContext = CreateDbContext();
 
-        // ToQueryString compiles the JSON materializer without opening a database connection.
         var sql = dbContext.Tests
             .AsNoTracking()
             .Include(test => test.Versions)

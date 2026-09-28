@@ -97,12 +97,17 @@ public sealed class ReviewJobProcessor(
             try
             {
                 var llmResult = await llmGatewayReviewClient.ReviewFreeTextAnswerAsync(
-                    review.ModelKeySnapshot,
+                    review.ModelId ?? throw new InvalidOperationException("A model must be selected for LLM review."),
                     task,
                     JsonSerializer.Deserialize<List<GradingExampleSnapshot>>(
                         review.GradingExamplesJson, JsonHelper.Options) ?? [],
                     cancellationToken);
                 scoringService.ApplyLlmResult(task, llmResult, DateTimeOffset.UtcNow);
+                task.LlmDeploymentId = llmResult.Execution?.DeploymentId;
+                task.LlmDeploymentName = llmResult.Execution?.DeploymentName;
+                task.LlmProviderModelId = llmResult.Execution?.ProviderModelId;
+                task.LlmModelDisplayName = llmResult.Execution?.ModelDisplayName;
+                task.LlmDeploymentUpdatedAt = llmResult.Execution?.DeploymentUpdatedAt;
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
@@ -253,7 +258,7 @@ public sealed class ReviewJobProcessor(
             return error;
         }
 
-        if (string.IsNullOrWhiteSpace(review.ModelKeySnapshot))
+        if (review.ModelId is null or <= 0)
         {
             const string error = "Для теста не выбрана LLM-модель проверки.";
             review.LlmQuotaReservationError = error;
@@ -278,14 +283,11 @@ public sealed class ReviewJobProcessor(
 
         var quota = await modelAccessService.TryConsumeChecksAsync(
             review.TeacherUserId,
-            review.ModelKeySnapshot,
+            review.ModelId.Value,
             llmTaskCount,
             cancellationToken);
         if (quota.Status == ModelQuotaConsumptionStatus.Allowed)
         {
-            // Keep the quota debit and its durable reservation marker indivisible. The quota
-            // service uses this same DbContext/transaction, so a crash can never debit usage
-            // without preventing a second debit on the next worker pass.
             await dbContext.SaveChangesAsync(cancellationToken);
             if (transaction is not null)
                 await transaction.CommitAsync(cancellationToken);
@@ -294,7 +296,7 @@ public sealed class ReviewJobProcessor(
 
         review.LlmQuotaReservedAt = null;
         var quotaError = ReviewCreationService.CreateQuotaError(
-            review.ModelKeySnapshot,
+            review.ModelId.Value,
             quota);
         review.LlmQuotaReservationError = quotaError;
         return quotaError;

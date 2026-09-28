@@ -83,9 +83,6 @@ public sealed class ReviewStorageCleanupService(
             .SingleOrDefaultAsync(cancellationToken);
         if (stalePending is not null)
         {
-            // Pending answers are intentionally retained: deleting them would make a late
-            // policy event impossible to recover. This warning is the operator signal to
-            // inspect the integration DLQ and republish the exact policy revision.
             logger.LogError(
                 "{PendingSubmissionCount} submissions have waited for a review policy since at least {OldestReceivedAt}. Inspect the integration DLQ; pending answers were retained.",
                 stalePending.Count,

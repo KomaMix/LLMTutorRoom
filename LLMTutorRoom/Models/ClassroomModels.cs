@@ -5,7 +5,6 @@ using TeachingService.Contracts.Models;
 
 namespace LLMTutorRoom.Models
 {
-    /// <summary>Classroom data available to a teacher.</summary>
     public sealed record TeacherClassroomOverviewResponse(
         List<CourseTestDto> Tests,
         List<LanguageModel> Models,
@@ -14,7 +13,6 @@ namespace LLMTutorRoom.Models
         DashboardMetrics Metrics,
         string? TerminalReviewsNextCursor);
 
-    /// <summary>Classroom data available to a student.</summary>
     public sealed record StudentClassroomOverviewResponse(
         List<StudentCourseTestResponse> Tests,
         List<LanguageModel> Models,
@@ -23,7 +21,6 @@ namespace LLMTutorRoom.Models
         DashboardMetrics Metrics,
         string? TerminalReviewsNextCursor);
 
-    /// <summary>A test exposed to a student without teacher grading data.</summary>
     public sealed record StudentCourseTestResponse(
         string Id,
         string TeacherUserId,
@@ -33,12 +30,11 @@ namespace LLMTutorRoom.Models
         DateTimeOffset Deadline,
         int TimeLimitMinutes,
         string Summary,
-        string LlmModelKey,
+        int? LlmModelId,
         int VersionNumber,
         decimal TotalPoints,
         List<StudentTestTaskResponse> Tasks);
 
-    /// <summary>A test task exposed to a student without correct answers or grading examples.</summary>
     public sealed record StudentTestTaskResponse(
         string Id,
         TestTaskType Type,
@@ -51,7 +47,6 @@ namespace LLMTutorRoom.Models
         DateTimeOffset CreatedAt,
         List<StudentAnswerOptionResponse> Options);
 
-    /// <summary>An answer option exposed to a student without its correctness marker.</summary>
     public sealed record StudentAnswerOptionResponse(
         string Id,
         string Text);
@@ -70,7 +65,7 @@ namespace LLMTutorRoom.Models
 
     public sealed class LanguageModel
     {
-        public string Key { get; set; } = string.Empty;
+        public int Id { get; set; }
         public string DisplayName { get; set; } = string.Empty;
         public string Status { get; set; } = string.Empty;
         public int Priority { get; set; }

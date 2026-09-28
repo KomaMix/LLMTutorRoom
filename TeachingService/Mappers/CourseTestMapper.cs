@@ -26,7 +26,7 @@ namespace TeachingService.Mappers
                 Deadline = version.Deadline,
                 TimeLimitMinutes = version.TimeLimitMinutes,
                 Summary = version.Summary,
-                LlmModelKey = version.LlmModelKey,
+                LlmModelId = version.LlmModelId,
                 GradingExamples = GradingExamples.ToDtos(version.GradingExamples),
                 VersionNumber = version.VersionNumber,
                 ContentRevision = version.ContentRevision,

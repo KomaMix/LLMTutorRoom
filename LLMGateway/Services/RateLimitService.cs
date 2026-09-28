@@ -7,7 +7,7 @@ namespace LLMGateway.Services
     {
         private readonly object _syncRoot = new();
         private readonly Dictionary<int, int> _activeRequests = new();
-        private readonly Dictionary<RateLimitKey, Queue<DateTimeOffset>> _requests = new();
+        private readonly Dictionary<RateLimitKey, RequestWindow> _requests = new();
 
         public LimitCheckResult TryAcquire(
             int deploymentId,
@@ -32,7 +32,7 @@ namespace LLMGateway.Services
                             $"Rate limit rule '{rule.Id}' has invalid configuration.");
 
                     var key = new RateLimitKey(deploymentId, rule.Id);
-                    var queue = GetRequestQueue(key);
+                    var queue = GetRequestQueue(key, rule.WindowSeconds);
                     var window = TimeSpan.FromSeconds(rule.WindowSeconds);
                     var windowStart = now - window;
 
@@ -45,8 +45,7 @@ namespace LLMGateway.Services
                     allowedQueues.Add(queue);
                 }
 
-                if (hasConcurrencyLimit)
-                    _activeRequests[deploymentId] = activeRequests + 1;
+                _activeRequests[deploymentId] = activeRequests + 1;
 
                 foreach (var queue in allowedQueues)
                     queue.Enqueue(now);
@@ -55,13 +54,8 @@ namespace LLMGateway.Services
             }
         }
 
-        public void Release(
-            int deploymentId,
-            int? maxConcurrentRequests)
+        public void Release(int deploymentId)
         {
-            if (maxConcurrentRequests.GetValueOrDefault() <= 0)
-                return;
-
             lock (_syncRoot)
             {
                 if (!_activeRequests.TryGetValue(deploymentId, out var activeRequests))
@@ -74,14 +68,15 @@ namespace LLMGateway.Services
             }
         }
 
-        private Queue<DateTimeOffset> GetRequestQueue(RateLimitKey key)
+        private Queue<DateTimeOffset> GetRequestQueue(RateLimitKey key, int windowSeconds)
         {
-            if (!_requests.TryGetValue(key, out var queue))
-                _requests[key] = queue = new Queue<DateTimeOffset>();
+            if (!_requests.TryGetValue(key, out var window) || window.Seconds != windowSeconds)
+                _requests[key] = window = new RequestWindow(windowSeconds, new Queue<DateTimeOffset>());
 
-            return queue;
+            return window.Requests;
         }
 
         private readonly record struct RateLimitKey(int DeploymentId, int RuleId);
+        private sealed record RequestWindow(int Seconds, Queue<DateTimeOffset> Requests);
     }
 }

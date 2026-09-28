@@ -76,7 +76,7 @@ export function createTeacherTaskActions({
         testId,
         versionNumber,
         contentRevision,
-        createTaskPayload(taskForm, Boolean(activeTest.llmModelKey))
+        createTaskPayload(taskForm, Boolean(activeTest.llmModelId))
       );
       if (isCurrentOperation("createTask", operation)) {
         const nextForm = createInitialTaskForm();
@@ -132,7 +132,7 @@ export function createTeacherTaskActions({
         versionNumber,
         contentRevision,
         taskId,
-        createTaskPayload(taskEditForm, Boolean(activeTest.llmModelKey))
+        createTaskPayload(taskEditForm, Boolean(activeTest.llmModelId))
       );
       if (isCurrentOperation("saveTask", operation)) {
         taskEditBaselineRef.current = taskEditForm;

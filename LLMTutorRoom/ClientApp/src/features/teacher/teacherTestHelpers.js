@@ -20,14 +20,14 @@ export const taskCheckModes = [
   { value: "manual", label: "Вручную" }
 ];
 
-export function createInitialTestForm(defaultModelKey = "") {
+export function createInitialTestForm(defaultModelId = "") {
   return {
     title: "",
     subject: "",
     summary: "",
     deadline: toInputDate(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)),
     timeLimitMinutes: 45,
-    llmModelKey: defaultModelKey,
+    llmModelId: defaultModelId,
     gradingExamples: []
   };
 }
@@ -57,7 +57,7 @@ export function createTestFormFromTest(test) {
     summary: test.summary,
     deadline: toInputDate(test.deadline),
     timeLimitMinutes: test.timeLimitMinutes,
-    llmModelKey: test.llmModelKey ?? "",
+    llmModelId: test.llmModelId ?? "",
     gradingExamples: copyGradingExamples(test.gradingExamples)
   };
 }
@@ -69,7 +69,7 @@ export function createTestPayload(form) {
     summary: form.summary,
     deadline: endOfLocalDayToIso(form.deadline),
     timeLimitMinutes: Number(form.timeLimitMinutes),
-    llmModelKey: form.llmModelKey,
+    llmModelId: form.llmModelId ? Number(form.llmModelId) : null,
     gradingExamples: createGradingExamplesPayload(form.gradingExamples)
   };
 }
@@ -112,16 +112,16 @@ export function createTaskPayload(form, hasLlmModel = true) {
   };
 }
 
-export function getModelOptions(models, currentModelKey) {
-  if (!currentModelKey || models.some(model => model.key === currentModelKey)) {
+export function getModelOptions(models, currentModelId) {
+  if (!currentModelId || models.some(model => model.id === currentModelId)) {
     return models;
   }
 
   return [
     ...models,
     {
-      key: currentModelKey,
-      displayName: currentModelKey,
+      id: currentModelId,
+      displayName: `Модель #${currentModelId} (недоступна)`,
       remainingChecks: 0,
       maxChecks: 0
     }
@@ -129,7 +129,7 @@ export function getModelOptions(models, currentModelKey) {
 }
 
 export function getModelOptionLabel(model) {
-  const name = model.displayName || model.key;
+  const name = model.displayName || model.id;
   if (typeof model.remainingChecks !== "number" || typeof model.maxChecks !== "number") {
     return name;
   }

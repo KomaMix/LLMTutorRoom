@@ -105,7 +105,6 @@ public sealed class ReviewQueueMaintenanceService(
                     {
                         ReviewId = review.Id,
                         AttemptId = review.AttemptId,
-                        ModelKey = review.ModelKeySnapshot,
                         RequestedAt = now
                     },
                     retryDelaySeconds: null,

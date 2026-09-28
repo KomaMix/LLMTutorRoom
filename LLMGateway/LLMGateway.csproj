@@ -23,7 +23,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="Models\" />
+    <ProjectReference Include="..\Shared.Auth\Shared.Auth.csproj" />
   </ItemGroup>
 
 </Project>

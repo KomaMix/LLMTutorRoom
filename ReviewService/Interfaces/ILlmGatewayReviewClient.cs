@@ -6,7 +6,7 @@ namespace ReviewService.Interfaces;
 public interface ILlmGatewayReviewClient
 {
     Task<LlmTaskReviewResult> ReviewFreeTextAnswerAsync(
-        string modelKey,
+        int modelId,
         ReviewTask task,
         IReadOnlyList<GradingExampleSnapshot> testGradingExamples,
         CancellationToken cancellationToken);

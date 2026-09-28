@@ -14,6 +14,8 @@ import { useOverview } from "./useOverview.js";
 
 const AdminTeachers = lazy(() => import("../features/admin/AdminTeachers.jsx")
   .then(module => ({ default: module.AdminTeachers })));
+const AdminModels = lazy(() => import("../features/admin/AdminModels.jsx")
+  .then(module => ({ default: module.AdminModels })));
 const AdminModelAccess = lazy(() => import("../features/admin/AdminModelAccess.jsx")
   .then(module => ({ default: module.AdminModelAccess })));
 const TeacherRoutes = lazy(() => import("../features/teacher/TeacherRoutes.jsx")
@@ -34,6 +36,7 @@ function AdminRoutes() {
   return (
     <Routes>
       <Route path="/admin/teachers" element={<AdminTeachers />} />
+      <Route path="/admin/models" element={<AdminModels />} />
       <Route path="/admin/model-access" element={<AdminModelAccess />} />
       <Route path="*" element={<Navigate to="/admin/teachers" replace />} />
     </Routes>

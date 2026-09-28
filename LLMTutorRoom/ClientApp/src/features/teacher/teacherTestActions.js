@@ -53,7 +53,7 @@ export function createTeacherTestActions({
     try {
       const test = await createTestRequest(createTestPayload(testForm));
       if (isCurrentOperation("createTest", operation)) {
-        const nextForm = createInitialTestForm(models[0]?.key ?? "");
+        const nextForm = createInitialTestForm(models[0]?.id ?? "");
         createTestBaselineRef.current = nextForm;
         setTestForm(nextForm);
         setTestMessage("Тест создан.");

@@ -1,265 +1,72 @@
-using LLMGateway.Data;
-using LLMGateway.Data.Models;
 using LLMGateway.DTOs.Models;
+using LLMGateway.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
-namespace LLMGateway.Controllers
+namespace LLMGateway.Controllers;
+
+[ApiController]
+[Authorize(Roles = "Admin")]
+[Route("api/models")]
+public sealed class ModelsController(IModelManagementService service) : ControllerBase
 {
-    [ApiController]
-    [Route("api/models")]
-    public class ModelsController : ControllerBase
+    [HttpGet]
+    public async Task<ActionResult<List<ModelResponse>>> GetModels(CancellationToken ct) => Ok(await service.GetModelsAsync(ct));
+
+    [HttpGet("{modelId:int}")]
+    public async Task<ActionResult<ModelResponse>> GetModel(int modelId, CancellationToken ct) =>
+        await service.GetModelAsync(modelId, ct) is { } result ? Ok(result) : NotFound();
+
+    [HttpPost]
+    public async Task<ActionResult<ModelResponse>> CreateModel(CreateModelRequest request, CancellationToken ct)
     {
-        private readonly AppDbContext _dbContext;
-
-        public ModelsController(AppDbContext dbContext)
-        {
-            _dbContext = dbContext;
-        }
-
-        [HttpGet]
-        public async Task<ActionResult<List<string>>> GetModels(CancellationToken cancellationToken)
-        {
-            var models = await _dbContext.Models
-                .AsNoTracking()
-                .Where(m => m.Deployments.Any(d => d.IsEnabled))
-                .OrderBy(m => m.Key)
-                .Select(m => m.Key)
-                .ToListAsync(cancellationToken);
-
-            return Ok(models);
-        }
-
-        [HttpGet("catalog")]
-        public async Task<ActionResult<List<ModelResponse>>> GetModelCatalog(
-            CancellationToken cancellationToken)
-        {
-            var models = await _dbContext.Models
-                .AsNoTracking()
-                .Include(model => model.Deployments)
-                .OrderBy(model => model.Key)
-                .ToListAsync(cancellationToken);
-
-            return Ok(models.Select(ToResponse).ToList());
-        }
-
-        [HttpPost]
-        public async Task<ActionResult<ModelResponse>> CreateModel(
-            [FromBody] CreateModelRequest request,
-            CancellationToken cancellationToken)
-        {
-            if (await _dbContext.Models.AnyAsync(m => m.Key == request.Key, cancellationToken))
-                return Conflict($"Model '{request.Key}' already exists.");
-
-            var model = new Model
-            {
-                Key = request.Key,
-                DisplayName = request.DisplayName,
-                Description = request.Description
-            };
-            _dbContext.Models.Add(model);
-            await _dbContext.SaveChangesAsync(cancellationToken);
-
-            return CreatedAtAction(nameof(GetModel), new { modelKey = model.Key }, ToResponse(model));
-        }
-
-        [HttpGet("{modelKey}")]
-        public async Task<ActionResult<ModelResponse>> GetModel(
-            [FromRoute] string modelKey,
-            CancellationToken cancellationToken)
-        {
-            var model = await GetModelWithDeploymentsAsync(modelKey, cancellationToken);
-            return model is null ? NotFound() : Ok(ToResponse(model));
-        }
-
-        [HttpDelete("{modelKey}")]
-        public async Task<IActionResult> DeleteModel(
-            [FromRoute] string modelKey,
-            CancellationToken cancellationToken)
-        {
-            var model = await _dbContext.Models
-                .Include(m => m.Deployments)
-                .SingleOrDefaultAsync(m => m.Key == modelKey, cancellationToken);
-            if (model is null)
-                return NotFound();
-
-            _dbContext.Models.Remove(model);
-            await _dbContext.SaveChangesAsync(cancellationToken);
-            return NoContent();
-        }
-
-        [HttpPost("{modelKey}/deployments")]
-        public async Task<ActionResult<ModelDeploymentResponse>> CreateDeployment(
-            [FromRoute] string modelKey,
-            [FromBody] CreateModelDeploymentRequest request,
-            CancellationToken cancellationToken)
-        {
-            var model = await _dbContext.Models.SingleOrDefaultAsync(m => m.Key == modelKey, cancellationToken);
-            if (model is null)
-                return NotFound();
-
-            var deployment = new ModelDeployment
-            {
-                ModelId = model.Id,
-                Endpoint = request.Endpoint,
-                ApiKey = request.ApiKey,
-                ProviderModelId = request.ProviderModelId,
-                IsEnabled = request.IsEnabled,
-                Priority = request.Priority,
-                MaxConcurrentRequests = request.MaxConcurrentRequests
-            };
-            _dbContext.ModelDeployments.Add(deployment);
-            await _dbContext.SaveChangesAsync(cancellationToken);
-
-            return CreatedAtAction(nameof(GetModel), new { modelKey }, ToResponse(deployment));
-        }
-
-        [HttpPut("deployments/{deploymentId:int}")]
-        public async Task<ActionResult<ModelDeploymentResponse>> UpdateDeployment(
-            [FromRoute] int deploymentId,
-            [FromBody] UpdateModelDeploymentRequest request,
-            CancellationToken cancellationToken)
-        {
-            var deployment = await _dbContext.ModelDeployments
-                .SingleOrDefaultAsync(d => d.Id == deploymentId, cancellationToken);
-            if (deployment is null)
-                return NotFound();
-
-            deployment.Endpoint = request.Endpoint;
-            deployment.ApiKey = request.ApiKey;
-            deployment.ProviderModelId = request.ProviderModelId;
-            deployment.IsEnabled = request.IsEnabled;
-            deployment.Priority = request.Priority;
-            deployment.MaxConcurrentRequests = request.MaxConcurrentRequests;
-            deployment.UpdatedAt = DateTime.UtcNow;
-
-            await _dbContext.SaveChangesAsync(cancellationToken);
-            return Ok(ToResponse(deployment));
-        }
-
-        [HttpDelete("deployments/{deploymentId:int}")]
-        public async Task<IActionResult> DeleteDeployment(
-            [FromRoute] int deploymentId,
-            CancellationToken cancellationToken)
-        {
-            var deployment = await _dbContext.ModelDeployments
-                .SingleOrDefaultAsync(d => d.Id == deploymentId, cancellationToken);
-            if (deployment is null)
-                return NotFound();
-
-            _dbContext.ModelDeployments.Remove(deployment);
-            await _dbContext.SaveChangesAsync(cancellationToken);
-            return NoContent();
-        }
-
-        [HttpPost("deployments/{deploymentId:int}/rate-limits")]
-        public async Task<ActionResult<RateLimitRuleResponse>> CreateRateLimitRule(
-            [FromRoute] int deploymentId,
-            [FromBody] CreateRateLimitRuleRequest request,
-            CancellationToken cancellationToken)
-        {
-            var deployment = await _dbContext.ModelDeployments
-                .SingleOrDefaultAsync(d => d.Id == deploymentId, cancellationToken);
-            if (deployment is null)
-                return NotFound();
-
-            var rules = deployment.RateLimitRules.ToList();
-            var rule = new ModelRateLimitRule
-            {
-                Id = await GetNextRateLimitRuleIdAsync(cancellationToken),
-                WindowSeconds = request.WindowSeconds,
-                MaxRequests = request.MaxRequests
-            };
-            rules.Add(rule);
-
-            deployment.RateLimitRules = rules.OrderBy(r => r.Id).ToList();
-            deployment.UpdatedAt = DateTime.UtcNow;
-            await _dbContext.SaveChangesAsync(cancellationToken);
-
-            return Ok(ToResponse(rule));
-        }
-
-        [HttpDelete("rate-limits/{rateLimitRuleId:int}")]
-        public async Task<IActionResult> DeleteRateLimitRule(
-            [FromRoute] int rateLimitRuleId,
-            CancellationToken cancellationToken)
-        {
-            var deployments = await _dbContext.ModelDeployments
-                .ToListAsync(cancellationToken);
-
-            foreach (var deployment in deployments)
-            {
-                var rules = deployment.RateLimitRules.ToList();
-                if (rules.All(r => r.Id != rateLimitRuleId))
-                    continue;
-
-                deployment.RateLimitRules = rules
-                    .Where(r => r.Id != rateLimitRuleId)
-                    .OrderBy(r => r.Id)
-                    .ToList();
-                deployment.UpdatedAt = DateTime.UtcNow;
-                await _dbContext.SaveChangesAsync(cancellationToken);
-                return NoContent();
-            }
-
-            return NotFound();
-        }
-
-        private Task<Model?> GetModelWithDeploymentsAsync(string modelKey, CancellationToken cancellationToken)
-        {
-            return _dbContext.Models
-                .AsNoTracking()
-                .Include(m => m.Deployments)
-                .SingleOrDefaultAsync(m => m.Key == modelKey, cancellationToken);
-        }
-
-        private static ModelResponse ToResponse(Model model)
-        {
-            return new ModelResponse
-            {
-                Key = model.Key,
-                DisplayName = model.DisplayName,
-                Description = model.Description,
-                Deployments = model.Deployments.Select(ToResponse).ToList()
-            };
-        }
-
-        private static ModelDeploymentResponse ToResponse(ModelDeployment deployment)
-        {
-            return new ModelDeploymentResponse
-            {
-                Id = deployment.Id,
-                Endpoint = deployment.Endpoint,
-                ProviderModelId = deployment.ProviderModelId,
-                IsEnabled = deployment.IsEnabled,
-                Priority = deployment.Priority,
-                MaxConcurrentRequests = deployment.MaxConcurrentRequests,
-                RateLimitRules = deployment.RateLimitRules.Select(ToResponse).ToList()
-            };
-        }
-
-        private static RateLimitRuleResponse ToResponse(ModelRateLimitRule rule)
-        {
-            return new RateLimitRuleResponse
-            {
-                Id = rule.Id,
-                WindowSeconds = rule.WindowSeconds,
-                MaxRequests = rule.MaxRequests
-            };
-        }
-
-        private async Task<int> GetNextRateLimitRuleIdAsync(CancellationToken cancellationToken)
-        {
-            var deployments = await _dbContext.ModelDeployments
-                .AsNoTracking()
-                .Select(d => d.RateLimitRules)
-                .ToListAsync(cancellationToken);
-
-            return deployments
-                .SelectMany(rules => rules)
-                .Select(r => r.Id)
-                .DefaultIfEmpty()
-                .Max() + 1;
-        }
+        var result = await service.CreateModelAsync(request, ct);
+        return CreatedAtAction(nameof(GetModel), new { modelId = result.Id }, result);
     }
+
+    [HttpPut("{modelId:int}")]
+    public async Task<ActionResult<ModelResponse>> UpdateModel(int modelId, UpdateModelRequest request, CancellationToken ct) =>
+        await service.UpdateModelAsync(modelId, request, ct) is { } result ? Ok(result) : NotFound();
+
+    [HttpGet("deployments/{deploymentId:int}")]
+    public async Task<ActionResult<ModelDeploymentResponse>> GetDeployment(int deploymentId, CancellationToken ct) =>
+        await service.GetDeploymentAsync(deploymentId, ct) is { } result ? Ok(result) : NotFound();
+
+    [HttpPost("{modelId:int}/deployments")]
+    public async Task<ActionResult<ModelDeploymentResponse>> CreateDeployment(int modelId, CreateModelDeploymentRequest request, CancellationToken ct)
+    {
+        var result = await service.CreateDeploymentAsync(modelId, request, ct);
+        return CreatedAtAction(nameof(GetDeployment), new { deploymentId = result.Id }, result);
+    }
+
+    [HttpPut("deployments/{deploymentId:int}")]
+    public async Task<ActionResult<ModelDeploymentResponse>> UpdateDeployment(int deploymentId, UpdateModelDeploymentRequest request, CancellationToken ct) =>
+        await service.UpdateDeploymentAsync(deploymentId, request, ct) is { } result ? Ok(result) : NotFound();
+
+    [HttpDelete("deployments/{deploymentId:int}")]
+    public async Task<IActionResult> DeleteDeployment(int deploymentId, CancellationToken ct) =>
+        await service.DeleteDeploymentAsync(deploymentId, ct) ? NoContent() : NotFound();
+
+    [HttpPost("deployments/{deploymentId:int}/check")]
+    public async Task<ActionResult<DeploymentCheckResponse>> CheckDeployment(int deploymentId, CancellationToken ct) =>
+        await service.CheckDeploymentAsync(deploymentId, ct) is { } result ? Ok(result) : NotFound();
+
+    [HttpGet("rate-limits/{ruleId:int}")]
+    public async Task<ActionResult<RateLimitRuleResponse>> GetRateLimit(int ruleId, CancellationToken ct) =>
+        await service.GetRateLimitAsync(ruleId, ct) is { } result ? Ok(result) : NotFound();
+
+    [HttpPost("deployments/{deploymentId:int}/rate-limits")]
+    public async Task<ActionResult<RateLimitRuleResponse>> CreateRateLimit(int deploymentId, CreateRateLimitRuleRequest request, CancellationToken ct)
+    {
+        var result = await service.CreateRateLimitAsync(deploymentId, request, ct);
+        return CreatedAtAction(nameof(GetRateLimit), new { ruleId = result.Id }, result);
+    }
+
+    [HttpPut("rate-limits/{ruleId:int}")]
+    public async Task<ActionResult<RateLimitRuleResponse>> UpdateRateLimit(int ruleId, UpdateRateLimitRuleRequest request, CancellationToken ct) =>
+        await service.UpdateRateLimitAsync(ruleId, request, ct) is { } result ? Ok(result) : NotFound();
+
+    [HttpDelete("rate-limits/{ruleId:int}")]
+    public async Task<IActionResult> DeleteRateLimit(int ruleId, CancellationToken ct) =>
+        await service.DeleteRateLimitAsync(ruleId, ct) ? NoContent() : NotFound();
 }

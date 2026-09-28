@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using TeachingService.Contracts.Enums;
 using TeachingService.Contracts.Models;
 
@@ -11,7 +12,8 @@ namespace TeachingService.Contracts.Requests
         public CourseTestStatus Status { get; set; } = CourseTestStatus.Draft;
         public DateTimeOffset? Deadline { get; set; }
         public int TimeLimitMinutes { get; set; } = 45;
-        public string LlmModelKey { get; set; } = string.Empty;
+        [Range(1, int.MaxValue)]
+        public int? LlmModelId { get; set; }
         public List<GradingExampleDto> GradingExamples { get; set; } = new();
     }
 }

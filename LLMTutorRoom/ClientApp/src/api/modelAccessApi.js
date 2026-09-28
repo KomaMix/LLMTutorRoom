@@ -11,9 +11,9 @@ export function getTeacherModelAccess(teacherId, { signal } = {}) {
   );
 }
 
-export function saveTeacherModelAccess(teacherId, modelKey, payload) {
+export function saveTeacherModelAccess(teacherId, modelId, payload) {
   return apiRequest(
-    `/api/model-access/models/${encodeURIComponent(modelKey)}/teachers/${encodeURIComponent(teacherId)}`,
+    `/api/model-access/models/${encodeURIComponent(modelId)}/teachers/${encodeURIComponent(teacherId)}`,
     {
       method: "PUT",
       body: payload
@@ -21,9 +21,9 @@ export function saveTeacherModelAccess(teacherId, modelKey, payload) {
   );
 }
 
-export function deleteTeacherModelAccess(teacherId, modelKey) {
+export function deleteTeacherModelAccess(teacherId, modelId) {
   return apiRequest(
-    `/api/model-access/models/${encodeURIComponent(modelKey)}/teachers/${encodeURIComponent(teacherId)}`,
+    `/api/model-access/models/${encodeURIComponent(modelId)}/teachers/${encodeURIComponent(teacherId)}`,
     { method: "DELETE" }
   );
 }

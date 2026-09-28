@@ -43,8 +43,6 @@ function hasPendingResults(overview) {
       return true;
     }
 
-    // A missing old review may simply live behind the terminal cursor. Newly
-    // submitted attempts still receive a short delivery grace window.
     return submittedAt > oldestLoadedTerminalTime
       || submittedAt >= recentSubmissionThreshold;
   });
@@ -86,7 +84,6 @@ function StudentTestsRoute({ overview, refresh, updateAttempt }) {
   const { availableTests, attemptByTestId } = useStudentTestAvailability(
     overview.tests,
     overview.attempts);
-  // Keep the requested attempt mounted until the navigation guard finishes saving.
   const selectedTest = overview.tests.find(test => test.id === testId)
     ?? availableTests[0]
     ?? null;

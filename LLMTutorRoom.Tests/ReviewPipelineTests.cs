@@ -273,7 +273,7 @@ public sealed class ReviewPipelineTests
             Status = status,
             Deadline = DateTimeOffset.UtcNow.AddDays(1),
             TimeLimitMinutes = 45,
-            LlmModelKey = "gemma3:12b",
+            LlmModelId = 1,
             VersionNumber = versionNumber,
             TotalPoints = tasks.Sum(task => task.MaxPoints),
             Tasks = tasks.ToList()
@@ -322,7 +322,7 @@ public sealed class ReviewPipelineTests
             StudentUserId: "student",
             StudentName: "Student",
             Status: ReviewStatus.ManualReview,
-            ModelKey: test.LlmModelKey,
+            ModelId: test.LlmModelId,
             SubmittedAt: DateTimeOffset.UtcNow,
             QueuedAt: null,
             StartedAt: null,

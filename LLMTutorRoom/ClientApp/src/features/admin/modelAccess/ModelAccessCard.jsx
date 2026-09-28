@@ -3,7 +3,7 @@ import { formatDate, formatPeriod } from "../../../shared/lib/dates.js";
 
 export function ModelAccessCard({
   access,
-  busyModelKey,
+  busyModelId,
   canMutateAccess,
   isEditing,
   onEdit,
@@ -25,8 +25,8 @@ export function ModelAccessCard({
             <Bot size={18} aria-hidden="true" />
           </span>
           <div>
-            <strong>{access.displayName || access.modelKey}</strong>
-            <span>{access.modelKey}</span>
+            <strong>{access.displayName || access.modelId}</strong>
+            <span>{access.modelId}</span>
           </div>
         </div>
         <div className="admin-access-state-group">
@@ -74,7 +74,7 @@ export function ModelAccessCard({
         <button
           type="button"
           className="button secondary"
-          aria-label={`Изменить доступ к модели ${access.displayName || access.modelKey}`}
+          aria-label={`Изменить доступ к модели ${access.displayName || access.modelId}`}
           disabled={!canMutateAccess}
           onClick={() => onEdit(access)}
         >
@@ -85,11 +85,11 @@ export function ModelAccessCard({
           type="button"
           className="icon-button danger"
           title="Удалить доступ"
-          aria-label={`Удалить доступ к модели ${access.displayName || access.modelKey}`}
-          disabled={!canMutateAccess || busyModelKey === access.modelKey}
+          aria-label={`Удалить доступ к модели ${access.displayName || access.modelId}`}
+          disabled={!canMutateAccess || busyModelId === access.modelId}
           onClick={() => onRemove(access)}
         >
-          {busyModelKey === access.modelKey
+          {busyModelId === access.modelId
             ? <Loader2 className="spin" size={16} aria-hidden="true" />
             : <Trash2 size={16} aria-hidden="true" />}
         </button>

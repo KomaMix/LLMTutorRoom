@@ -26,7 +26,7 @@ Routes:
 - `/api/attempts` and `/api/attempts/*` -> AttemptService
 - `/api/reviews/*` -> ReviewService
 - `/api/model-access/*` -> ReviewService
-- `/api/llm/*` -> LLMGateway, with `/api/llm/chat/...` rewritten to `/api/chat/...`
+- `/api/llm/models*` -> административный API LLMGateway с JWT и ролью Admin; служебные вызовы `/internal/chat/{modelId}` выполняются напрямую без аутентификации
 - `/` -> LLMTutorRoom frontend
 
 Nginx explicitly returns `404` for `/internal` and `/internal/*`; these paths

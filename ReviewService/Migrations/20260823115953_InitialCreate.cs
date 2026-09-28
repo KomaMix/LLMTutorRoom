@@ -6,10 +6,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 namespace ReviewService.Migrations
 {
-    /// <inheritdoc />
     public partial class InitialCreate : Migration
     {
-        /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.CreateTable(
@@ -59,7 +57,7 @@ namespace ReviewService.Migrations
                     StudentUserId = table.Column<string>(type: "character varying(450)", maxLength: 450, nullable: false),
                     StudentName = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
                     Status = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
-                    ModelKeySnapshot = table.Column<string>(type: "character varying(300)", maxLength: 300, nullable: false),
+                    ModelId = table.Column<int>(type: "integer", nullable: true),
                     SubmittedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     QueuedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
                     StartedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
@@ -88,7 +86,7 @@ namespace ReviewService.Migrations
                     Id = table.Column<int>(type: "integer", nullable: false)
                         .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
                     TeacherUserId = table.Column<string>(type: "character varying(450)", maxLength: 450, nullable: false),
-                    ModelKey = table.Column<string>(type: "character varying(300)", maxLength: 300, nullable: false),
+                    ModelId = table.Column<int>(type: "integer", nullable: false),
                     IsEnabled = table.Column<bool>(type: "boolean", nullable: false),
                     PeriodSeconds = table.Column<int>(type: "integer", nullable: false),
                     MaxChecks = table.Column<int>(type: "integer", nullable: false),
@@ -107,7 +105,7 @@ namespace ReviewService.Migrations
                     Id = table.Column<int>(type: "integer", nullable: false)
                         .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
                     TeacherUserId = table.Column<string>(type: "character varying(450)", maxLength: 450, nullable: false),
-                    ModelKey = table.Column<string>(type: "character varying(300)", maxLength: 300, nullable: false),
+                    ModelId = table.Column<int>(type: "integer", nullable: false),
                     PeriodStart = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     PeriodSeconds = table.Column<int>(type: "integer", nullable: false),
                     UsedChecks = table.Column<int>(type: "integer", nullable: false),
@@ -129,7 +127,7 @@ namespace ReviewService.Migrations
                     Revision = table.Column<int>(type: "integer", nullable: false),
                     TeacherUserId = table.Column<string>(type: "character varying(450)", maxLength: 450, nullable: false),
                     TestTitle = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: false),
-                    ModelKeySnapshot = table.Column<string>(type: "character varying(300)", maxLength: 300, nullable: false),
+                    ModelId = table.Column<int>(type: "integer", nullable: true),
                     Tasks = table.Column<string>(type: "jsonb", nullable: false),
                     PublishedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     ReceivedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
@@ -155,6 +153,11 @@ namespace ReviewService.Migrations
                     StudentAnswer = table.Column<string>(type: "text", nullable: false),
                     WrongAnswerPenalty = table.Column<decimal>(type: "numeric", nullable: false),
                     AnswerOptions = table.Column<string>(type: "jsonb", nullable: false),
+                    LlmDeploymentId = table.Column<int>(type: "integer", nullable: true),
+                    LlmDeploymentName = table.Column<string>(type: "text", nullable: true),
+                    LlmProviderModelId = table.Column<string>(type: "text", nullable: true),
+                    LlmModelDisplayName = table.Column<string>(type: "text", nullable: true),
+                    LlmDeploymentUpdatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
                     Attempts = table.Column<int>(type: "integer", nullable: false),
                     NextRetryAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
                     CompletedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
@@ -251,9 +254,9 @@ namespace ReviewService.Migrations
                 column: "TeacherUserId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_TeacherModelAccesses_TeacherUserId_ModelKey",
+                name: "IX_TeacherModelAccesses_TeacherUserId_ModelId",
                 table: "TeacherModelAccesses",
-                columns: new[] { "TeacherUserId", "ModelKey" },
+                columns: new[] { "TeacherUserId", "ModelId" },
                 unique: true);
 
             migrationBuilder.CreateIndex(
@@ -262,9 +265,9 @@ namespace ReviewService.Migrations
                 column: "TeacherUserId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_TeacherModelUsages_TeacherUserId_ModelKey_PeriodStart_Perio~",
+                name: "IX_TeacherModelUsages_TeacherUserId_ModelId_PeriodStart_Period~",
                 table: "TeacherModelUsages",
-                columns: new[] { "TeacherUserId", "ModelKey", "PeriodStart", "PeriodSeconds" },
+                columns: new[] { "TeacherUserId", "ModelId", "PeriodStart", "PeriodSeconds" },
                 unique: true);
 
             migrationBuilder.CreateIndex(
@@ -274,7 +277,6 @@ namespace ReviewService.Migrations
                 unique: true);
         }
 
-        /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropTable(

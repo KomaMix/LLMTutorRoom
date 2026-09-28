@@ -1,129 +1,129 @@
-# LLMGateway: маршрутизация запросов к моделям
+# LLMGateway: модели, подключения и лимиты
 
-## Назначение и границы владения
+LLMGateway владеет каталогом логических моделей и подключениями к провайдерам.
+Администратор управляет ими на странице `/admin/models` в разделе «Модели и
+подключения». Доступы преподавателей и квоты проверок остаются в ReviewService
+и на отдельной странице `/admin/model-access`.
 
-`LLMGateway` скрывает конкретные LLM-провайдеры за единым HTTP-контрактом. Он владеет каталогом логических моделей, их deployment-конфигурациями, API-ключами и техническими ограничениями запросов. Для каждого chat-запроса сервис выбирает доступный deployment, проверяет его и при сбое пробует следующий.
+## Идентификаторы
 
-Gateway не решает, какую модель разрешено использовать преподавателю, не резервирует пользовательские квоты и не интерпретирует ответ модели. Ключ сохраняется в [`CourseTestVersion`](../TeachingService/Models/CourseTestVersion.cs); [`ReviewCreationService`](../ReviewService/Services/ReviewCreationService.cs) получает его snapshot, проверяет доступ и резервирует квоту, а [`LlmGatewayReviewClient`](../ReviewService/Services/LlmGatewayReviewClient.cs) формирует prompt и разбирает JSON результата. Gateway также не владеет пользователями, учебными тестами и очередями. В текущем коде у его контроллеров нет аутентификации или role-based authorization.
+- `Model.Id` – постоянный числовой идентификатор модели. Он передается между
+  сервисами, сохраняется в тестах, проверках, правах доступа и расходе квот.
+- `Model.Key` – уникальное редактируемое обозначение в каталоге, например
+  `gemma-12b`. Изменение ключа не меняет ссылки на модель.
+- `ModelDeployment.ProviderModelId` – точное имя модели в API провайдера,
+  например `gemma3:12b`. Оно используется только при обращении к провайдеру.
 
-## Ключевые сущности и правила
+Один `Model.Id` объединяет подключения к одной логической модели. Для перехода
+на другую модель или существенно другую версию создается новая запись каталога.
+Старые имена ключей, поиск по ключу и преобразование прежних данных не поддерживаются.
 
-[`Model`](../LLMGateway/Data/Models/Model.cs) — логическая модель с уникальным строковым `Key`, названием и описанием. Один ключ объединяет несколько [`ModelDeployment`](../LLMGateway/Data/Models/ModelDeployment.cs). Deployment хранит базовый URL OpenAI-compatible API, необязательный API key, реальный `ProviderModelId`, признак включения, числовой приоритет и необязательный предел параллельных запросов. Меньшее значение `Priority` означает более раннюю попытку; при равенстве используется меньший ID.
+## Управление каталогом
 
-[`ModelRateLimitRule`](../LLMGateway/Data/Models/ModelRateLimitRule.cs) задаёт скользящее окно: не больше `MaxRequests` за `WindowSeconds`. У deployment может быть несколько правил, и запрос должен пройти каждое из них. `MaxConcurrentRequests`, равный `null` или `0`, отключает ограничение параллелизма.
+У модели редактируются ключ, название, описание и архивное состояние. Архивная
+модель скрывается из нового выбора преподавателя и выдачи новых доступов.
+Уже сохраненные версии тестов и поставленные проверки продолжают ссылаться на
+ее ID. Физическое удаление модели через API не предусмотрено.
 
-Ограничения исполняет singleton [`RateLimitService`](../LLMGateway/Services/RateLimitService.cs). Счётчики находятся только в памяти процесса, защищены общей блокировкой и не сохраняются в PostgreSQL. Правила конфигурации сохраняются, а история запросов и число активных вызовов — нет.
+Деплоймент содержит название подключения, адрес OpenAI-compatible API, ID модели
+провайдера, API-ключ, приоритет, признак включения и предел одновременных запросов.
+Меньшее число приоритета выбирается первым, при равенстве используется ID.
+Отключение исключает деплоймент из новых запросов и не отменяет начатую генерацию.
+Удаление деплоймента удаляет его правила лимитов; метаданные завершенных проверок
+остаются в ReviewService.
 
-## Основной поток chat-запроса
+Сохраненный API-ключ не возвращается в ответах. Доступен только `hasApiKey`.
+При обновлении `apiKey: null` сохраняет ключ, непустое значение заменяет его,
+а `clearApiKey: true` удаляет. Замена и удаление в одном запросе запрещены.
+Ключ хранится в базе шлюза; в диагностические записи и результаты проверок он
+не включается. URL подключения принимает HTTP/HTTPS без встроенных учетных данных,
+query string и fragment.
 
-```mermaid
-sequenceDiagram
-    participant Client as ReviewService или клиент
-    participant API as ChatController
-    participant Exec as ChatExecutionService
-    participant DB as PostgreSQL
-    participant Limit as RateLimitService
-    participant Provider as OpenAI-compatible provider
+Кнопка проверки подключения использует сохраненные настройки: выполняет
+`GET {endpoint}/models` с таймаутом 3 секунды и ищет точное совпадение
+`data[].id` с `ProviderModelId`. Генерация текста не запускается. Возвращаются
+результат, безопасное пояснение, время проверки и длительность запроса.
+Это отдельная диагностика доступности, а не признак `IsEnabled`.
 
-    Client->>API: POST /api/chat/{modelKey}
-    API->>Exec: ExecuteAsync
-    Exec->>DB: модель и все deployments
-    loop включённые deployments по priority и ID
-        Exec->>Limit: TryAcquire
-        alt лимит исчерпан
-            Exec->>Exec: перейти к следующему deployment
-        else запрос допущен
-            Exec->>Provider: GET {endpoint}/models
-            alt health check неуспешен
-                Exec->>Limit: Release concurrency slot, если был
-                Exec->>Exec: перейти к следующему deployment
-            else health check успешен
-                Exec->>Provider: chat completion для ProviderModelId
-                alt chat-вызов успешен
-                    Provider-->>Exec: текст ответа
-                    Exec->>Limit: Release concurrency slot, если был
-                    Exec-->>API: Completed
-                    API-->>Client: 200, model + text
-                else ошибка или таймаут chat-вызова
-                    Exec->>Limit: Release concurrency slot, если был
-                    Exec->>Exec: перейти к следующему deployment
-                end
-            end
-        end
-    end
+## API и авторизация
+
+Все `/api/models` требуют JWT с ролью `Admin`, включая прямые обращения к
+порту шлюза. Nginx публикует их как `/api/llm/models`.
+
+| Метод и маршрут | Назначение |
+| --- | --- |
+| `GET /api/models` | Полный каталог с деплойментами |
+| `POST /api/models` | Создание модели |
+| `GET /api/models/{modelId}` | Чтение модели |
+| `PUT /api/models/{modelId}` | Редактирование или архивирование |
+| `POST /api/models/{modelId}/deployments` | Создание деплоймента |
+| `GET /api/models/deployments/{deploymentId}` | Чтение деплоймента |
+| `PUT /api/models/deployments/{deploymentId}` | Изменение подключения и параллелизма |
+| `DELETE /api/models/deployments/{deploymentId}` | Удаление подключения |
+| `POST /api/models/deployments/{deploymentId}/check` | Проверка каталога провайдера |
+| `POST /api/models/deployments/{deploymentId}/rate-limits` | Создание ограничения |
+| `GET /api/models/rate-limits/{ruleId}` | Чтение ограничения |
+| `PUT /api/models/rate-limits/{ruleId}` | Изменение ограничения |
+| `DELETE /api/models/rate-limits/{ruleId}` | Удаление ограничения |
+
+ReviewService использует `GET /internal/models/catalog` и
+`POST /internal/chat/{modelId}` без аутентификации. Каталог содержит
+ID, ключ, название, архивное состояние и наличие включенного деплоймента;
+адреса подключений и секреты не передаются.
+Служебные маршруты не публикуются через nginx.
+
+Параметры `Auth:Jwt` шлюза нужны для пользовательского доступа к
+административному API и должны совпадать с параметрами выдачи JWT в AuthService.
+
+Примеры всех операций находятся в [LLMGateway.http](../LLMGateway/LLMGateway.http).
+
+## Исполнение и ограничения
+
+Правила хранятся в таблице `ModelRateLimitRules` с внешним ключом `DeploymentId`.
+ID генерирует база данных. Каждое правило задает скользящее окно от 1 до 86400
+секунд и максимум от 1 до 1000000 запросов; запрос должен пройти все правила.
+Пустой `MaxConcurrentRequests` означает отсутствие ограничения параллелизма,
+иначе допустимо положительное целое число.
+
+Счетчики находятся в памяти одного процесса шлюза. Перезапуск сбрасывает их,
+между экземплярами они не распределяются. Изменение максимума запросов сохраняет
+расход текущего окна; изменение длительности окна начинает новый счетчик правила
+при следующем обращении. При включении лимита параллелизма учитываются уже
+выполняющиеся вызовы, даже если они начались без ограничения.
+
+Шлюз читает текущие подключения по ID модели. Для каждого подходящего деплоймента
+он резервирует лимиты, проверяет каталог провайдера и вызывает генерацию.
+Неудачная попытка также занимает место в окне запросов. Слот параллелизма
+освобождается при любом результате. При недоступности или исчерпании лимита
+используется следующий деплоймент той же модели.
+
+Неизвестный ID дает `404`, отсутствие доступного подключения – `503`,
+исчерпание лимитов – `429`, сбой генерации – `502`, таймаут генерации – `504`.
+ReviewService показывает причину ожидания и планирует повторную проверку.
+
+Успешный ответ содержит текст и фактические `ModelId`, `DeploymentId`,
+`ProviderModelId`, названия модели и деплоймента, а также `DeploymentUpdatedAt`.
+ReviewService сохраняет эти данные у результата задания и показывает их
+преподавателю. Последующее редактирование каталога не переписывает этот снимок.
+Дата настроек используется для диагностики, не для блокировки конкурентных правок.
+
+## Чистое окружение разработки
+
+Начальные миграции TeachingService, ReviewService и LLMGateway обновлены под
+новую схему. Старые базы с уже примененными миграциями нужно пересоздать.
+Вместе с ними очищаются связанные попытки, outbox/inbox и сообщения RabbitMQ:
+сохраненные сообщения с прежними ключами несовместимы с новым контрактом.
+
+Для полного Compose-окружения, если все прежние development-данные больше не нужны:
+
+```bash
+docker compose down --volumes
+docker compose up -d --build
 ```
 
-[`ChatExecutionService`](../LLMGateway/Services/ChatExecutionService.cs) сначала отличает неизвестный ключ (`404`) от модели без включённых deployment (`503`). Перед фактическим вызовом он резервирует лимиты и выполняет `GET /models` с таймаутом три секунды, добавляя Bearer API key, если он задан. Проверка успешна только при успешном HTTP-статусе и точном совпадении одного из `data[].id` с `ProviderModelId`; отсутствие модели или некорректный каталог означает неуспешную проверку и переход к следующему deployment. Затем [`ChatClientFactory`](../LLMGateway/Services/ChatClientFactory.cs) создаёт OpenAI-compatible клиент, а `ProviderModelId` явно передаётся как model ID. Пустой API key заменяется техническим значением `openai-compatible`.
-
-Если попытка неуспешна, перебор продолжается. Когда исчерпаны все deployment, итоговый статус выбирается с приоритетом: ошибка provider (`502`), таймаут chat-вызова (`504`), недоступность health check (`503`), rate limit (`429`), concurrency limit (`429`).
-
-## Зависимости и HTTP-граница
-
-Основной потребитель — [`ReviewService`](../ReviewService/Services/LlmGatewayReviewClient.cs): он вызывает `/api/chat/{modelKey}` для свободных ответов и [`/api/models/catalog`](../ReviewService/Services/LlmGatewayModelCatalogClient.cs) для каталога. Nginx публикует маршруты gateway под префиксом `/api/llm/*`, удаляя сегмент `llm`; внутри compose `ReviewService` обращается напрямую к `http://llm-gateway:8080`.
-
-HTTP-интерфейс делится на две части:
-
-- `/api/chat/{modelKey}` принимает непустой список сообщений с ролями `system`, `user` или `assistant` и необязательную temperature от 0 до 2;
-- `/api/models` управляет моделями, deployments и rate-limit rules; `/api/models/catalog` возвращает полный каталог, а `GET /api/models` — только ключи с хотя бы одним включённым deployment.
-
-Исходящие зависимости — PostgreSQL и настроенные OpenAI-compatible HTTP API. RabbitMQ и другие backend-сервисы gateway не вызывает.
-
-## Минимальная настройка модели
-
-В Development каталог можно подготовить через Swagger либо двумя запросами к
-прямому порту gateway. Сначала создаётся логический ключ:
-
-```http
-POST http://localhost:5200/api/models
-Content-Type: application/json
-
-{
-  "key": "gemma3:12b",
-  "displayName": "Gemma 3 12B",
-  "description": "Локальная модель для проверки ответов"
-}
-```
-
-Затем к нему добавляется хотя бы один включённый deployment:
-
-```http
-POST http://localhost:5200/api/models/gemma3:12b/deployments
-Content-Type: application/json
-
-{
-  "endpoint": "http://host.docker.internal:11434/v1",
-  "providerModelId": "gemma3:12b",
-  "isEnabled": true,
-  "priority": 0,
-  "maxConcurrentRequests": 1
-}
-```
-
-`endpoint` должен быть доступен именно из окружения `LLMGateway`. После этого
-администратор отдельно выдаёт преподавателю доступ и квоту в интерфейсе — это
-уже данные `ReviewService`, а не gateway.
-
-## Данные и конфигурация
-
-[`AppDbContext`](../LLMGateway/Data/AppDbContext.cs) хранит `Models` и связанные с ними `ModelDeployments`; удаление модели каскадно удаляет deployments. Массив rate-limit rules сериализуется в одну колонку PostgreSQL `jsonb` с EF value comparer. API key сохраняется обычной строкой без прикладного шифрования, но намеренно отсутствует в response DTO. Миграция применяется автоматически при запуске для relational database.
-
-В [`appsettings.json`](../LLMGateway/appsettings.json) обязательна фактически только `ConnectionStrings:DefaultConnection`; provider endpoints и ключи создаются через model API, а не через конфигурацию. Таймаут health check зафиксирован в коде. Swagger доступен только в Development.
-
-## Ошибки и важные нюансы
-
-- Лимиты локальны одному процессу, сбрасываются при рестарте и не дают глобального ограничения при нескольких репликах.
-- Rate-limit timestamp записывается до health check. Недоступный или упавший provider всё равно расходует запрос в скользящем окне; только concurrency slot освобождается в `finally`.
-- Health-check timeout классифицируется как `ProviderUnavailable`; ошибка chat-вызова обнаруживается после него и допускает failover.
-- ID правила вычисляется как текущий глобальный максимум в JSON-массивах плюс один. Параллельное создание правил не защищено транзакционной последовательностью и может породить одинаковые ID.
-- API управления каталогом и chat endpoint не защищены. Если ограничение доступа требуется, его нужно обеспечить внешней сетевой политикой; текущий compose публикует и nginx-маршрут, и прямой порт `5200` на host.
-- Необработанные ошибки превращаются глобальным handler в обезличенный `500`; отмена исходного HTTP-запроса пробрасывается из execution service.
-
-## С чего начать чтение кода
-
-1. [`Program.cs`](../LLMGateway/Program.cs) — DI, PostgreSQL, миграции и обработка ошибок.
-2. [`ChatController.cs`](../LLMGateway/Controllers/ChatController.cs) — внешние статусы chat-вызова.
-3. [`ChatExecutionService.cs`](../LLMGateway/Services/ChatExecutionService.cs) — выбор deployment, health check и failover.
-4. [`RateLimitService.cs`](../LLMGateway/Services/RateLimitService.cs) — семантика окон и параллелизма.
-5. [`ModelsController.cs`](../LLMGateway/Controllers/ModelsController.cs) — изменение каталога и правила генерации ID.
-6. [`AppDbContext.cs`](../LLMGateway/Data/AppDbContext.cs) и [initial migration](../LLMGateway/Migrations/20260807135241_InitialCreate.cs) — хранение сущностей и JSONB.
-7. [`ChatExecutionServiceTests.cs`](../LLMGateway.Tests/ChatExecutionServiceTests.cs) — зафиксированные сценарии failover.
+Это удалит данные PostgreSQL и RabbitMQ этого Compose-проекта, включая учетные
+записи; development-пользователи создадутся заново при запуске. Команды здесь
+приведены для ручного выполнения. После запуска администратор создает модель,
+добавляет подключение, проверяет его и выдает преподавателю доступ и квоту.
+При локальных базах используется тот же порядок: остановить сервисы, пересоздать
+базы и очистить очереди, затем запустить все сервисы с согласованными контрактами.

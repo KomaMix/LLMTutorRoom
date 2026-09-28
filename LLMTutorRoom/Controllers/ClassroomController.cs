@@ -91,7 +91,6 @@ namespace LLMTutorRoom.Controllers
             }
             catch (JsonException)
             {
-                // The fallback below deliberately avoids exposing an arbitrary upstream body.
             }
 
             var statusCode = (int)result.StatusCode;

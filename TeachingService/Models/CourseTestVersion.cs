@@ -26,7 +26,7 @@ namespace TeachingService.Models
         public DateTimeOffset Deadline { get; set; }
         public int TimeLimitMinutes { get; set; }
         public string Summary { get; set; } = string.Empty;
-        public string LlmModelKey { get; set; } = string.Empty;
+        public int? LlmModelId { get; set; }
         public List<GradingExample> GradingExamples { get; set; } = [];
         public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
         public DateTimeOffset? PublishedAt { get; set; }

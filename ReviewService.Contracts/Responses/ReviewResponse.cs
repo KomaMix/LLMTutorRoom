@@ -12,7 +12,7 @@ public sealed record ReviewResponse(
     string StudentUserId,
     string? StudentName,
     ReviewStatus Status,
-    string ModelKey,
+    int? ModelId,
     DateTimeOffset SubmittedAt,
     DateTimeOffset? QueuedAt,
     DateTimeOffset? StartedAt,

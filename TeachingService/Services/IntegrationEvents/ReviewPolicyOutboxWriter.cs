@@ -52,7 +52,7 @@ namespace TeachingService.Services.IntegrationEvents
                 Revision = revision,
                 TeacherUserId = test.TeacherUserId,
                 TestTitle = version.Title,
-                ModelKey = version.LlmModelKey,
+                ModelId = version.LlmModelId,
                 GradingExamples = ToGradingExamples(version.GradingExamples),
                 Tasks = version.Tasks
                     .Where(task => !task.IsHidden)

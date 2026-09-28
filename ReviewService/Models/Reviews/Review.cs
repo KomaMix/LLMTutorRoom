@@ -13,7 +13,7 @@ public sealed class Review
     public string StudentUserId { get; set; } = string.Empty;
     public string? StudentName { get; set; }
     public ReviewStatus Status { get; set; } = ReviewStatus.Checked;
-    public string ModelKeySnapshot { get; set; } = string.Empty;
+    public int? ModelId { get; set; }
     public string GradingExamplesJson { get; set; } = "[]";
     public DateTimeOffset SubmittedAt { get; set; }
     public DateTimeOffset? QueuedAt { get; set; }

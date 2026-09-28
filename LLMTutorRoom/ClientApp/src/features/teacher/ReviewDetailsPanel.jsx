@@ -48,6 +48,14 @@ function ReviewTaskResult({ result, taskIndex }) {
         </div>
       </header>
 
+      {isLlm && result.llmExecution && (
+        <div className="teacher-review-copy-block">
+          <span>Модель, выполнившая проверку</span>
+          <p>{result.llmExecution.modelDisplayName} · {result.llmExecution.providerModelId}<br />
+            {result.llmExecution.deploymentName} · настройки от {formatDate(result.llmExecution.deploymentUpdatedAt)}</p>
+        </div>
+      )}
+
       <div className="teacher-review-copy-block">
         <span>Задание</span>
         <p>{result.taskPrompt?.trim() || "Текст задания не указан."}</p>
@@ -114,6 +122,15 @@ export function ReviewDetailsPanel({ review, children }) {
       <div className="teacher-review-total-score">
         <strong>{review.score ?? 0} из {review.maxScore}</strong>
       </div>
+
+      {review.status === "retry-scheduled" && (
+        <div className="teacher-review-copy-block">
+          <span>Ожидание повторной проверки</span>
+          <p>{review.taskResults.find(task => task.status === "retry-scheduled")?.lastError
+            || review.lastError || "Проверка будет запущена повторно."}</p>
+          {review.nextRetryAt && <p>Следующая попытка: {formatDate(review.nextRetryAt)}</p>}
+        </div>
+      )}
 
       {children}
 

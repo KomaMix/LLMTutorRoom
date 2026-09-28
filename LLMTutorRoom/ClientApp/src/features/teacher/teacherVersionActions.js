@@ -199,10 +199,7 @@ export function createTeacherVersionActions({
     if (publishedVersionNumber) {
       try {
         fallbackVersion = await getTestVersion(testId, publishedVersionNumber);
-      } catch {
-        // The DELETE already succeeded. The overview refresh below is the second
-        // recovery path; this failure must not be reported as a failed deletion.
-      }
+      } catch {}
     }
 
     if (fallbackVersion && isCurrentLogicalOperation("deleteVersion", operation)) {

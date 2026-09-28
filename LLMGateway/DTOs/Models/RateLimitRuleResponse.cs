@@ -1,9 +1,3 @@
-namespace LLMGateway.DTOs.Models
-{
-    public class RateLimitRuleResponse
-    {
-        public int Id { get; set; }
-        public int WindowSeconds { get; set; }
-        public int MaxRequests { get; set; }
-    }
-}
+namespace LLMGateway.DTOs.Models;
+
+public sealed record RateLimitRuleResponse(int Id, int DeploymentId, int WindowSeconds, int MaxRequests);

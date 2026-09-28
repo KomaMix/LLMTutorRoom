@@ -12,7 +12,7 @@ namespace TeachingService.Contracts.Models
         public DateTimeOffset Deadline { get; set; }
         public int TimeLimitMinutes { get; set; }
         public string Summary { get; set; } = string.Empty;
-        public string LlmModelKey { get; set; } = string.Empty;
+        public int? LlmModelId { get; set; }
         public List<GradingExampleDto> GradingExamples { get; set; } = new();
         public int VersionNumber { get; set; }
         public int ContentRevision { get; set; }

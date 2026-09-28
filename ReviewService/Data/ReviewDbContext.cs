@@ -23,7 +23,6 @@ public sealed class ReviewDbContext(DbContextOptions<ReviewDbContext> options) :
             entity.Property(item => item.TeacherUserId).HasMaxLength(450);
             entity.Property(item => item.StudentUserId).HasMaxLength(450);
             entity.Property(item => item.StudentName).HasMaxLength(500);
-            entity.Property(item => item.ModelKeySnapshot).HasMaxLength(300);
             entity.Property(item => item.Status).HasConversion<string>().HasMaxLength(40);
             entity.Property(item => item.ProcessingGeneration).IsConcurrencyToken();
             entity.Property(item => item.GradingExamplesJson).HasColumnName("GradingExamples").HasColumnType("jsonb");
@@ -80,7 +79,6 @@ public sealed class ReviewDbContext(DbContextOptions<ReviewDbContext> options) :
             entity.Property(item => item.TestId).HasMaxLength(200);
             entity.Property(item => item.TeacherUserId).HasMaxLength(450);
             entity.Property(item => item.TestTitle).HasMaxLength(500);
-            entity.Property(item => item.ModelKeySnapshot).HasMaxLength(300);
             entity.Property(item => item.TasksJson).HasColumnName("Tasks").HasColumnType("jsonb");
             entity.Property(item => item.GradingExamplesJson).HasColumnName("GradingExamples").HasColumnType("jsonb");
             entity.HasIndex(item => new { item.TestId, item.Revision }).IsUnique();
@@ -107,19 +105,17 @@ public sealed class ReviewDbContext(DbContextOptions<ReviewDbContext> options) :
         modelBuilder.Entity<TeacherModelAccess>(entity =>
         {
             entity.Property(item => item.TeacherUserId).HasMaxLength(450);
-            entity.Property(item => item.ModelKey).HasMaxLength(300);
-            entity.HasIndex(item => new { item.TeacherUserId, item.ModelKey }).IsUnique();
+            entity.HasIndex(item => new { item.TeacherUserId, item.ModelId }).IsUnique();
             entity.HasIndex(item => item.TeacherUserId);
         });
 
         modelBuilder.Entity<TeacherModelUsage>(entity =>
         {
             entity.Property(item => item.TeacherUserId).HasMaxLength(450);
-            entity.Property(item => item.ModelKey).HasMaxLength(300);
             entity.HasIndex(item => new
             {
                 item.TeacherUserId,
-                item.ModelKey,
+                item.ModelId,
                 item.PeriodStart,
                 item.PeriodSeconds
             }).IsUnique();

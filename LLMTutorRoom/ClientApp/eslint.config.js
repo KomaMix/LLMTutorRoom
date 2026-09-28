@@ -24,6 +24,7 @@ export default [
     },
     rules: {
       ...js.configs.recommended.rules,
+      "no-empty": ["error", { allowEmptyCatch: true }],
       "react-hooks/rules-of-hooks": "error",
       "react-hooks/exhaustive-deps": "warn",
       "no-unused-vars": ["error", {

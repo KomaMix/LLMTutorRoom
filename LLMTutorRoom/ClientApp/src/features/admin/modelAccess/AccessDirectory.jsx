@@ -4,9 +4,9 @@ import { ModelAccessCard } from "./ModelAccessCard.jsx";
 export function AccessDirectory({
   accessError,
   accessList,
-  busyModelKey,
+  busyModelId,
   canMutateAccess,
-  editingModelKey,
+  editingModelId,
   isAccessCurrent,
   isAccessLoading,
   onEdit,
@@ -60,11 +60,11 @@ export function AccessDirectory({
         <div className="admin-access-list">
           {accessList.map(access => (
             <ModelAccessCard
-              key={access.modelKey}
+              key={access.modelId}
               access={access}
-              busyModelKey={busyModelKey}
+              busyModelId={busyModelId}
               canMutateAccess={canMutateAccess}
-              isEditing={editingModelKey === access.modelKey}
+              isEditing={editingModelId === access.modelId}
               onEdit={onEdit}
               onRemove={onRemove}
             />

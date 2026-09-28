@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace LLMGateway.Controllers
 {
     [ApiController]
-    [Route("api/chat")]
+    [Route("internal/chat")]
     public class ChatController : ControllerBase
     {
         private readonly ChatExecutionService _chatExecutionService;
@@ -16,13 +16,13 @@ namespace LLMGateway.Controllers
             _chatExecutionService = chatExecutionService;
         }
 
-        [HttpPost("{modelKey}")]
+        [HttpPost("{modelId:int}")]
         public async Task<ActionResult<ChatCompletionResponse>> Chat(
-            [FromRoute] string modelKey,
+            [FromRoute] int modelId,
             [FromBody] ChatRequest request,
             CancellationToken cancellationToken)
         {
-            var result = await _chatExecutionService.ExecuteAsync(modelKey, request, cancellationToken);
+            var result = await _chatExecutionService.ExecuteAsync(modelId, request, cancellationToken);
             return result.Status switch
             {
                 ChatExecutionStatus.Completed => Ok(result.Response),

@@ -15,18 +15,18 @@ public interface ITeacherModelAccessService
 
     Task<TeacherModelAccessResponse?> UpsertTeacherAccessAsync(
         string teacherUserId,
-        string modelKey,
+        int modelId,
         UpsertTeacherModelAccessRequest request,
         CancellationToken cancellationToken);
 
     Task<bool> DeleteTeacherAccessAsync(
         string teacherUserId,
-        string modelKey,
+        int modelId,
         CancellationToken cancellationToken);
 
     Task<ModelQuotaConsumptionResult> TryConsumeChecksAsync(
         string teacherUserId,
-        string modelKey,
+        int modelId,
         int checkCount,
         CancellationToken cancellationToken);
 }

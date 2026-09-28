@@ -76,7 +76,7 @@ namespace TeachingService.Migrations
                     Deadline = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     TimeLimitMinutes = table.Column<int>(type: "integer", nullable: false),
                     Summary = table.Column<string>(type: "text", nullable: false),
-                    LlmModelKey = table.Column<string>(type: "text", nullable: false),
+                    LlmModelId = table.Column<int>(type: "integer", nullable: true),
                     CreatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     PublishedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true)
                 },

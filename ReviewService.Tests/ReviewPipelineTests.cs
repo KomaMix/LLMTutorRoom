@@ -313,7 +313,7 @@ public sealed class ReviewPipelineTests
         dbContext.TeacherModelAccesses.Add(new TeacherModelAccess
         {
             TeacherUserId = "teacher",
-            ModelKey = "model",
+            ModelId = 1,
             IsEnabled = true,
             PeriodSeconds = 3600,
             MaxChecks = 3,
@@ -327,12 +327,12 @@ public sealed class ReviewPipelineTests
 
         var first = await service.TryConsumeChecksAsync(
             "teacher",
-            "model",
+            1,
             2,
             CancellationToken.None);
         var second = await service.TryConsumeChecksAsync(
             "teacher",
-            "model",
+            1,
             2,
             CancellationToken.None);
 
@@ -353,7 +353,7 @@ public sealed class ReviewPipelineTests
 
         var created = await service.UpsertTeacherAccessAsync(
             "teacher",
-            " model ",
+            1,
             new UpsertTeacherModelAccessRequest
             {
                 IsEnabled = true,
@@ -363,7 +363,7 @@ public sealed class ReviewPipelineTests
             CancellationToken.None);
         var updated = await service.UpsertTeacherAccessAsync(
             "teacher",
-            "model",
+            1,
             new UpsertTeacherModelAccessRequest
             {
                 IsEnabled = false,
@@ -375,10 +375,38 @@ public sealed class ReviewPipelineTests
         var stored = await dbContext.TeacherModelAccesses.SingleAsync();
         Assert.NotNull(created);
         Assert.NotNull(updated);
-        Assert.Equal("model", stored.ModelKey);
+        Assert.Equal(1, stored.ModelId);
         Assert.False(stored.IsEnabled);
         Assert.Equal(7200, stored.PeriodSeconds);
         Assert.Equal(25, stored.MaxChecks);
+    }
+
+    [Fact]
+    public async Task CatalogRename_PreservesGrantAndUsage_ArchiveHidesNewSelection()
+    {
+        await using var dbContext = CreateDbContext();
+        var catalog = new FakeCatalogClient();
+        var service = new TeacherModelAccessService(dbContext, catalog);
+        await service.UpsertTeacherAccessAsync("teacher", 1, new UpsertTeacherModelAccessRequest
+        {
+            IsEnabled = true, PeriodSeconds = int.MaxValue, MaxChecks = 10
+        }, CancellationToken.None);
+        await service.TryConsumeChecksAsync("teacher", 1, 3, CancellationToken.None);
+        catalog.Key = "renamed-key";
+        var access = Assert.Single(await service.GetTeacherAccessAsync("teacher", false, CancellationToken.None));
+        Assert.Equal(1, access.ModelId);
+        Assert.Equal(3, access.UsedChecks);
+        Assert.Equal(7, access.RemainingChecks);
+        catalog.IsArchived = true;
+        Assert.Empty(await service.GetTeacherAccessAsync("teacher", false, CancellationToken.None));
+        Assert.Equal(3, Assert.Single(await service.GetTeacherAccessAsync("teacher", true, CancellationToken.None)).UsedChecks);
+        Assert.Null(await service.UpsertTeacherAccessAsync("another-teacher", 1, new UpsertTeacherModelAccessRequest
+        {
+            IsEnabled = true, PeriodSeconds = 3600, MaxChecks = 10
+        }, CancellationToken.None));
+        var reservedForPublishedTest = await service.TryConsumeChecksAsync("teacher", 1, 1, CancellationToken.None);
+        Assert.Equal(ModelQuotaConsumptionStatus.Allowed, reservedForPublishedTest.Status);
+        Assert.Equal(6, reservedForPublishedTest.RemainingChecks);
     }
 
     [Fact]
@@ -390,7 +418,7 @@ public sealed class ReviewPipelineTests
         dbContext.TeacherModelAccesses.Add(new TeacherModelAccess
         {
             TeacherUserId = "teacher",
-            ModelKey = "model",
+            ModelId = 1,
             IsEnabled = true,
             PeriodSeconds = periodSeconds,
             MaxChecks = 1,
@@ -400,7 +428,7 @@ public sealed class ReviewPipelineTests
         dbContext.TeacherModelUsages.Add(new TeacherModelUsage
         {
             TeacherUserId = "teacher",
-            ModelKey = "model",
+            ModelId = 1,
             PeriodStart = TeacherModelAccessService.GetPeriodStart(now, periodSeconds),
             PeriodSeconds = periodSeconds,
             UsedChecks = 1,
@@ -422,7 +450,7 @@ public sealed class ReviewPipelineTests
                 WrongAnswerPenalty = 0,
                 Options = []
             },
-            modelKey: "model");
+            modelId: 1);
 
         await handler.HandleAsync(policy, CancellationToken.None);
         await handler.HandleAsync(
@@ -564,7 +592,7 @@ public sealed class ReviewPipelineTests
 
     private static TestReviewPolicyPublishedV1 CreatePolicy(
         ReviewTaskPolicySnapshot? task = null,
-        string modelKey = "model")
+        int modelId = 1)
     {
         task ??= new ReviewTaskPolicySnapshot
         {
@@ -598,7 +626,7 @@ public sealed class ReviewPipelineTests
             Revision = 1,
             TeacherUserId = "teacher",
             TestTitle = "Test",
-            ModelKey = modelKey,
+            ModelId = modelId,
             Tasks = [task],
             PublishedAt = Now.AddMinutes(-10)
         };
@@ -638,12 +666,14 @@ public sealed class ReviewPipelineTests
 
     private sealed class FakeCatalogClient : ILlmGatewayModelCatalogClient
     {
+        public string Key { get; set; } = "model";
+        public bool IsArchived { get; set; }
         public Task<List<LlmModelCatalogItemResponse>> GetModelsAsync(
             CancellationToken cancellationToken)
         {
             List<LlmModelCatalogItemResponse> result =
             [
-                new LlmModelCatalogItemResponse("model", "Model", true)
+                new LlmModelCatalogItemResponse(1, Key, "Model", IsArchived, true)
             ];
             return Task.FromResult(result);
         }

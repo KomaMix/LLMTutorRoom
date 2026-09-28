@@ -49,7 +49,7 @@ public sealed class ReviewCreationService(
             TeacherUserId = policy.TeacherUserId,
             StudentUserId = studentUserId,
             StudentName = string.IsNullOrWhiteSpace(studentName) ? null : studentName.Trim(),
-            ModelKeySnapshot = policy.ModelKeySnapshot,
+            ModelId = policy.ModelId,
             GradingExamplesJson = policy.GradingExamplesJson,
             SubmittedAt = submittedAt,
             MaxScore = policyTasks.Sum(task => task.MaxPoints),
@@ -96,7 +96,7 @@ public sealed class ReviewCreationService(
             return;
         }
 
-        if (string.IsNullOrWhiteSpace(review.ModelKeySnapshot))
+        if (review.ModelId is null or <= 0)
         {
             review.LlmQuotaReservationError = "Для теста не выбрана LLM-модель проверки.";
             return;
@@ -104,7 +104,7 @@ public sealed class ReviewCreationService(
 
         var quota = await modelAccessService.TryConsumeChecksAsync(
             review.TeacherUserId,
-            review.ModelKeySnapshot,
+            review.ModelId.Value,
             llmTaskCount,
             cancellationToken);
         if (quota.Status == ModelQuotaConsumptionStatus.Allowed)
@@ -114,7 +114,7 @@ public sealed class ReviewCreationService(
             return;
         }
 
-        review.LlmQuotaReservationError = CreateQuotaError(review.ModelKeySnapshot, quota);
+        review.LlmQuotaReservationError = CreateQuotaError(review.ModelId.Value, quota);
     }
 
     private static ReviewStatus GetInitialStatus(IEnumerable<ReviewTask> tasks)
@@ -129,14 +129,14 @@ public sealed class ReviewCreationService(
         return ReviewStatus.Checked;
     }
 
-    internal static string CreateQuotaError(string modelKey, ModelQuotaConsumptionResult result)
+    internal static string CreateQuotaError(int modelId, ModelQuotaConsumptionResult result)
     {
         return result.Status switch
         {
             ModelQuotaConsumptionStatus.AccessNotFound =>
-                $"Преподавателю не выдан доступ к модели '{modelKey}'.",
+                $"Преподавателю не выдан доступ к модели '{modelId}'.",
             ModelQuotaConsumptionStatus.LimitExceeded =>
-                $"Лимит проверок для модели '{modelKey}' исчерпан. Осталось: {result.RemainingChecks}.",
+                $"Лимит проверок для модели '{modelId}' исчерпан. Осталось: {result.RemainingChecks}.",
             ModelQuotaConsumptionStatus.InvalidCheckCount =>
                 "Количество LLM-проверок должно быть больше нуля.",
             _ => "Не удалось зарезервировать лимит LLM-проверок."

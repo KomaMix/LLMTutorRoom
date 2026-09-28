@@ -52,10 +52,7 @@ export function useAttemptAutosave({
         revision,
         successMessage: "",
         conflictMessage: "Время выполнения истекло. Ответы больше нельзя изменить."
-      })).catch(() => {
-        // Dirty остается true: следующая правка, ручное сохранение или
-        // navigation guard повторят запись последней ревизии.
-      });
+      })).catch(() => {});
     }, autosaveDelayMilliseconds);
 
     return clearAutosaveTimer;
