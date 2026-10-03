@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text;
 using AttemptService.Data;
 using AttemptService.Options;
@@ -6,24 +7,41 @@ using Microsoft.Extensions.Options;
 using RabbitMQ.Client;
 using ReviewService.Contracts.Events;
 using ReviewService.Contracts.Messaging;
+using Shared.Observability;
 
 namespace AttemptService.Services.IntegrationEvents;
 
-public sealed class AttemptSubmissionOutboxPublisherService(
-    IDbContextFactory<AttemptDbContext> dbContextFactory,
-    RabbitMqConnectionProvider connectionProvider,
-    IOptions<RabbitMqOptions> rabbitMqOptions,
-    IOptions<AttemptOutboxOptions> outboxOptions,
-    ILogger<AttemptSubmissionOutboxPublisherService> logger) : BackgroundService
+public class AttemptSubmissionOutboxPublisherService : BackgroundService
 {
-    private readonly RabbitMqOptions _rabbitMqOptions = rabbitMqOptions.Value;
-    private readonly AttemptOutboxOptions _outboxOptions = outboxOptions.Value;
+    private const string OutboxName = "attempt-submission";
+    private readonly IDbContextFactory<AttemptDbContext> _dbContextFactory;
+    private readonly RabbitMqConnectionProvider _connectionProvider;
+    private readonly RabbitMqOptions _rabbitMqOptions;
+    private readonly AttemptOutboxOptions _outboxOptions;
+    private readonly ProjectMetrics _metrics;
+    private readonly ILogger<AttemptSubmissionOutboxPublisherService> _logger;
+
+    public AttemptSubmissionOutboxPublisherService(
+        IDbContextFactory<AttemptDbContext> dbContextFactory,
+        RabbitMqConnectionProvider connectionProvider,
+        IOptions<RabbitMqOptions> rabbitMqOptions,
+        IOptions<AttemptOutboxOptions> outboxOptions,
+        ProjectMetrics metrics,
+        ILogger<AttemptSubmissionOutboxPublisherService> logger)
+    {
+        _dbContextFactory = dbContextFactory;
+        _connectionProvider = connectionProvider;
+        _rabbitMqOptions = rabbitMqOptions.Value;
+        _outboxOptions = outboxOptions.Value;
+        _metrics = metrics;
+        _logger = logger;
+    }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         if (!_outboxOptions.Enabled || !_rabbitMqOptions.Enabled)
         {
-            logger.LogInformation("Attempt submission outbox publisher is disabled.");
+            _logger.LogInformation("Attempt submission outbox publisher is disabled.");
             return;
         }
 
@@ -39,7 +57,7 @@ public sealed class AttemptSubmissionOutboxPublisherService(
             }
             catch (Exception exception)
             {
-                logger.LogWarning(exception, "Attempt submission outbox pass failed.");
+                _logger.LogWarning(exception, "Attempt submission outbox pass failed.");
             }
 
             await Task.Delay(
@@ -50,7 +68,7 @@ public sealed class AttemptSubmissionOutboxPublisherService(
 
     public async Task<int> PublishPendingAsync(CancellationToken cancellationToken)
     {
-        await using var dbContext = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var dbContext = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
         var now = DateTimeOffset.UtcNow;
         var messages = await dbContext.AttemptSubmissionOutboxMessages
             .Where(message => !message.PublishedAt.HasValue
@@ -59,9 +77,11 @@ public sealed class AttemptSubmissionOutboxPublisherService(
             .Take(_outboxOptions.BatchSize)
             .ToListAsync(cancellationToken);
         if (messages.Count == 0)
+        {
             return 0;
+        }
 
-        var connection = await connectionProvider.GetConnectionAsync(cancellationToken);
+        var connection = await _connectionProvider.GetConnectionAsync(cancellationToken);
         var channelOptions = new CreateChannelOptions(
             publisherConfirmationsEnabled: true,
             publisherConfirmationTrackingEnabled: true);
@@ -79,6 +99,11 @@ public sealed class AttemptSubmissionOutboxPublisherService(
         var publishedCount = 0;
         foreach (var message in messages)
         {
+            using var activity = ProjectTelemetry.StartOutboxPublishActivity(
+                OutboxName,
+                message.Id,
+                message.TraceParent,
+                message.TraceState);
             try
             {
                 var properties = new BasicProperties
@@ -102,6 +127,8 @@ public sealed class AttemptSubmissionOutboxPublisherService(
                 message.NextPublishAt = null;
                 message.LastError = string.Empty;
                 publishedCount++;
+                activity?.SetStatus(ActivityStatusCode.Ok);
+                _metrics.RecordOutboxPublish(OutboxName, "published", message.OccurredAt);
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
@@ -109,7 +136,10 @@ public sealed class AttemptSubmissionOutboxPublisherService(
                 message.NextPublishAt = DateTimeOffset.UtcNow.AddSeconds(
                     _outboxOptions.RetryDelaySeconds);
                 message.LastError = Truncate(exception.Message, 2000);
-                logger.LogWarning(
+                activity?.SetStatus(ActivityStatusCode.Error, exception.Message);
+                activity?.SetTag("error.type", exception.GetType().FullName);
+                _metrics.RecordOutboxPublish(OutboxName, "failed", message.OccurredAt);
+                _logger.LogWarning(
                     exception,
                     "Could not publish attempt submission event {EventId} for attempt {AttemptId}.",
                     message.Id,

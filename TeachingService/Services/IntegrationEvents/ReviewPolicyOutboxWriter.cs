@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 using ReviewService.Contracts.Enums;
 using ReviewService.Contracts.Events;
 using ReviewService.Contracts.Messaging;
+using Shared.Observability;
 using TeachingService.Contracts.Enums;
 using TeachingService.Data;
 using TeachingService.Interfaces;
@@ -63,6 +64,7 @@ namespace TeachingService.Services.IntegrationEvents
                 PublishedAt = publishedAt
             };
             var payload = JsonSerializer.Serialize(integrationEvent, JsonOptions);
+            var traceContext = ProjectTelemetry.CaptureCurrentTraceContext();
 
             _dbContext.TestReviewPolicyRevisions.Add(new TestReviewPolicyRevision
             {
@@ -77,7 +79,9 @@ namespace TeachingService.Services.IntegrationEvents
                 nameof(TestReviewPolicyPublishedV1),
                 ReviewIntegrationRoutes.TestReviewPolicyPublishedV1,
                 payload,
-                publishedAt));
+                publishedAt,
+                traceContext.TraceParent,
+                traceContext.TraceState));
         }
 
         private static ReviewTaskPolicySnapshot ToSnapshot(TestTask task)

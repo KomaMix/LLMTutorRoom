@@ -15,6 +15,30 @@ services:
       timeout: 5s
       retries: 20
 
+  aspire-dashboard-data-init:
+    image: alpine:3.20
+    command: ["chown", "-R", "1654:1654", "/dashboard-data"]
+    volumes:
+      - aspire-dashboard-data:/dashboard-data
+    restart: "no"
+
+  aspire-dashboard:
+    image: mcr.microsoft.com/dotnet/aspire-dashboard:latest
+    environment:
+      ASPIRE_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS: "true"
+      ASPIRE_DASHBOARD_APPLICATION_NAME: LLMTutorRoom
+      ASPIRE_DASHBOARD_DATA_DIRECTORY: /dashboard-data
+      ASPIRE_DASHBOARD_PERSISTENCE_MODE: Resume
+    ports:
+      - "18888:18888"
+      - "4317:18889"
+      - "4318:18890"
+    volumes:
+      - aspire-dashboard-data:/dashboard-data
+    depends_on:
+      aspire-dashboard-data-init:
+        condition: service_completed_successfully
+
   nginx:
     image: nginx:1.27
     ports:
@@ -26,3 +50,4 @@ services:
 
 volumes:
   rabbitmq-data:
+  aspire-dashboard-data:

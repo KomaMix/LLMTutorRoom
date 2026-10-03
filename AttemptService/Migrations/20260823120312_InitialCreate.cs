@@ -17,6 +17,8 @@ namespace AttemptService.Migrations
                     AttemptId = table.Column<Guid>(type: "uuid", nullable: false),
                     OccurredAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     Payload = table.Column<string>(type: "jsonb", nullable: false),
+                    TraceParent = table.Column<string>(type: "character varying(55)", maxLength: 55, nullable: true),
+                    TraceState = table.Column<string>(type: "character varying(512)", maxLength: 512, nullable: true),
                     PublishAttempts = table.Column<int>(type: "integer", nullable: false),
                     NextPublishAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
                     PublishedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),

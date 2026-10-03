@@ -46,6 +46,10 @@ public sealed class AttemptDbContext(DbContextOptions<AttemptDbContext> options)
                 .HasColumnType("jsonb");
             entity.Property(message => message.LastError)
                 .HasMaxLength(2000);
+            entity.Property(message => message.TraceParent)
+                .HasMaxLength(55);
+            entity.Property(message => message.TraceState)
+                .HasMaxLength(512);
             entity.HasIndex(message => message.AttemptId)
                 .IsUnique();
             entity.HasIndex(message => new { message.PublishedAt, message.NextPublishAt });

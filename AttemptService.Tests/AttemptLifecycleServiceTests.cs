@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 using AttemptService.Contracts.Enums;
 using AttemptService.Contracts.Responses;
@@ -392,11 +393,18 @@ public sealed class AttemptLifecycleServiceTests
             },
             CancellationToken.None);
 
+        using var submissionActivity = new Activity("submit-attempt")
+            .SetIdFormat(ActivityIdFormat.W3C)
+            .Start();
+        submissionActivity.TraceStateString = "vendor=test";
+        var expectedTraceParent = submissionActivity.Id;
+        var expectedTraceState = submissionActivity.TraceStateString;
         var firstSubmit = await service.SubmitAttemptAsync(
             attempt.Id,
             "student-1",
             "  Alice Student  ",
             CancellationToken.None);
+        submissionActivity.Stop();
 
         Assert.Equal(AttemptOperationStatus.Success, firstSubmit.Status);
         var submittedAttempt = Assert.IsType<TestAttemptResponse>(firstSubmit.Value);
@@ -415,6 +423,8 @@ public sealed class AttemptLifecycleServiceTests
             Assert.Equal(TestAttemptStatus.Submitted, storedAttempt.Status);
             Assert.Equal(2, storedAttempt.StateRevision);
             Assert.Equal(storedAttempt.SubmittedAt, outboxMessage.OccurredAt);
+            Assert.Equal(expectedTraceParent, outboxMessage.TraceParent);
+            Assert.Equal(expectedTraceState, outboxMessage.TraceState);
             Assert.Equal(outboxMessage.Id, submissionEvent.EventId);
             Assert.Equal(storedAttempt.Id, submissionEvent.AttemptId);
             Assert.Equal(test.Id, submissionEvent.TestId);
@@ -444,6 +454,8 @@ public sealed class AttemptLifecycleServiceTests
         Assert.Equal(2, repeatedAttempt.StateRevision);
         Assert.Equal(eventId, repeatedOutbox.Id);
         Assert.Equal(payload, repeatedOutbox.PayloadJson);
+        Assert.Equal(expectedTraceParent, repeatedOutbox.TraceParent);
+        Assert.Equal(expectedTraceState, repeatedOutbox.TraceState);
     }
 
     [Fact]

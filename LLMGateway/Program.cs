@@ -3,10 +3,11 @@ using Shared.Auth;
 using LLMGateway.Data;
 using LLMGateway.Services;
 using Microsoft.EntityFrameworkCore;
+using Shared.Observability;
 using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
-
+builder.AddProjectObservability("llm-gateway");
 
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));

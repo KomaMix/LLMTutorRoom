@@ -173,6 +173,7 @@ export function TaskEditorForm({
             value={form.maxPoints}
             disabled={controlsDisabled}
             onChange={event => updateForm("maxPoints", event.target.value)}
+            onWheel={event => event.currentTarget.blur()}
             required
           />
         </div>

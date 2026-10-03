@@ -21,7 +21,9 @@ namespace TeachingService.Migrations
                     NextPublishAttemptAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     PublishedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
                     PublishAttempts = table.Column<int>(type: "integer", nullable: false),
-                    LastError = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: true)
+                    LastError = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: true),
+                    TraceParent = table.Column<string>(type: "character varying(55)", maxLength: 55, nullable: true),
+                    TraceState = table.Column<string>(type: "character varying(512)", maxLength: 512, nullable: true)
                 },
                 constraints: table =>
                 {

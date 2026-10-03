@@ -10,6 +10,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Npgsql;
 using ReviewService.Contracts.Events;
+using Shared.Observability;
 using TeachingService.Contracts.Enums;
 
 namespace AttemptService.Services;
@@ -445,6 +446,7 @@ public sealed class AttemptLifecycleService(
             SubmittedAt = submittedAt
         };
         var payload = JsonSerializer.Serialize(message, JsonOptions);
+        var traceContext = ProjectTelemetry.CaptureCurrentTraceContext();
 
         if (existingOutbox is null)
         {
@@ -453,7 +455,9 @@ public sealed class AttemptLifecycleService(
                 Id = eventId,
                 AttemptId = attempt.Id,
                 OccurredAt = submittedAt,
-                PayloadJson = payload
+                PayloadJson = payload,
+                TraceParent = traceContext.TraceParent,
+                TraceState = traceContext.TraceState
             });
             return true;
         }
@@ -466,6 +470,12 @@ public sealed class AttemptLifecycleService(
         existingOutbox.PublishAttempts = 0;
         existingOutbox.NextPublishAt = null;
         existingOutbox.LastError = string.Empty;
+        if (traceContext.TraceParent is not null)
+        {
+            existingOutbox.TraceParent = traceContext.TraceParent;
+            existingOutbox.TraceState = traceContext.TraceState;
+        }
+
         return true;
     }
 

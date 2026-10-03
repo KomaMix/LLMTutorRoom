@@ -3,6 +3,7 @@ WORKDIR /src
 
 COPY ["AuthService/AuthService.csproj", "AuthService/"]
 COPY ["Shared.Auth/Shared.Auth.csproj", "Shared.Auth/"]
+COPY ["Shared.Observability/Shared.Observability.csproj", "Shared.Observability/"]
 RUN dotnet restore "AuthService/AuthService.csproj"
 
 COPY . .

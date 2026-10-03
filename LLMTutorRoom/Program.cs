@@ -6,10 +6,12 @@ using LLMTutorRoom.Services.Reviews;
 using LLMTutorRoom.Services.Teaching;
 using Microsoft.AspNetCore.StaticFiles;
 using Shared.Auth;
+using Shared.Observability;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.AddProjectObservability("tutor-room");
 builder.Services.AddControllers()
     .AddJsonOptions(options =>
     {

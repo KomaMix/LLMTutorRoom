@@ -1,26 +1,41 @@
 using LLMGateway.Data.Models;
 using Microsoft.Extensions.AI;
 using OpenAI;
+using Shared.Observability;
 using System.ClientModel;
 
-namespace LLMGateway.Services
+namespace LLMGateway.Services;
+
+public class ChatClientFactory
 {
-    public class ChatClientFactory
+    private const string DefaultApiKey = "openai-compatible";
+    private readonly ILoggerFactory _loggerFactory;
+
+    public ChatClientFactory(ILoggerFactory loggerFactory)
     {
-        private const string DefaultApiKey = "openai-compatible";
+        _loggerFactory = loggerFactory;
+    }
 
-        public virtual IChatClient CreateClient(ModelDeployment deployment)
+    public virtual IChatClient CreateClient(ModelDeployment deployment)
+    {
+        var options = new OpenAIClientOptions
         {
-            var options = new OpenAIClientOptions
-            {
-                Endpoint = new Uri(deployment.Endpoint)
-            };
-            var apiKey = string.IsNullOrWhiteSpace(deployment.ApiKey)
-                ? DefaultApiKey
-                : deployment.ApiKey;
+            Endpoint = new Uri(deployment.Endpoint)
+        };
+        var apiKey = string.IsNullOrWhiteSpace(deployment.ApiKey)
+            ? DefaultApiKey
+            : deployment.ApiKey;
 
-            var client = new OpenAIClient(new ApiKeyCredential(apiKey), options);
-            return client.GetChatClient(deployment.ProviderModelId).AsIChatClient();
-        }
+        var openAiClient = new OpenAIClient(new ApiKeyCredential(apiKey), options);
+        var chatClient = openAiClient
+            .GetChatClient(deployment.ProviderModelId)
+            .AsIChatClient();
+
+        return new ChatClientBuilder(chatClient)
+            .UseOpenTelemetry(
+                _loggerFactory,
+                ProjectTelemetry.LlmTelemetryName,
+                telemetry => telemetry.EnableSensitiveData = false)
+            .Build();
     }
 }

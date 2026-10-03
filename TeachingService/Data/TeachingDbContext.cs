@@ -105,6 +105,8 @@ namespace TeachingService.Data
                 entity.Property(message => message.RoutingKey).HasMaxLength(200);
                 entity.Property(message => message.Payload).HasColumnType("jsonb");
                 entity.Property(message => message.LastError).HasMaxLength(2000);
+                entity.Property(message => message.TraceParent).HasMaxLength(55);
+                entity.Property(message => message.TraceState).HasMaxLength(512);
             });
         }
 

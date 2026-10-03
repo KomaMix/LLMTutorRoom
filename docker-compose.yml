@@ -36,6 +36,33 @@ services:
       - backend
       - host-access
 
+  aspire-dashboard-data-init:
+    image: alpine:3.20
+    command: ["chown", "-R", "1654:1654", "/dashboard-data"]
+    volumes:
+      - aspire-dashboard-data:/dashboard-data
+    restart: "no"
+
+  aspire-dashboard:
+    image: mcr.microsoft.com/dotnet/aspire-dashboard:latest
+    environment:
+      ASPIRE_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS: "true"
+      ASPIRE_DASHBOARD_APPLICATION_NAME: LLMTutorRoom
+      ASPIRE_DASHBOARD_DATA_DIRECTORY: /dashboard-data
+      ASPIRE_DASHBOARD_PERSISTENCE_MODE: Resume
+    ports:
+      - "18888:18888"
+      - "4317:18889"
+      - "4318:18890"
+    volumes:
+      - aspire-dashboard-data:/dashboard-data
+    depends_on:
+      aspire-dashboard-data-init:
+        condition: service_completed_successfully
+    networks:
+      - edge
+      - backend
+
   auth-service:
     build:
       context: .
@@ -43,6 +70,8 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_URLS: http://+:8080
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://aspire-dashboard:18889
+      OTEL_EXPORTER_OTLP_PROTOCOL: grpc
       ConnectionStrings__DefaultConnection: Host=postgres;Database=llm_tutor_auth;Username=postgres;Password=postgres;
     ports:
       - "5210:8080"
@@ -60,6 +89,8 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_URLS: http://+:8080
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://aspire-dashboard:18889
+      OTEL_EXPORTER_OTLP_PROTOCOL: grpc
       ConnectionStrings__DefaultConnection: Host=postgres;Database=llm_tutor_teaching;Username=postgres;Password=postgres;
       IntegrationEvents__HostName: rabbitmq
       IntegrationEvents__Port: 5672
@@ -83,6 +114,8 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_URLS: http://+:8080
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://aspire-dashboard:18889
+      OTEL_EXPORTER_OTLP_PROTOCOL: grpc
       ConnectionStrings__DefaultConnection: Host=postgres;Database=llm_tutor_attempts;Username=postgres;Password=postgres;
       RabbitMq__HostName: rabbitmq
       RabbitMq__Port: 5672
@@ -109,6 +142,8 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_URLS: http://+:8080
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://aspire-dashboard:18889
+      OTEL_EXPORTER_OTLP_PROTOCOL: grpc
       ConnectionStrings__DefaultConnection: Host=postgres;Database=llm_gateway;Username=postgres;Password=postgres;
     ports:
       - "5200:8080"
@@ -126,6 +161,8 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_URLS: http://+:8080
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://aspire-dashboard:18889
+      OTEL_EXPORTER_OTLP_PROTOCOL: grpc
       ConnectionStrings__DefaultConnection: Host=postgres;Database=llm_tutor_reviews;Username=postgres;Password=postgres;
       RabbitMq__HostName: rabbitmq
       RabbitMq__Port: 5672
@@ -152,6 +189,8 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_URLS: http://+:8080
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://aspire-dashboard:18889
+      OTEL_EXPORTER_OTLP_PROTOCOL: grpc
       AttemptService__BaseUrl: http://attempt-service:8080
       TeachingService__BaseUrl: http://teaching-service:8080
       ReviewService__BaseUrl: http://review-service:8080
@@ -193,6 +232,7 @@ services:
 volumes:
   postgres-data:
   rabbitmq-data:
+  aspire-dashboard-data:
 
 networks:
   edge:

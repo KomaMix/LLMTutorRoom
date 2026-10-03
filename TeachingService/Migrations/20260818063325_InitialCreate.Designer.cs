@@ -160,6 +160,14 @@ namespace TeachingService.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
+                    b.Property<string>("TraceParent")
+                        .HasMaxLength(55)
+                        .HasColumnType("character varying(55)");
+
+                    b.Property<string>("TraceState")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
                     b.HasKey("Id");
 
                     b.HasIndex("PublishedAt", "NextPublishAttemptAt");

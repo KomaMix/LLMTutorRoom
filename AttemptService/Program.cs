@@ -8,9 +8,18 @@ using AttemptService.Services;
 using AttemptService.Services.IntegrationEvents;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.EntityFrameworkCore;
+using OpenTelemetry.Trace;
 using Shared.Auth;
+using Shared.Observability;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.AddProjectObservability("attempt-service");
+builder.Services.AddOpenTelemetry()
+    .WithTracing(tracing => tracing.AddRabbitMQInstrumentation(options =>
+    {
+        options.UseRoutingKeyAsOperationName = false;
+        options.UsePublisherAsParent = true;
+    }));
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
     ?? throw new InvalidOperationException("ConnectionStrings:DefaultConnection is required.");
 var inputLimits = builder.Configuration

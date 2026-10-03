@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
 using TeachingService.Contracts.Enums;
@@ -194,18 +195,27 @@ public sealed class TestVersioningTests
         Assert.Empty(dbContext.TestReviewPolicyRevisions);
         Assert.Empty(dbContext.IntegrationOutboxMessages);
 
+        using var publicationActivity = new Activity("publish-test")
+            .SetIdFormat(ActivityIdFormat.W3C)
+            .Start();
+        publicationActivity.TraceStateString = "vendor=test";
+        var expectedTraceParent = publicationActivity.Id;
+        var expectedTraceState = publicationActivity.TraceStateString;
         var firstPublication = await service.PublishVersionAsync(
             Guid.Parse(created.Id),
             versionNumber: 1,
             expectedContentRevision: 1,
             "teacher",
             CancellationToken.None);
+        publicationActivity.Stop();
         dbContext.ChangeTracker.Clear();
 
         Assert.Equal(CatalogOperationStatus.Success, firstPublication.Status);
         Assert.Equal(CourseTestStatus.Published, firstPublication.Value!.Status);
         Assert.Single(dbContext.TestReviewPolicyRevisions);
-        Assert.Single(dbContext.IntegrationOutboxMessages);
+        var firstOutboxMessage = Assert.Single(dbContext.IntegrationOutboxMessages);
+        Assert.Equal(expectedTraceParent, firstOutboxMessage.TraceParent);
+        Assert.Equal(expectedTraceState, firstOutboxMessage.TraceState);
 
         var immutableUpdate = await service.UpdateTestAsync(
             Guid.Parse(created.Id),

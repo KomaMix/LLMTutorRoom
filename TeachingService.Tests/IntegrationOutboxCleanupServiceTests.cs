@@ -98,7 +98,9 @@ public sealed class IntegrationOutboxCleanupServiceTests
             "TestEvent",
             "test.event",
             "{}",
-            occurredAt);
+            occurredAt,
+            null,
+            null);
 
         if (publishedAt.HasValue)
             message.MarkPublished(publishedAt.Value);

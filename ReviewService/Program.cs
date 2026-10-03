@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.EntityFrameworkCore;
+using OpenTelemetry.Trace;
 using ReviewService.Data;
 using ReviewService.ExceptionHandling;
 using ReviewService.Health;
@@ -12,8 +13,16 @@ using ReviewService.Messaging.ReviewProcessing;
 using ReviewService.Options;
 using ReviewService.Services;
 using Shared.Auth;
+using Shared.Observability;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.AddProjectObservability("review-service");
+builder.Services.AddOpenTelemetry()
+    .WithTracing(tracing => tracing.AddRabbitMQInstrumentation(options =>
+    {
+        options.UseRoutingKeyAsOperationName = false;
+        options.UsePublisherAsParent = true;
+    }));
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
     ?? throw new InvalidOperationException("ConnectionStrings:DefaultConnection is required.");
 const int maxRabbitMqTtlSeconds = int.MaxValue / 1000;

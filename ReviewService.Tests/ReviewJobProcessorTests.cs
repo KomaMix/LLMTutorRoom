@@ -306,6 +306,7 @@ public sealed class ReviewJobProcessorTests
         dbContext.TeacherModelAccesses.Add(new TeacherModelAccess
         {
             TeacherUserId = review.TeacherUserId,
+            ModelId = review.ModelId!.Value,
             IsEnabled = true,
             PeriodSeconds = 3600,
             MaxChecks = 1,

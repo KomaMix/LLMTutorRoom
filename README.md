@@ -20,7 +20,9 @@
   перевода задания в ручной режим;
 - персональные доступы преподавателей к моделям и квоты проверок;
 - история результатов с фильтрацией по версиям и постраничной загрузкой;
-- transactional outbox, inbox и RabbitMQ для надёжной доставки событий.
+- transactional outbox, inbox и RabbitMQ для надёжной доставки событий;
+- OpenTelemetry для логов, метрик и сквозных трасс через HTTP, outbox,
+  RabbitMQ, PostgreSQL и LLM-вызовы.
 
 ## Архитектура
 
@@ -55,6 +57,8 @@ flowchart LR
 
 Начать знакомство с системой лучше с [общей архитектуры](docs/architecture.md).
 Полный индекс находится в [`docs/README.md`](docs/README.md).
+Настройка телеметрии описана в
+[`docs/observability.md`](docs/observability.md).
 
 ## Как проходит проверка
 
@@ -120,6 +124,7 @@ docker compose up --build
 | AuthService напрямую | `http://localhost:5210` |
 | LLMGateway напрямую | `http://localhost:5200` |
 | RabbitMQ Management | `http://localhost:15672` (`llm` / `llm-dev`) |
+| Aspire Dashboard | `http://localhost:18888` |
 | PostgreSQL | `localhost:5433` |
 
 `TeachingService`, `AttemptService`, `ReviewService` и `LLMTutorRoom` в полном
@@ -225,6 +230,7 @@ ReviewService/               проверки и model access
 ReviewService.Contracts/     события и API-контракты проверок
 LLMGateway/                  модели и LLM execution
 Shared.Auth/                 общая JWT-конфигурация
+Shared.Observability/        общая конфигурация OpenTelemetry
 docs/                        бизнесовая документация
 infra/nginx/                 reverse proxy
 ```

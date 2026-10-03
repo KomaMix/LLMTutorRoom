@@ -1,7 +1,9 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.EntityFrameworkCore;
+using OpenTelemetry.Trace;
 using Shared.Auth;
+using Shared.Observability;
 using TeachingService.Data;
 using TeachingService.Interfaces;
 using TeachingService.Options;
@@ -9,6 +11,13 @@ using TeachingService.Services.IntegrationEvents;
 using TeachingService.Services;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.AddProjectObservability("teaching-service");
+builder.Services.AddOpenTelemetry()
+    .WithTracing(tracing => tracing.AddRabbitMQInstrumentation(options =>
+    {
+        options.UseRoutingKeyAsOperationName = false;
+        options.UsePublisherAsParent = true;
+    }));
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
     ?? throw new InvalidOperationException("ConnectionStrings:DefaultConnection is required.");
 

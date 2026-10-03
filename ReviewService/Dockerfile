@@ -4,6 +4,7 @@ WORKDIR /src
 COPY ["ReviewService/ReviewService.csproj", "ReviewService/"]
 COPY ["ReviewService.Contracts/ReviewService.Contracts.csproj", "ReviewService.Contracts/"]
 COPY ["Shared.Auth/Shared.Auth.csproj", "Shared.Auth/"]
+COPY ["Shared.Observability/Shared.Observability.csproj", "Shared.Observability/"]
 RUN dotnet restore "ReviewService/ReviewService.csproj"
 
 COPY . .

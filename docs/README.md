@@ -13,6 +13,8 @@
 5. [LLMTutorRoom](llm-tutor-room.md) — stateless web-фасад и React-приложение.
 6. [ReviewService](review-service.md) — создание и выполнение проверок.
 7. [LLMGateway](llm-gateway.md) — модели, deployment-ы и вызов provider-а.
+8. [Наблюдаемость](observability.md) — OpenTelemetry, Aspire Dashboard и
+   сквозной trace context через outbox и RabbitMQ.
 
 Дополнительные технические документы:
 

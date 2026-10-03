@@ -5,6 +5,7 @@ COPY ["AttemptService/AttemptService.csproj", "AttemptService/"]
 COPY ["AttemptService.Contracts/AttemptService.Contracts.csproj", "AttemptService.Contracts/"]
 COPY ["ReviewService.Contracts/ReviewService.Contracts.csproj", "ReviewService.Contracts/"]
 COPY ["Shared.Auth/Shared.Auth.csproj", "Shared.Auth/"]
+COPY ["Shared.Observability/Shared.Observability.csproj", "Shared.Observability/"]
 COPY ["TeachingService.Contracts/TeachingService.Contracts.csproj", "TeachingService.Contracts/"]
 RUN dotnet restore "AttemptService/AttemptService.csproj"
 

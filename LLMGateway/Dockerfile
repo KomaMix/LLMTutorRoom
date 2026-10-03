@@ -2,6 +2,7 @@ FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
 WORKDIR /src
 COPY ["LLMGateway/LLMGateway.csproj", "LLMGateway/"]
 COPY ["Shared.Auth/Shared.Auth.csproj", "Shared.Auth/"]
+COPY ["Shared.Observability/Shared.Observability.csproj", "Shared.Observability/"]
 RUN dotnet restore "LLMGateway/LLMGateway.csproj"
 COPY . .
 WORKDIR "/src/LLMGateway"

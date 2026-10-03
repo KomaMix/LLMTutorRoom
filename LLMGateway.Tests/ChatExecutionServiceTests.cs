@@ -338,6 +338,11 @@ namespace LLMGateway.Tests
         {
             private readonly Dictionary<string, IChatClient> _clients = new();
 
+            public FakeChatClientFactory()
+                : base(NullLoggerFactory.Instance)
+            {
+            }
+
             public override IChatClient CreateClient(ModelDeployment deployment)
             {
                 return _clients[deployment.ProviderModelId];

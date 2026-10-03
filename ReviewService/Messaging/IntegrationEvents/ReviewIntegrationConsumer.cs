@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
@@ -9,24 +10,41 @@ using ReviewService.Contracts.Messaging;
 using ReviewService.Helpers;
 using ReviewService.Interfaces;
 using ReviewService.Messaging;
+using Shared.Observability;
 
 namespace ReviewService.Messaging.IntegrationEvents;
 
-public sealed class ReviewIntegrationConsumer(
-    IServiceScopeFactory scopeFactory,
-    IOptions<RabbitMqOptions> options,
-    RabbitMqConnectionProvider connectionProvider,
-    RabbitMqTopology topology,
-    ILogger<ReviewIntegrationConsumer> logger) : BackgroundService
+public class ReviewIntegrationConsumer : BackgroundService
 {
     private const string RetryCountHeader = "x-review-integration-retry-count";
-    private readonly RabbitMqOptions _options = options.Value;
+    private readonly IServiceScopeFactory _scopeFactory;
+    private readonly RabbitMqOptions _options;
+    private readonly RabbitMqConnectionProvider _connectionProvider;
+    private readonly RabbitMqTopology _topology;
+    private readonly ProjectMetrics _metrics;
+    private readonly ILogger<ReviewIntegrationConsumer> _logger;
+
+    public ReviewIntegrationConsumer(
+        IServiceScopeFactory scopeFactory,
+        IOptions<RabbitMqOptions> options,
+        RabbitMqConnectionProvider connectionProvider,
+        RabbitMqTopology topology,
+        ProjectMetrics metrics,
+        ILogger<ReviewIntegrationConsumer> logger)
+    {
+        _scopeFactory = scopeFactory;
+        _options = options.Value;
+        _connectionProvider = connectionProvider;
+        _topology = topology;
+        _metrics = metrics;
+        _logger = logger;
+    }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         if (!_options.Enabled)
         {
-            logger.LogInformation("Review integration consumer is disabled.");
+            _logger.LogInformation("Review integration consumer is disabled.");
             return;
         }
 
@@ -34,14 +52,14 @@ public sealed class ReviewIntegrationConsumer(
         {
             try
             {
-                var connection = await connectionProvider.GetConnectionAsync(stoppingToken);
+                var connection = await _connectionProvider.GetConnectionAsync(stoppingToken);
                 var channelOptions = new CreateChannelOptions(
                     publisherConfirmationsEnabled: true,
                     publisherConfirmationTrackingEnabled: true);
                 await using var channel = await connection.CreateChannelAsync(
                     channelOptions,
                     stoppingToken);
-                await topology.DeclareIntegrationAsync(channel, stoppingToken);
+                await _topology.DeclareIntegrationAsync(channel, stoppingToken);
                 await channel.BasicQosAsync(
                     prefetchSize: 0,
                     prefetchCount: Math.Max((ushort)1, _options.PrefetchCount),
@@ -67,11 +85,11 @@ public sealed class ReviewIntegrationConsumer(
                     consumer: consumer,
                     cancellationToken: stoppingToken);
 
-                logger.LogInformation(
+                _logger.LogInformation(
                     "Review integration consumer is consuming queue {QueueName}.",
                     _options.IntegrationQueueName);
                 var reason = await shutdown.Task.WaitAsync(stoppingToken);
-                logger.LogWarning(
+                _logger.LogWarning(
                     "Review integration consumer stopped ({ReplyCode}: {ReplyText}); reconnecting.",
                     reason.ReplyCode,
                     reason.ReplyText);
@@ -85,7 +103,7 @@ public sealed class ReviewIntegrationConsumer(
             }
             catch (Exception exception)
             {
-                logger.LogWarning(exception, "Review integration consumer failed; reconnecting.");
+                _logger.LogWarning(exception, "Review integration consumer failed; reconnecting.");
                 await Task.Delay(
                     TimeSpan.FromSeconds(Math.Max(1, _options.ConnectionRetryDelaySeconds)),
                     stoppingToken);
@@ -98,10 +116,11 @@ public sealed class ReviewIntegrationConsumer(
         BasicDeliverEventArgs args,
         CancellationToken cancellationToken)
     {
+        RecordDeliveryDelay(args);
         try
         {
             var json = Encoding.UTF8.GetString(args.Body.ToArray());
-            using var scope = scopeFactory.CreateScope();
+            using var scope = _scopeFactory.CreateScope();
             var handler = scope.ServiceProvider.GetRequiredService<IReviewIntegrationEventHandler>();
 
             switch (args.RoutingKey)
@@ -111,7 +130,10 @@ public sealed class ReviewIntegrationConsumer(
                         json,
                         JsonHelper.Options);
                     if (policy is null)
+                    {
                         throw new JsonException("Test review policy event was empty.");
+                    }
+
                     await handler.HandleAsync(policy, cancellationToken);
                     break;
 
@@ -120,7 +142,10 @@ public sealed class ReviewIntegrationConsumer(
                         json,
                         JsonHelper.Options);
                     if (attempt is null)
+                    {
                         throw new JsonException("Attempt submitted event was empty.");
+                    }
+
                     await handler.HandleAsync(attempt, cancellationToken);
                     break;
 
@@ -130,6 +155,7 @@ public sealed class ReviewIntegrationConsumer(
             }
 
             await channel.BasicAckAsync(args.DeliveryTag, multiple: false, cancellationToken);
+            Activity.Current?.SetTag("messaging.consumer.outcome", "processed");
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -137,7 +163,9 @@ public sealed class ReviewIntegrationConsumer(
         }
         catch (Exception exception) when (exception is JsonException or InvalidDataException)
         {
-            logger.LogError(
+            Activity.Current?.SetStatus(ActivityStatusCode.Error, exception.Message);
+            Activity.Current?.SetTag("messaging.consumer.outcome", "dead-lettered");
+            _logger.LogError(
                 exception,
                 "Review integration message {MessageId} on {RoutingKey} was dead-lettered.",
                 args.BasicProperties.MessageId,
@@ -146,10 +174,12 @@ public sealed class ReviewIntegrationConsumer(
         }
         catch (Exception exception)
         {
+            Activity.Current?.SetStatus(ActivityStatusCode.Error, exception.Message);
             var retryCount = GetRetryCount(args.BasicProperties.Headers);
             if (retryCount >= _options.IntegrationMaxRetryAttempts)
             {
-                logger.LogError(
+                Activity.Current?.SetTag("messaging.consumer.outcome", "dead-lettered");
+                _logger.LogError(
                     exception,
                     "Integration message {MessageId} on {RoutingKey} exhausted {RetryCount} retries and was dead-lettered.",
                     args.BasicProperties.MessageId,
@@ -162,7 +192,7 @@ public sealed class ReviewIntegrationConsumer(
                 return;
             }
 
-            logger.LogWarning(
+            _logger.LogWarning(
                 exception,
                 "Transient failure while handling integration message {MessageId} on {RoutingKey}; scheduling retry {RetryCount}.",
                 args.BasicProperties.MessageId,
@@ -190,10 +220,12 @@ public sealed class ReviewIntegrationConsumer(
                     args.DeliveryTag,
                     multiple: false,
                     cancellationToken);
+                Activity.Current?.SetTag("messaging.consumer.outcome", "retry-scheduled");
             }
             catch (Exception retryException) when (retryException is not OperationCanceledException)
             {
-                logger.LogWarning(
+                Activity.Current?.SetTag("messaging.consumer.outcome", "requeued");
+                _logger.LogWarning(
                     retryException,
                     "Could not schedule integration retry for message {MessageId}; requeueing the original delivery.",
                     args.BasicProperties.MessageId);
@@ -204,6 +236,19 @@ public sealed class ReviewIntegrationConsumer(
                     cancellationToken);
             }
         }
+    }
+
+    private void RecordDeliveryDelay(BasicDeliverEventArgs args)
+    {
+        var unixTime = args.BasicProperties.Timestamp.UnixTime;
+        if (unixTime <= 0)
+        {
+            return;
+        }
+
+        _metrics.RecordMessageDelivery(
+            _options.IntegrationQueueName,
+            DateTimeOffset.FromUnixTimeSeconds(unixTime));
     }
 
     private static int GetRetryCount(IDictionary<string, object?>? headers)
