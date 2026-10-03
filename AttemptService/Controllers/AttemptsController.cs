@@ -56,6 +56,7 @@ public sealed class AttemptsController(IAttemptLifecycleService attemptService) 
         var result = await attemptService.StartAttemptAsync(
             testId,
             studentUserId,
+            GetUserName(),
             versionNumber,
             cancellationToken);
 

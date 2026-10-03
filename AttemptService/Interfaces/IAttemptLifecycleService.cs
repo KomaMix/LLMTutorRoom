@@ -18,6 +18,7 @@ public interface IAttemptLifecycleService
     Task<Result<AttemptOperationStatus, TestAttemptResponse>> StartAttemptAsync(
         Guid testId,
         string studentUserId,
+        string studentUserName,
         int? expectedVersionNumber,
         CancellationToken cancellationToken);
 

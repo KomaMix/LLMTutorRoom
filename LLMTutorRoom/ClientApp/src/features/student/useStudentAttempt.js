@@ -14,6 +14,7 @@ export function useStudentAttempt({
   selectedAttempt,
   updateAttempt,
   onAttemptVersionConflict,
+  onDeadlineReached,
   onSubmitted
 }) {
   const testId = selectedTest?.id ?? null;
@@ -43,8 +44,18 @@ export function useStudentAttempt({
   }
 
   const context = contextRef.current;
-  const callbacksRef = useRef({ updateAttempt, onAttemptVersionConflict, onSubmitted });
-  callbacksRef.current = { updateAttempt, onAttemptVersionConflict, onSubmitted };
+  const callbacksRef = useRef({
+    updateAttempt,
+    onAttemptVersionConflict,
+    onDeadlineReached,
+    onSubmitted
+  });
+  callbacksRef.current = {
+    updateAttempt,
+    onAttemptVersionConflict,
+    onDeadlineReached,
+    onSubmitted
+  };
 
   const mountedRef = useRef(true);
   const accessTokenSnapshotRef = useRef(getAccessToken());
@@ -60,6 +71,7 @@ export function useStudentAttempt({
   const saveOperationRef = useRef(null);
   const submitOperationRef = useRef(null);
   const navigationPreparationRef = useRef(null);
+  const deadlineHandledAttemptIdRef = useRef(null);
 
   if (didContextChange) {
     answersRef.current = copyAnswers(selectedAttempt?.answers);
@@ -196,6 +208,34 @@ export function useStudentAttempt({
     }
 
     const endsAt = new Date(selectedAttempt.endsAt).getTime();
+    let countdownTimer = null;
+    let deadlineRefreshTimer = null;
+    let isActive = true;
+    const handleDeadline = () => {
+      if (deadlineHandledAttemptIdRef.current !== selectedAttempt.id) {
+        deadlineHandledAttemptIdRef.current = selectedAttempt.id;
+        blockedAttemptIdsRef.current.add(selectedAttempt.id);
+        clearAutosaveTimer();
+        setDirty(false);
+        setMessageState({
+          generation: contextRef.current.generation,
+          value: "Время истекло. Работа отправляется автоматически."
+        });
+      }
+
+      const refresh = callbacksRef.current.onDeadlineReached;
+      if (!refresh) {
+        return;
+      }
+
+      Promise.resolve(refresh())
+        .catch(() => undefined)
+        .finally(() => {
+          if (isActive) {
+            deadlineRefreshTimer = window.setTimeout(handleDeadline, 5000);
+          }
+        });
+    };
     const tick = () => {
       const currentTime = Date.now();
       setNow(currentTime);
@@ -203,17 +243,27 @@ export function useStudentAttempt({
     };
 
     if (tick()) {
-      return;
+      handleDeadline();
+    } else {
+      countdownTimer = window.setInterval(() => {
+        if (tick()) {
+          window.clearInterval(countdownTimer);
+          countdownTimer = null;
+          handleDeadline();
+        }
+      }, 1000);
     }
 
-    const timer = window.setInterval(() => {
-      if (tick()) {
-        window.clearInterval(timer);
+    return () => {
+      isActive = false;
+      if (countdownTimer !== null) {
+        window.clearInterval(countdownTimer);
       }
-    }, 1000);
-
-    return () => window.clearInterval(timer);
-  }, [selectedAttempt]);
+      if (deadlineRefreshTimer !== null) {
+        window.clearTimeout(deadlineRefreshTimer);
+      }
+    };
+  }, [clearAutosaveTimer, selectedAttempt, setDirty]);
 
   const {
     onAnswerChange,

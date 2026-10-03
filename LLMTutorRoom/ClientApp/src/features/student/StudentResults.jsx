@@ -74,7 +74,7 @@ function ReviewProgress({ attemptStatus, isReviewDeferred, review }) {
         <Clock3 size={20} aria-hidden="true" />
         <div>
           <strong>Время выполнения истекло</strong>
-          <p>Ответы больше нельзя изменить.</p>
+          <p>Последние сохранённые ответы отправляются на проверку.</p>
         </div>
       </div>
     );
@@ -230,7 +230,9 @@ function StudentResultCard({ attempt, currentTime, isReviewDeferred, review, tes
         {(attempt?.submittedAt ?? review?.submittedAt) && (
           <span>
             <Send size={15} aria-hidden="true" />
-            Отправлен {formatDate(attempt?.submittedAt ?? review.submittedAt)}
+            {attempt?.submissionReason === "deadline"
+              ? "Автоматически отправлен"
+              : "Отправлен"} {formatDate(attempt?.submittedAt ?? review.submittedAt)}
           </span>
         )}
         {review?.completedAt && (
@@ -242,7 +244,7 @@ function StudentResultCard({ attempt, currentTime, isReviewDeferred, review, tes
         {attemptStatus === "expired" && !attempt?.submittedAt && (
           <span>
             <Clock3 size={15} aria-hidden="true" />
-            Завершён {formatDate(attempt.endsAt)}
+            Достигнут срок отправки {formatDate(attempt.endsAt)}
           </span>
         )}
       </div>

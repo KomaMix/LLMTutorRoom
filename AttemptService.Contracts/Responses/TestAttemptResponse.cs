@@ -11,5 +11,6 @@ public sealed class TestAttemptResponse
     public DateTimeOffset StartedAt { get; set; }
     public DateTimeOffset EndsAt { get; set; }
     public DateTimeOffset? SubmittedAt { get; set; }
+    public AttemptSubmissionReason? SubmissionReason { get; set; }
     public Dictionary<string, string> Answers { get; set; } = new();
 }

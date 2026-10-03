@@ -19,7 +19,12 @@ public sealed class AttemptDbContext(DbContextOptions<AttemptDbContext> options)
                 .HasMaxLength(100);
             entity.Property(attempt => attempt.StudentUserId)
                 .HasMaxLength(450);
+            entity.Property(attempt => attempt.StudentName)
+                .HasMaxLength(500);
             entity.Property(attempt => attempt.Status)
+                .HasConversion<string>()
+                .HasMaxLength(32);
+            entity.Property(attempt => attempt.SubmissionReason)
                 .HasConversion<string>()
                 .HasMaxLength(32);
             entity.Property(attempt => attempt.AnswersJson)

@@ -30,7 +30,7 @@ function SubmissionSummary({ attempt, attemptStatus, isReviewDeferred, review })
         </span>
         <div>
           <strong>Время выполнения истекло</strong>
-          <p>Ответы доступны только для просмотра.</p>
+          <p>Последние сохранённые ответы отправляются на проверку.</p>
         </div>
       </section>
     );
@@ -54,13 +54,16 @@ function SubmissionSummary({ attempt, attemptStatus, isReviewDeferred, review })
   }
 
   if (!review && isReviewDeferred) {
+    const submissionText = attempt.submissionReason === "deadline"
+      ? "Работа автоматически отправлена"
+      : "Ответы отправлены";
     return (
       <section className="student-submission-summary pending">
         <span className="student-submission-icon">
           <FileCheck2 size={21} aria-hidden="true" />
         </span>
         <div>
-          <span>Ответы отправлены {formatDate(attempt.submittedAt)}</span>
+          <span>{submissionText} {formatDate(attempt.submittedAt)}</span>
           <strong>Состояние этой работы доступно в истории результатов.</strong>
         </div>
         <Link className="button secondary" to={`/student/results#attempt-${attempt.id}`}>
@@ -71,13 +74,16 @@ function SubmissionSummary({ attempt, attemptStatus, isReviewDeferred, review })
   }
 
   const reviewStatus = review?.status ?? "queued";
+  const submissionText = attempt.submissionReason === "deadline"
+    ? "Работа автоматически отправлена"
+    : "Ответы отправлены";
   return (
     <section className="student-submission-summary pending">
       <span className="student-submission-icon">
         <Hourglass size={21} aria-hidden="true" />
       </span>
       <div>
-        <span>Ответы отправлены {formatDate(attempt.submittedAt ?? attempt.endsAt)}</span>
+        <span>{submissionText} {formatDate(attempt.submittedAt ?? attempt.endsAt)}</span>
         <strong>{getReviewStatusMessage(reviewStatus)}</strong>
       </div>
       {review && <StatusBadge status={review.status} />}
@@ -216,7 +222,9 @@ export function StudentWorkspace({
           )}
           {effectiveAttemptStatus === "submitted" && (
             <div className="attempt-time">
-              <span>Отправлено</span>
+              <span>{selectedAttempt.submissionReason === "deadline"
+                ? "Автоотправка"
+                : "Отправлено"}</span>
               <strong>{formatDate(selectedAttempt.submittedAt)}</strong>
             </div>
           )}

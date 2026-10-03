@@ -101,6 +101,7 @@ function StudentTestsRoute({ overview, refresh, updateAttempt }) {
     selectedAttempt,
     updateAttempt,
     onAttemptVersionConflict: refresh,
+    onDeadlineReached: refresh,
     onSubmitted: () => {
       if (refresh) {
         Promise.resolve(refresh()).catch(() => undefined);

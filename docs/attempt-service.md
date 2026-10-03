@@ -38,12 +38,16 @@ flowchart LR
 старте, поэтому новая публикация не меняет уже начатую работу и нельзя сохранить
 ответ для задания, которого в этой версии не было.
 
+Имя ученика также фиксируется при старте, чтобы фоновая отправка могла создать
+полное событие без обращения к `AuthService`. `SubmissionReason` различает
+ручную отправку `Student` и автоматическую отправку `Deadline`.
+
 Идентификатор попытки — `Guid`, который создаёт сам `AttemptService`. Поэтому
 события остаются глобально различимыми даже после переноса данных между
 отдельными базами или повторного развёртывания сервиса.
 
 `StateRevision` используется как optimistic concurrency token. Параллельные
-autosave, submit и истечение времени не перезаписывают более новое состояние:
+autosave, ручная отправка и автоматическая отправка по дедлайну не перезаписывают более новое состояние:
 операция перечитывает попытку и либо повторяет безопасное изменение, либо
 возвращает конфликт.
 
@@ -54,9 +58,8 @@ stateDiagram-v2
     [*] --> InProgress: старт опубликованной версии
     InProgress --> InProgress: сохранить допустимые ответы
     InProgress --> Submitted: явная отправка до EndsAt
-    InProgress --> Expired: наступил EndsAt
+    InProgress --> Submitted: автоматическая отправка в EndsAt
     Submitted --> [*]
-    Expired --> [*]
 ```
 
 При старте сервис:
@@ -67,13 +70,11 @@ stateDiagram-v2
 4. рассчитывает `EndsAt` как минимум личного лимита и общего deadline теста;
 5. при конкурентном повторном запросе возвращает уже созданную попытку.
 
-Истечение времени и отправка — разные бизнес-события. Фоновый проход переводит
-просроченную `InProgress`-попытку в `Expired`, а команды дополнительно проверяют
-`EndsAt`, чтобы закрыть гонку с worker-ом. `Expired` запрещает дальнейшее
-редактирование, но не создаёт outbox-сообщение и не запускает проверку.
-
-Только явный `submit`, принятый до дедлайна, переводит попытку в `Submitted` и
-записывает `AttemptSubmittedV1` в той же транзакции.
+Явный `submit` до дедлайна переводит попытку в `Submitted` с причиной `Student`.
+При наступлении `EndsAt` фоновый процесс автоматически отправляет последние
+сохранённые ответы с причиной `Deadline`. Команды чтения и изменения также
+проверяют срок, чтобы закрыть гонку с worker-ом. В обоих случаях статус и
+`AttemptSubmittedV1` записываются в одной транзакции, поэтому проверка не теряется.
 
 ## Доставка в ReviewService
 
@@ -86,6 +87,7 @@ key `attempt.submitted.v1` и ждёт publisher confirm. При временн�
 sequenceDiagram
     actor Student as Ученик
     participant API as AttemptService
+    participant Deadline as Deadline worker
     participant DB as Attempt DB
     participant Rabbit as RabbitMQ
     participant Review as ReviewService
@@ -94,6 +96,9 @@ sequenceDiagram
     API->>DB: Submitted + outbox, одна транзакция
     DB-->>API: commit
     API-->>Student: актуальная попытка
+    opt ученик не отправил работу сам
+        Deadline->>DB: Submitted + outbox в EndsAt
+    end
     DB-->>Rabbit: AttemptSubmittedV1
     Rabbit-->>Review: attempt.submitted.v1
 ```
@@ -131,13 +136,14 @@ DTO этой границы вынесены в
 - `TeachingService` — адрес internal API каталога и timeout;
 - `RabbitMq` — соединение с broker-ом;
 - `AttemptOutbox` — публикация, retry, retention и cleanup;
-- `AttemptExpiration` — период фонового поиска просроченных попыток;
+- `AttemptDeadlineSubmission` — период фонового поиска и автоматической отправки
+  попыток с наступившим сроком;
 - `AttemptInputLimits` — максимальный размер HTTP-body, количество ответов,
   длина одного ответа и суммарная длина текста;
 - `Auth:Jwt` — общие issuer, audience и signing key.
 
 При старте применяются EF Core migrations, затем запускаются
-`AttemptExpirationService`, `AttemptSubmissionOutboxPublisherService` и
+`AttemptDeadlineSubmissionService`, `AttemptSubmissionOutboxPublisherService` и
 `AttemptOutboxCleanupService`. `GET /health/live` проверяет процесс, а
 `GET /health/ready` — доступность PostgreSQL и, если `RabbitMq:Enabled=true`,
 RabbitMQ. В полном Compose сервис
@@ -148,7 +154,7 @@ RabbitMQ. В полном Compose сервис
 
 1. [`Program.cs`](../AttemptService/Program.cs) — DI, JWT, migrations, health и hosted services.
 2. [`Controllers`](../AttemptService/Controllers) — публичная и внутренняя HTTP-граница.
-3. [`Services`](../AttemptService/Services) — старт, autosave, submit и истечение времени.
+3. [`Services`](../AttemptService/Services) — старт, autosave и ручная либо автоматическая отправка.
 4. [`AttemptDbContext`](../AttemptService/Data/AttemptDbContext.cs) и
    [`Models`](../AttemptService/Models) — схема и инварианты хранения.
 5. [`IntegrationEvents`](../AttemptService/Services/IntegrationEvents) — outbox и RabbitMQ.

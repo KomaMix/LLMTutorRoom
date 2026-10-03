@@ -6,6 +6,7 @@ using AttemptService.Enums;
 using AttemptService.Models;
 using AttemptService.Options;
 using AttemptService.Services;
+using AttemptService.Services.IntegrationEvents;
 using Microsoft.EntityFrameworkCore;
 using ReviewService.Contracts.Events;
 using TeachingService.Contracts.Enums;
@@ -43,12 +44,14 @@ public sealed class AttemptLifecycleServiceTests
         var timeLimitedResult = await service.StartAttemptAsync(
             Guid.Parse(distantDeadlineTest.Id),
             "student-1",
+            "Alice Student",
             expectedVersionNumber: 7,
             CancellationToken.None);
         var afterStart = DateTimeOffset.UtcNow;
         var deadlineLimitedResult = await service.StartAttemptAsync(
             Guid.Parse(nearDeadlineTest.Id),
             "student-1",
+            "Alice Student",
             expectedVersionNumber: 4,
             CancellationToken.None);
 
@@ -69,6 +72,10 @@ public sealed class AttemptLifecycleServiceTests
         Assert.Equal(nearDeadline, deadlineLimitedAttempt.EndsAt);
         Assert.False(teachingClient.LastIncludeHidden);
         Assert.Null(teachingClient.LastVersionNumber);
+        await using var dbContext = factory.CreateDbContext();
+        var storedAttempt = await dbContext.TestAttempts
+            .SingleAsync(item => item.Id == timeLimitedAttempt.Id);
+        Assert.Equal("Alice Student", storedAttempt.StudentName);
     }
 
     [Fact]
@@ -88,6 +95,7 @@ public sealed class AttemptLifecycleServiceTests
         var result = await service.StartAttemptAsync(
             Guid.Parse(test.Id),
             "student-1",
+            "Alice Student",
             expectedVersionNumber: 7,
             CancellationToken.None);
 
@@ -114,6 +122,7 @@ public sealed class AttemptLifecycleServiceTests
         var result = await service.StartAttemptAsync(
             Guid.Parse(test.Id),
             "student-1",
+            "Alice Student",
             expectedVersionNumber: 3,
             CancellationToken.None);
 
@@ -140,11 +149,13 @@ public sealed class AttemptLifecycleServiceTests
         var firstResult = await service.StartAttemptAsync(
             Guid.Parse(test.Id),
             "student-1",
+            "Alice Student",
             expectedVersionNumber: 2,
             CancellationToken.None);
         var repeatedResult = await service.StartAttemptAsync(
             Guid.Parse(test.Id),
             "student-1",
+            "Alice Student",
             expectedVersionNumber: 999,
             CancellationToken.None);
 
@@ -177,6 +188,7 @@ public sealed class AttemptLifecycleServiceTests
         var startResult = await service.StartAttemptAsync(
             Guid.Parse(test.Id),
             "student-1",
+            "Alice Student",
             expectedVersionNumber: 3,
             CancellationToken.None);
         var attempt = Assert.IsType<TestAttemptResponse>(startResult.Value);
@@ -209,7 +221,7 @@ public sealed class AttemptLifecycleServiceTests
     }
 
     [Fact]
-    public async Task SaveAnswers_WhenDeadlinePassed_ExpiresAttemptAndDoesNotCreateOutboxMessage()
+    public async Task SaveAnswers_WhenDeadlinePassed_SubmitsSavedAnswersAndCreatesOutboxMessage()
     {
         await using var factory = TestAttemptDbContextFactory.CreateInMemory();
         var attempt = CreateStoredAttempt(
@@ -230,14 +242,23 @@ public sealed class AttemptLifecycleServiceTests
 
         Assert.Equal(AttemptOperationStatus.Conflict, result.Status);
         var currentAttempt = Assert.IsType<TestAttemptResponse>(result.Value);
-        Assert.Equal(TestAttemptStatus.Expired, currentAttempt.Status);
+        Assert.Equal(TestAttemptStatus.Submitted, currentAttempt.Status);
+        Assert.Equal(AttemptSubmissionReason.Deadline, currentAttempt.SubmissionReason);
+        Assert.Equal(attempt.EndsAt, currentAttempt.SubmittedAt);
         Assert.Equal("old-answer", currentAttempt.Answers["task-a"]);
 
         await using var dbContext = factory.CreateDbContext();
         var storedAttempt = await dbContext.TestAttempts.SingleAsync();
-        Assert.Equal(TestAttemptStatus.Expired, storedAttempt.Status);
+        var outboxMessage = await dbContext.AttemptSubmissionOutboxMessages.SingleAsync();
+        var submissionEvent = Assert.IsType<AttemptSubmittedV1>(
+            JsonSerializer.Deserialize<AttemptSubmittedV1>(outboxMessage.PayloadJson, JsonOptions));
+        Assert.Equal(TestAttemptStatus.Submitted, storedAttempt.Status);
+        Assert.Equal(AttemptSubmissionReason.Deadline, storedAttempt.SubmissionReason);
+        Assert.Equal(storedAttempt.EndsAt, storedAttempt.SubmittedAt);
         Assert.Equal(1, storedAttempt.StateRevision);
-        Assert.Empty(dbContext.AttemptSubmissionOutboxMessages);
+        Assert.Equal("old-answer", submissionEvent.Answers["task-a"]);
+        Assert.Equal("Alice Student", submissionEvent.StudentName);
+        Assert.Equal(storedAttempt.EndsAt, submissionEvent.SubmittedAt);
     }
 
     [Fact]
@@ -379,6 +400,7 @@ public sealed class AttemptLifecycleServiceTests
         var startResult = await service.StartAttemptAsync(
             Guid.Parse(test.Id),
             "student-1",
+            "Alice Student",
             expectedVersionNumber: 6,
             CancellationToken.None);
         var attempt = Assert.IsType<TestAttemptResponse>(startResult.Value);
@@ -409,6 +431,7 @@ public sealed class AttemptLifecycleServiceTests
         Assert.Equal(AttemptOperationStatus.Success, firstSubmit.Status);
         var submittedAttempt = Assert.IsType<TestAttemptResponse>(firstSubmit.Value);
         Assert.Equal(TestAttemptStatus.Submitted, submittedAttempt.Status);
+        Assert.Equal(AttemptSubmissionReason.Student, submittedAttempt.SubmissionReason);
         Assert.NotNull(submittedAttempt.SubmittedAt);
 
         Guid eventId;
@@ -421,6 +444,7 @@ public sealed class AttemptLifecycleServiceTests
                 JsonSerializer.Deserialize<AttemptSubmittedV1>(outboxMessage.PayloadJson, JsonOptions));
 
             Assert.Equal(TestAttemptStatus.Submitted, storedAttempt.Status);
+            Assert.Equal(AttemptSubmissionReason.Student, storedAttempt.SubmissionReason);
             Assert.Equal(2, storedAttempt.StateRevision);
             Assert.Equal(storedAttempt.SubmittedAt, outboxMessage.OccurredAt);
             Assert.Equal(expectedTraceParent, outboxMessage.TraceParent);
@@ -526,7 +550,7 @@ public sealed class AttemptLifecycleServiceTests
     }
 
     [Fact]
-    public async Task SubmitAttempt_WhenDeadlinePassed_ExpiresAttemptWithoutSubmissionEvent()
+    public async Task SubmitAttempt_WhenDeadlinePassed_AutomaticallySubmitsSavedAnswers()
     {
         await using var factory = TestAttemptDbContextFactory.CreateInMemory();
         var attempt = CreateStoredAttempt(
@@ -542,17 +566,22 @@ public sealed class AttemptLifecycleServiceTests
             "Alice",
             CancellationToken.None);
 
-        Assert.Equal(AttemptOperationStatus.Conflict, result.Status);
+        Assert.Equal(AttemptOperationStatus.Success, result.Status);
         var currentAttempt = Assert.IsType<TestAttemptResponse>(result.Value);
-        Assert.Equal(TestAttemptStatus.Expired, currentAttempt.Status);
-        Assert.Null(currentAttempt.SubmittedAt);
+        Assert.Equal(TestAttemptStatus.Submitted, currentAttempt.Status);
+        Assert.Equal(AttemptSubmissionReason.Deadline, currentAttempt.SubmissionReason);
+        Assert.Equal(attempt.EndsAt, currentAttempt.SubmittedAt);
 
         await using var dbContext = factory.CreateDbContext();
         var storedAttempt = await dbContext.TestAttempts.SingleAsync();
-        Assert.Equal(TestAttemptStatus.Expired, storedAttempt.Status);
-        Assert.Null(storedAttempt.SubmittedAt);
+        var outboxMessage = await dbContext.AttemptSubmissionOutboxMessages.SingleAsync();
+        var submissionEvent = Assert.IsType<AttemptSubmittedV1>(
+            JsonSerializer.Deserialize<AttemptSubmittedV1>(outboxMessage.PayloadJson, JsonOptions));
+        Assert.Equal(TestAttemptStatus.Submitted, storedAttempt.Status);
+        Assert.Equal(AttemptSubmissionReason.Deadline, storedAttempt.SubmissionReason);
+        Assert.Equal(storedAttempt.EndsAt, storedAttempt.SubmittedAt);
         Assert.Equal(1, storedAttempt.StateRevision);
-        Assert.Empty(dbContext.AttemptSubmissionOutboxMessages);
+        Assert.Equal(storedAttempt.EndsAt, submissionEvent.SubmittedAt);
     }
 
     [Fact]
@@ -638,6 +667,7 @@ public sealed class AttemptLifecycleServiceTests
         return new AttemptLifecycleService(
             factory,
             teachingClient,
+            new AttemptSubmissionOutboxWriter(),
             Microsoft.Extensions.Options.Options.Create(
                 inputLimits ?? new AttemptInputLimitsOptions()));
     }
@@ -668,6 +698,7 @@ public sealed class AttemptLifecycleServiceTests
             TestId = testId.ToString("D"),
             TestRevision = 1,
             StudentUserId = studentUserId,
+            StudentName = "Alice Student",
             Status = TestAttemptStatus.InProgress,
             StartedAt = startedAt ?? DateTimeOffset.UtcNow.AddMinutes(-5),
             EndsAt = endsAt,

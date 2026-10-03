@@ -86,6 +86,7 @@ public sealed class AttemptsControllerTests
         public Task<Result<AttemptOperationStatus, TestAttemptResponse>> StartAttemptAsync(
             Guid testId,
             string studentUserId,
+            string studentUserName,
             int? expectedVersionNumber,
             CancellationToken cancellationToken) =>
             throw new NotSupportedException();

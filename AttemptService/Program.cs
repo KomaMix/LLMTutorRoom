@@ -67,10 +67,10 @@ builder.Services.AddOptions<AttemptOutboxOptions>()
             && options.CleanupBatchSize > 0,
         "AttemptOutbox contains invalid polling, retry, or retention settings.")
     .ValidateOnStart();
-builder.Services.AddOptions<AttemptExpirationOptions>()
-    .Bind(builder.Configuration.GetSection(AttemptExpirationOptions.SectionName))
+builder.Services.AddOptions<AttemptDeadlineSubmissionOptions>()
+    .Bind(builder.Configuration.GetSection(AttemptDeadlineSubmissionOptions.SectionName))
     .Validate(options => options.PollIntervalSeconds > 0 && options.BatchSize > 0,
-        "AttemptExpiration contains invalid polling settings.")
+        "AttemptDeadlineSubmission contains invalid polling settings.")
     .ValidateOnStart();
 builder.Services.AddOptions<AttemptInputLimitsOptions>()
     .Bind(builder.Configuration.GetSection(AttemptInputLimitsOptions.SectionName))
@@ -82,6 +82,7 @@ builder.Services.AddOptions<AttemptInputLimitsOptions>()
     .ValidateOnStart();
 
 builder.Services.AddScoped<IAttemptLifecycleService, AttemptLifecycleService>();
+builder.Services.AddSingleton<AttemptSubmissionOutboxWriter>();
 builder.Services.AddSingleton<RabbitMqConnectionProvider>();
 builder.Services.AddHttpClient<ITeachingServiceClient, TeachingServiceClient>((services, client) =>
 {
@@ -91,7 +92,7 @@ builder.Services.AddHttpClient<ITeachingServiceClient, TeachingServiceClient>((s
     client.BaseAddress = new Uri(options.BaseUrl);
     client.Timeout = TimeSpan.FromSeconds(options.RequestTimeoutSeconds);
 });
-builder.Services.AddHostedService<AttemptExpirationService>();
+builder.Services.AddHostedService<AttemptDeadlineSubmissionService>();
 builder.Services.AddHostedService<AttemptSubmissionOutboxPublisherService>();
 builder.Services.AddHostedService<AttemptOutboxCleanupService>();
 builder.Services.AddHealthChecks()

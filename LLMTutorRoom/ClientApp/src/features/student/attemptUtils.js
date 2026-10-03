@@ -1,7 +1,7 @@
 const attemptStatusText = {
   "in-progress": "Выполняется",
   submitted: "Отправлено",
-  expired: "Время вышло"
+  expired: "Отправляется"
 };
 
 export function getEffectiveAttemptStatus(attempt, remainingSeconds) {

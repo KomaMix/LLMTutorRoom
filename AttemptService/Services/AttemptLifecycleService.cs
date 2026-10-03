@@ -6,31 +6,42 @@ using AttemptService.Enums;
 using AttemptService.Interfaces;
 using AttemptService.Models;
 using AttemptService.Options;
+using AttemptService.Services.IntegrationEvents;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Npgsql;
-using ReviewService.Contracts.Events;
-using Shared.Observability;
 using TeachingService.Contracts.Enums;
 
 namespace AttemptService.Services;
 
-public sealed class AttemptLifecycleService(
-    IDbContextFactory<AttemptDbContext> dbContextFactory,
-    ITeachingServiceClient teachingServiceClient,
-    IOptions<AttemptInputLimitsOptions> inputLimitsOptions) : IAttemptLifecycleService
+public class AttemptLifecycleService : IAttemptLifecycleService
 {
     private const int MaxMutationAttempts = 5;
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
-    private readonly AttemptInputLimitsOptions _inputLimits = inputLimitsOptions.Value;
+    private readonly IDbContextFactory<AttemptDbContext> _dbContextFactory;
+    private readonly ITeachingServiceClient _teachingServiceClient;
+    private readonly AttemptSubmissionOutboxWriter _outboxWriter;
+    private readonly AttemptInputLimitsOptions _inputLimits;
+
+    public AttemptLifecycleService(
+        IDbContextFactory<AttemptDbContext> dbContextFactory,
+        ITeachingServiceClient teachingServiceClient,
+        AttemptSubmissionOutboxWriter outboxWriter,
+        IOptions<AttemptInputLimitsOptions> inputLimitsOptions)
+    {
+        _dbContextFactory = dbContextFactory;
+        _teachingServiceClient = teachingServiceClient;
+        _outboxWriter = outboxWriter;
+        _inputLimits = inputLimitsOptions.Value;
+    }
 
     public async Task<List<TestAttemptResponse>> GetStudentAttemptsAsync(
         string studentUserId,
         CancellationToken cancellationToken)
     {
-        await ExpireStudentAttemptsAsync(studentUserId, cancellationToken);
+        await SubmitDueStudentAttemptsAsync(studentUserId, cancellationToken);
 
-        await using var dbContext = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var dbContext = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
         var attempts = await dbContext.TestAttempts
             .AsNoTracking()
             .Where(attempt => attempt.StudentUserId == studentUserId)
@@ -45,9 +56,9 @@ public sealed class AttemptLifecycleService(
         string studentUserId,
         CancellationToken cancellationToken)
     {
-        await ExpireStudentAttemptsAsync(studentUserId, cancellationToken);
+        await SubmitDueStudentAttemptsAsync(studentUserId, cancellationToken);
 
-        await using var dbContext = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var dbContext = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
         var attempt = await dbContext.TestAttempts
             .AsNoTracking()
             .SingleOrDefaultAsync(
@@ -59,13 +70,14 @@ public sealed class AttemptLifecycleService(
     public async Task<Result<AttemptOperationStatus, TestAttemptResponse>> StartAttemptAsync(
         Guid testId,
         string studentUserId,
+        string studentUserName,
         int? expectedVersionNumber,
         CancellationToken cancellationToken)
     {
-        await ExpireStudentAttemptsAsync(studentUserId, cancellationToken);
+        await SubmitDueStudentAttemptsAsync(studentUserId, cancellationToken);
         var canonicalTestId = testId.ToString("D");
 
-        await using (var readContext = await dbContextFactory.CreateDbContextAsync(cancellationToken))
+        await using (var readContext = await _dbContextFactory.CreateDbContextAsync(cancellationToken))
         {
             var existingAttempt = await readContext.TestAttempts
                 .AsNoTracking()
@@ -83,7 +95,7 @@ public sealed class AttemptLifecycleService(
             }
         }
 
-        var test = await teachingServiceClient.GetTestAsync(
+        var test = await _teachingServiceClient.GetTestAsync(
             testId,
             includeHidden: false,
             versionNumber: null,
@@ -122,6 +134,7 @@ public sealed class AttemptLifecycleService(
             TestId = canonicalTestId,
             TestRevision = test.VersionNumber,
             StudentUserId = studentUserId,
+            StudentName = AttemptSubmissionOutboxWriter.NormalizeStudentName(studentUserName),
             Status = TestAttemptStatus.InProgress,
             StartedAt = now,
             EndsAt = Min(now.AddMinutes(test.TimeLimitMinutes), test.Deadline),
@@ -129,7 +142,7 @@ public sealed class AttemptLifecycleService(
             AllowedTaskIdsJson = SerializeTaskIds(test.Tasks.Select(task => task.Id))
         };
 
-        await using var writeContext = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var writeContext = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
         writeContext.TestAttempts.Add(attempt);
         try
         {
@@ -167,7 +180,7 @@ public sealed class AttemptLifecycleService(
     {
         for (var mutationAttempt = 1; mutationAttempt <= MaxMutationAttempts; mutationAttempt++)
         {
-            await using var dbContext = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+            await using var dbContext = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
             var attempt = await FindStudentAttemptAsync(
                 dbContext,
                 attemptId,
@@ -181,16 +194,28 @@ public sealed class AttemptLifecycleService(
                 };
             }
 
-            var expiredNow = ExpireIfNeeded(attempt, DateTimeOffset.UtcNow);
             if (attempt.Status != TestAttemptStatus.InProgress)
             {
-                if (!expiredNow)
+                return new Result<AttemptOperationStatus, TestAttemptResponse>
                 {
-                    return new Result<AttemptOperationStatus, TestAttemptResponse>
-                    {
-                        Status = AttemptOperationStatus.Conflict,
-                        Value = ToResponse(attempt)
-                    };
+                    Status = AttemptOperationStatus.Conflict,
+                    Value = ToResponse(attempt)
+                };
+            }
+
+            if (attempt.EndsAt <= DateTimeOffset.UtcNow)
+            {
+                ApplyDeadlineSubmission(attempt);
+                var submissionEventStaged = await _outboxWriter.StageAsync(
+                    dbContext,
+                    attempt,
+                    cancellationToken);
+                if (!submissionEventStaged)
+                {
+                    return await CreateConcurrencyConflictAsync(
+                        attemptId,
+                        studentUserId,
+                        cancellationToken);
                 }
 
                 IncrementStateRevision(attempt);
@@ -207,7 +232,20 @@ public sealed class AttemptLifecycleService(
                 {
                     continue;
                 }
+                catch (DbUpdateException exception) when (
+                    IsDuplicateSubmissionEvent(exception)
+                    && mutationAttempt < MaxMutationAttempts)
+                {
+                    continue;
+                }
                 catch (DbUpdateConcurrencyException)
+                {
+                    return await CreateConcurrencyConflictAsync(
+                        attemptId,
+                        studentUserId,
+                        cancellationToken);
+                }
+                catch (DbUpdateException exception) when (IsDuplicateSubmissionEvent(exception))
                 {
                     return await CreateConcurrencyConflictAsync(
                         attemptId,
@@ -262,7 +300,7 @@ public sealed class AttemptLifecycleService(
     {
         for (var mutationAttempt = 1; mutationAttempt <= MaxMutationAttempts; mutationAttempt++)
         {
-            await using var dbContext = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+            await using var dbContext = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
             var attempt = await FindStudentAttemptAsync(
                 dbContext,
                 attemptId,
@@ -276,37 +314,6 @@ public sealed class AttemptLifecycleService(
                 };
             }
 
-            var now = DateTimeOffset.UtcNow;
-            var expiredNow = ExpireIfNeeded(attempt, now);
-            if (attempt.Status == TestAttemptStatus.Expired)
-            {
-                if (expiredNow)
-                {
-                    IncrementStateRevision(attempt);
-                    try
-                    {
-                        await dbContext.SaveChangesAsync(cancellationToken);
-                    }
-                    catch (DbUpdateConcurrencyException) when (mutationAttempt < MaxMutationAttempts)
-                    {
-                        continue;
-                    }
-                    catch (DbUpdateConcurrencyException)
-                    {
-                        return await CreateConcurrencyConflictAsync(
-                            attemptId,
-                            studentUserId,
-                            cancellationToken);
-                    }
-                }
-
-                return new Result<AttemptOperationStatus, TestAttemptResponse>
-                {
-                    Status = AttemptOperationStatus.Conflict,
-                    Value = ToResponse(attempt)
-                };
-            }
-
             if (attempt.Status == TestAttemptStatus.Submitted)
             {
                 return new Result<AttemptOperationStatus, TestAttemptResponse>
@@ -316,12 +323,20 @@ public sealed class AttemptLifecycleService(
                 };
             }
 
-            attempt.Status = TestAttemptStatus.Submitted;
-            attempt.SubmittedAt = now;
-            var submissionEventStaged = await StageSubmissionEventAsync(
+            var now = DateTimeOffset.UtcNow;
+            attempt.StudentName = AttemptSubmissionOutboxWriter.NormalizeStudentName(studentUserName);
+            if (attempt.EndsAt <= now)
+            {
+                ApplyDeadlineSubmission(attempt);
+            }
+            else
+            {
+                ApplyStudentSubmission(attempt, now);
+            }
+
+            var submissionEventStaged = await _outboxWriter.StageAsync(
                 dbContext,
                 attempt,
-                studentUserName,
                 cancellationToken);
             if (!submissionEventStaged)
             {
@@ -381,13 +396,13 @@ public sealed class AttemptLifecycleService(
         };
     }
 
-    private async Task ExpireStudentAttemptsAsync(
+    private async Task SubmitDueStudentAttemptsAsync(
         string studentUserId,
         CancellationToken cancellationToken)
     {
         for (var mutationAttempt = 1; mutationAttempt <= MaxMutationAttempts; mutationAttempt++)
         {
-            await using var dbContext = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+            await using var dbContext = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
             var now = DateTimeOffset.UtcNow;
             var attempts = await dbContext.TestAttempts
                 .Where(attempt => attempt.StudentUserId == studentUserId
@@ -395,12 +410,27 @@ public sealed class AttemptLifecycleService(
                     && attempt.EndsAt <= now)
                 .ToListAsync(cancellationToken);
             if (attempts.Count == 0)
+            {
                 return;
+            }
 
+            var stagedAttemptCount = 0;
             foreach (var attempt in attempts)
             {
-                attempt.Status = TestAttemptStatus.Expired;
+                ApplyDeadlineSubmission(attempt);
+                if (!await _outboxWriter.StageAsync(dbContext, attempt, cancellationToken))
+                {
+                    dbContext.Entry(attempt).State = EntityState.Unchanged;
+                    continue;
+                }
+
                 IncrementStateRevision(attempt);
+                stagedAttemptCount++;
+            }
+
+            if (stagedAttemptCount == 0)
+            {
+                return;
             }
 
             try
@@ -412,71 +442,21 @@ public sealed class AttemptLifecycleService(
             {
                 continue;
             }
+            catch (DbUpdateException exception) when (
+                IsDuplicateSubmissionEvent(exception)
+                && mutationAttempt < MaxMutationAttempts)
+            {
+                continue;
+            }
             catch (DbUpdateConcurrencyException)
             {
                 return;
             }
-        }
-    }
-
-    private static async Task<bool> StageSubmissionEventAsync(
-        AttemptDbContext dbContext,
-        TestAttempt attempt,
-        string studentUserName,
-        CancellationToken cancellationToken)
-    {
-        var existingOutbox = await dbContext.AttemptSubmissionOutboxMessages
-            .SingleOrDefaultAsync(
-                message => message.AttemptId == attempt.Id,
-                cancellationToken);
-        var eventId = existingOutbox?.Id ?? Guid.NewGuid();
-        var submittedAt = attempt.SubmittedAt
-            ?? throw new InvalidOperationException("Submitted attempt must have SubmittedAt.");
-        var message = new AttemptSubmittedV1
-        {
-            EventId = eventId,
-            AttemptId = attempt.Id,
-            TestId = attempt.TestId,
-            TestRevision = attempt.TestRevision,
-            StudentUserId = attempt.StudentUserId,
-            StudentName = string.IsNullOrWhiteSpace(studentUserName)
-                ? "Студент"
-                : studentUserName.Trim(),
-            Answers = DeserializeAnswers(attempt.AnswersJson),
-            SubmittedAt = submittedAt
-        };
-        var payload = JsonSerializer.Serialize(message, JsonOptions);
-        var traceContext = ProjectTelemetry.CaptureCurrentTraceContext();
-
-        if (existingOutbox is null)
-        {
-            dbContext.AttemptSubmissionOutboxMessages.Add(new AttemptSubmissionOutboxMessage
+            catch (DbUpdateException exception) when (IsDuplicateSubmissionEvent(exception))
             {
-                Id = eventId,
-                AttemptId = attempt.Id,
-                OccurredAt = submittedAt,
-                PayloadJson = payload,
-                TraceParent = traceContext.TraceParent,
-                TraceState = traceContext.TraceState
-            });
-            return true;
+                return;
+            }
         }
-
-        if (existingOutbox.PublishedAt is not null)
-            return false;
-
-        existingOutbox.OccurredAt = submittedAt;
-        existingOutbox.PayloadJson = payload;
-        existingOutbox.PublishAttempts = 0;
-        existingOutbox.NextPublishAt = null;
-        existingOutbox.LastError = string.Empty;
-        if (traceContext.TraceParent is not null)
-        {
-            existingOutbox.TraceParent = traceContext.TraceParent;
-            existingOutbox.TraceState = traceContext.TraceState;
-        }
-
-        return true;
     }
 
     private async Task<Result<AttemptOperationStatus, TestAttemptResponse>> CreateConcurrencyConflictAsync(
@@ -484,7 +464,7 @@ public sealed class AttemptLifecycleService(
         string studentUserId,
         CancellationToken cancellationToken)
     {
-        await using var dbContext = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var dbContext = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
         var currentAttempt = await dbContext.TestAttempts
             .AsNoTracking()
             .SingleOrDefaultAsync(
@@ -517,7 +497,7 @@ public sealed class AttemptLifecycleService(
         string studentUserId,
         CancellationToken cancellationToken)
     {
-        await using var dbContext = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var dbContext = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
         var currentAttempt = await dbContext.TestAttempts
             .AsNoTracking()
             .SingleOrDefaultAsync(
@@ -541,12 +521,6 @@ public sealed class AttemptLifecycleService(
                     Status = AttemptOperationStatus.Success,
                     Value = ToResponse(currentAttempt)
                 },
-            TestAttemptStatus.Expired =>
-                new Result<AttemptOperationStatus, TestAttemptResponse>
-                {
-                    Status = AttemptOperationStatus.Conflict,
-                    Value = ToResponse(currentAttempt)
-                },
             _ => new Result<AttemptOperationStatus, TestAttemptResponse>
             {
                 Status = AttemptOperationStatus.Conflict
@@ -559,7 +533,7 @@ public sealed class AttemptLifecycleService(
         string studentUserId,
         CancellationToken cancellationToken)
     {
-        await using var dbContext = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var dbContext = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
         return await dbContext.TestAttempts
             .AsNoTracking()
             .SingleOrDefaultAsync(
@@ -609,13 +583,18 @@ public sealed class AttemptLifecycleService(
         return true;
     }
 
-    private static bool ExpireIfNeeded(TestAttempt attempt, DateTimeOffset now)
+    private static void ApplyStudentSubmission(TestAttempt attempt, DateTimeOffset submittedAt)
     {
-        if (attempt.Status != TestAttemptStatus.InProgress || attempt.EndsAt > now)
-            return false;
+        attempt.Status = TestAttemptStatus.Submitted;
+        attempt.SubmittedAt = submittedAt;
+        attempt.SubmissionReason = AttemptSubmissionReason.Student;
+    }
 
-        attempt.Status = TestAttemptStatus.Expired;
-        return true;
+    private static void ApplyDeadlineSubmission(TestAttempt attempt)
+    {
+        attempt.Status = TestAttemptStatus.Submitted;
+        attempt.SubmittedAt = attempt.EndsAt;
+        attempt.SubmissionReason = AttemptSubmissionReason.Deadline;
     }
 
     private static void IncrementStateRevision(TestAttempt attempt)
@@ -634,6 +613,7 @@ public sealed class AttemptLifecycleService(
             StartedAt = attempt.StartedAt,
             EndsAt = attempt.EndsAt,
             SubmittedAt = attempt.SubmittedAt,
+            SubmissionReason = attempt.SubmissionReason,
             Answers = DeserializeAnswers(attempt.AnswersJson)
         };
     }

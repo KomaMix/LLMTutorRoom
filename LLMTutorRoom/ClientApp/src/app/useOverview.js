@@ -92,8 +92,7 @@ export function useOverview({ enabled, identityKey, role }) {
       }
 
       const existingAttempt = current.attempts.find(item => item.id === attempt.id);
-      const existingIsTerminal = existingAttempt?.status === "submitted"
-        || existingAttempt?.status === "expired";
+      const existingIsTerminal = existingAttempt?.status === "submitted";
       if (existingIsTerminal && attempt.status === "in-progress") {
         return current;
       }

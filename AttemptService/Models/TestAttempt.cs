@@ -8,10 +8,12 @@ public sealed class TestAttempt
     public string TestId { get; set; } = string.Empty;
     public int TestRevision { get; set; }
     public string StudentUserId { get; set; } = string.Empty;
+    public string StudentName { get; set; } = string.Empty;
     public TestAttemptStatus Status { get; set; } = TestAttemptStatus.InProgress;
     public DateTimeOffset StartedAt { get; set; }
     public DateTimeOffset EndsAt { get; set; }
     public DateTimeOffset? SubmittedAt { get; set; }
+    public AttemptSubmissionReason? SubmissionReason { get; set; }
     public string AnswersJson { get; set; } = "{}";
     public string AllowedTaskIdsJson { get; set; } = "[]";
     public int StateRevision { get; set; }

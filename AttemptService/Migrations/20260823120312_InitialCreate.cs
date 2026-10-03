@@ -37,10 +37,12 @@ namespace AttemptService.Migrations
                     TestId = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
                     TestRevision = table.Column<int>(type: "integer", nullable: false),
                     StudentUserId = table.Column<string>(type: "character varying(450)", maxLength: 450, nullable: false),
+                    StudentName = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: false),
                     Status = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false),
                     StartedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     EndsAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     SubmittedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    SubmissionReason = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: true),
                     Answers = table.Column<string>(type: "jsonb", nullable: false),
                     AllowedTaskIds = table.Column<string>(type: "jsonb", nullable: false),
                     StateRevision = table.Column<int>(type: "integer", nullable: false)
