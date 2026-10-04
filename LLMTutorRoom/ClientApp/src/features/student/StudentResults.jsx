@@ -30,6 +30,7 @@ function getEntryTime(entry) {
     ?? entry.attempt?.submittedAt
     ?? entry.attempt?.endsAt
     ?? entry.attempt?.startedAt
+    ?? entry.test?.availableFrom
     ?? entry.test?.deadline;
   const timestamp = new Date(value).getTime();
   return Number.isFinite(timestamp) ? timestamp : 0;
@@ -50,6 +51,7 @@ function getEntryDate(entry) {
     ?? entry.attempt?.submittedAt
     ?? entry.attempt?.endsAt
     ?? entry.attempt?.startedAt
+    ?? entry.test?.availableFrom
     ?? entry.test?.deadline;
 }
 
@@ -186,7 +188,9 @@ function StudentResultCard({ attempt, currentTime, isReviewDeferred, review, tes
     >
       <header className="student-result-header">
         <div>
-          <span className="eyebrow">{test?.subject ?? "Тест"}</span>
+          <span className="eyebrow">
+            {test?.subject ?? "Тест"}{test?.groupName ? ` · ${test.groupName}` : ""}
+          </span>
           <h3>{title}</h3>
         </div>
         {displayStatus && <StatusBadge status={displayStatus} />}
@@ -198,8 +202,12 @@ function StudentResultCard({ attempt, currentTime, isReviewDeferred, review, tes
           <div>
             <strong>{displayStatus === "expired"
               ? "Срок выполнения теста истёк"
-              : "Тест больше недоступен для выполнения"}</strong>
-            <p>Вы не начинали этот тест.</p>
+              : displayStatus === "scheduled"
+                ? "Тест ещё не открыт"
+                : "Тест больше недоступен для выполнения"}</strong>
+            <p>{displayStatus === "scheduled"
+              ? `Начало выполнения ${formatDate(test.availableFrom)}`
+              : "Вы не начинали этот тест."}</p>
           </div>
         </div>
       ) : isChecked ? (
@@ -268,7 +276,7 @@ export function StudentResults({ attempts, reviews, tests, terminalReviewsNextCu
   const { hash } = useLocation();
   const [selectedEntryId, setSelectedEntryId] = useState(() =>
     hash ? decodeURIComponent(hash.slice(1)) : null);
-  const { unavailableTests, attemptByTestId, currentTime } = useStudentTestAvailability(tests, attempts);
+  const { unavailableTests, attemptByAssignmentId, currentTime } = useStudentTestAvailability(tests, attempts);
   const [terminalReviews, setTerminalReviews] = useState(() =>
     reviews.filter(isTerminalReview));
   const [nextCursor, setNextCursor] = useState(terminalReviewsNextCursor ?? null);
@@ -289,12 +297,12 @@ export function StudentResults({ attempts, reviews, tests, terminalReviewsNextCu
     ? Math.min(...terminalReviewTimes)
     : null;
   const completedAttemptIds = new Set(completedAttempts.map(attempt => attempt.id));
-  const reviewedTestIds = new Set(visibleReviews.map(review => review.testId));
+  const reviewedAssignmentIds = new Set(visibleReviews.map(review => review.assignmentId));
   const entries = [
     ...completedAttempts.map(attempt => ({
       attempt,
       review: reviewByAttemptId.get(attempt.id) ?? null,
-      test: tests.find(test => test.id === attempt.testId) ?? null,
+      test: tests.find(test => test.id === attempt.assignmentId) ?? null,
       isReviewDeferred: attempt.status === "submitted"
         && !reviewByAttemptId.has(attempt.id)
         && Boolean(nextCursor)
@@ -307,11 +315,11 @@ export function StudentResults({ attempts, reviews, tests, terminalReviewsNextCu
       .map(review => ({
         attempt: null,
         review,
-        test: tests.find(test => test.id === review.testId) ?? null,
+        test: tests.find(test => test.id === review.assignmentId) ?? null,
         isReviewDeferred: false
       })),
     ...unavailableTests
-      .filter(test => !attemptByTestId.has(test.id) && !reviewedTestIds.has(test.id))
+      .filter(test => !attemptByAssignmentId.has(test.id) && !reviewedAssignmentIds.has(test.id))
       .map(test => ({
         attempt: null,
         review: null,
@@ -415,6 +423,7 @@ export function StudentResults({ attempts, reviews, tests, terminalReviewsNextCu
                 <span className="student-result-accordion-title">
                   <strong>{getEntryTitle(entry)}</strong>
                   <span>
+                    {entry.test?.groupName ? `${entry.test.groupName} · ` : ""}
                     {entry.test?.subject ?? "Тест"} · {formatDate(getEntryDate(entry))}
                   </span>
                 </span>

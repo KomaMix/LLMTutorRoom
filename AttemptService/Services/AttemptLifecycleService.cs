@@ -10,7 +10,6 @@ using AttemptService.Services.IntegrationEvents;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Npgsql;
-using TeachingService.Contracts.Enums;
 
 namespace AttemptService.Services;
 
@@ -67,22 +66,34 @@ public class AttemptLifecycleService : IAttemptLifecycleService
         return attempt is null ? null : ToResponse(attempt);
     }
 
+    public async Task<List<TestAttemptResponse>> GetTeacherAttemptsAsync(
+        string teacherUserId,
+        CancellationToken cancellationToken)
+    {
+        await using var dbContext = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var attempts = await dbContext.TestAttempts
+            .AsNoTracking()
+            .Where(attempt => attempt.TeacherUserId == teacherUserId)
+            .OrderByDescending(attempt => attempt.StartedAt)
+            .ToListAsync(cancellationToken);
+
+        return attempts.Select(ToResponse).ToList();
+    }
+
     public async Task<Result<AttemptOperationStatus, TestAttemptResponse>> StartAttemptAsync(
-        Guid testId,
+        Guid assignmentId,
         string studentUserId,
         string studentUserName,
-        int? expectedVersionNumber,
         CancellationToken cancellationToken)
     {
         await SubmitDueStudentAttemptsAsync(studentUserId, cancellationToken);
-        var canonicalTestId = testId.ToString("D");
 
         await using (var readContext = await _dbContextFactory.CreateDbContextAsync(cancellationToken))
         {
             var existingAttempt = await readContext.TestAttempts
                 .AsNoTracking()
                 .SingleOrDefaultAsync(
-                    attempt => attempt.TestId == canonicalTestId
+                    attempt => attempt.AssignmentId == assignmentId
                         && attempt.StudentUserId == studentUserId,
                     cancellationToken);
             if (existingAttempt is not null)
@@ -95,14 +106,11 @@ public class AttemptLifecycleService : IAttemptLifecycleService
             }
         }
 
-        var test = await _teachingServiceClient.GetTestAsync(
-            testId,
-            includeHidden: false,
-            versionNumber: null,
+        var assignment = await _teachingServiceClient.GetStudentAssignmentAsync(
+            assignmentId,
+            studentUserId,
             cancellationToken);
-        if (test is null
-            || test.Status != CourseTestStatus.Published
-            || test.VersionNumber <= 0)
+        if (assignment is null || assignment.Test.VersionNumber <= 0)
         {
             return new Result<AttemptOperationStatus, TestAttemptResponse>
             {
@@ -110,17 +118,8 @@ public class AttemptLifecycleService : IAttemptLifecycleService
             };
         }
 
-        if (expectedVersionNumber.HasValue
-            && expectedVersionNumber.Value != test.VersionNumber)
-        {
-            return new Result<AttemptOperationStatus, TestAttemptResponse>
-            {
-                Status = AttemptOperationStatus.VersionConflict
-            };
-        }
-
         var now = DateTimeOffset.UtcNow;
-        if (test.Deadline <= now)
+        if (assignment.AvailableFrom > now || assignment.Deadline <= now)
         {
             return new Result<AttemptOperationStatus, TestAttemptResponse>
             {
@@ -131,15 +130,18 @@ public class AttemptLifecycleService : IAttemptLifecycleService
         var attempt = new TestAttempt
         {
             Id = Guid.NewGuid(),
-            TestId = canonicalTestId,
-            TestRevision = test.VersionNumber,
+            AssignmentId = assignment.Id,
+            GroupId = assignment.GroupId,
+            TestId = assignment.Test.Id,
+            TestRevision = assignment.Test.VersionNumber,
+            TeacherUserId = assignment.TeacherUserId,
             StudentUserId = studentUserId,
             StudentName = AttemptSubmissionOutboxWriter.NormalizeStudentName(studentUserName),
             Status = TestAttemptStatus.InProgress,
             StartedAt = now,
-            EndsAt = Min(now.AddMinutes(test.TimeLimitMinutes), test.Deadline),
+            EndsAt = Min(now.AddMinutes(assignment.Test.TimeLimitMinutes), assignment.Deadline),
             AnswersJson = "{}",
-            AllowedTaskIdsJson = SerializeTaskIds(test.Tasks.Select(task => task.Id))
+            AllowedTaskIdsJson = SerializeTaskIds(assignment.Test.Tasks.Select(task => task.Id))
         };
 
         await using var writeContext = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
@@ -156,7 +158,7 @@ public class AttemptLifecycleService : IAttemptLifecycleService
         catch (DbUpdateException exception) when (IsDuplicateAttempt(exception))
         {
             var concurrentlyCreatedAttempt = await LoadAttemptAsync(
-                canonicalTestId,
+                assignmentId,
                 studentUserId,
                 cancellationToken);
             return concurrentlyCreatedAttempt is null
@@ -529,7 +531,7 @@ public class AttemptLifecycleService : IAttemptLifecycleService
     }
 
     private async Task<TestAttempt?> LoadAttemptAsync(
-        string testId,
+        Guid assignmentId,
         string studentUserId,
         CancellationToken cancellationToken)
     {
@@ -537,7 +539,7 @@ public class AttemptLifecycleService : IAttemptLifecycleService
         return await dbContext.TestAttempts
             .AsNoTracking()
             .SingleOrDefaultAsync(
-                attempt => attempt.TestId == testId
+                attempt => attempt.AssignmentId == assignmentId
                     && attempt.StudentUserId == studentUserId,
                 cancellationToken);
     }
@@ -607,8 +609,13 @@ public class AttemptLifecycleService : IAttemptLifecycleService
         return new TestAttemptResponse
         {
             Id = attempt.Id,
+            AssignmentId = attempt.AssignmentId,
+            GroupId = attempt.GroupId,
             TestId = attempt.TestId,
             TestRevision = attempt.TestRevision,
+            TeacherUserId = attempt.TeacherUserId,
+            StudentUserId = attempt.StudentUserId,
+            StudentName = attempt.StudentName,
             Status = attempt.Status,
             StartedAt = attempt.StartedAt,
             EndsAt = attempt.EndsAt,
@@ -623,7 +630,7 @@ public class AttemptLifecycleService : IAttemptLifecycleService
         return exception.InnerException is PostgresException
         {
             SqlState: PostgresErrorCodes.UniqueViolation,
-            ConstraintName: "IX_TestAttempts_TestId_StudentUserId"
+            ConstraintName: "IX_TestAttempts_AssignmentId_StudentUserId"
         };
     }
 

@@ -1,12 +1,11 @@
-using TeachingService.Contracts.Models;
+using TeachingService.Contracts.Responses;
 
 namespace AttemptService.Interfaces;
 
 public interface ITeachingServiceClient
 {
-    Task<CourseTestDto?> GetTestAsync(
-        Guid testId,
-        bool includeHidden,
-        int? versionNumber,
+    Task<TestAssignmentResponse?> GetStudentAssignmentAsync(
+        Guid assignmentId,
+        string studentUserId,
         CancellationToken cancellationToken);
 }

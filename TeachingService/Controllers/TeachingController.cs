@@ -387,12 +387,6 @@ namespace TeachingService.Controllers
                 return false;
             }
 
-            if (!request.Deadline.HasValue)
-            {
-                error = "Deadline is required.";
-                return false;
-            }
-
             if (request.Status != CourseTestStatus.Draft)
             {
                 error = "Tests are created and edited as drafts. Use the publish endpoint to publish a version.";

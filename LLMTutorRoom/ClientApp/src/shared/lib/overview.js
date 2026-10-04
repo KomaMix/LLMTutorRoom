@@ -32,6 +32,9 @@ export function parseOverview(data, role) {
   requireArray(data.models, "models");
   requireArray(data.reviews, "reviews");
   requireArray(data.attempts, "attempts");
+  if (role === "teacher") {
+    requireArray(data.groups, "groups");
+  }
 
   if (data.terminalReviewsNextCursor != null
     && typeof data.terminalReviewsNextCursor !== "string") {
@@ -50,6 +53,14 @@ export function parseOverview(data, role) {
 
       if (test.llmModelId != null && (!Number.isInteger(test.llmModelId) || test.llmModelId <= 0)) {
         throw new Error(`tests[${testIndex}].llmModelId must be a positive integer or null.`);
+      }
+    } else {
+      if (typeof test.assignmentId !== "string" || test.assignmentId.length === 0) {
+        throw new Error(`tests[${testIndex}].assignmentId must be a non-empty string.`);
+      }
+
+      if (typeof test.availableFrom !== "string" || typeof test.deadline !== "string") {
+        throw new Error(`tests[${testIndex}] must contain assignment availability dates.`);
       }
     }
 
@@ -82,6 +93,14 @@ export function parseOverview(data, role) {
   });
 
   data.reviews.forEach((review, reviewIndex) => {
+    if (typeof review.assignmentId !== "string" || review.assignmentId.length === 0) {
+      throw new Error(`reviews[${reviewIndex}].assignmentId must be a non-empty string.`);
+    }
+
+    if (typeof review.groupId !== "string" || review.groupId.length === 0) {
+      throw new Error(`reviews[${reviewIndex}].groupId must be a non-empty string.`);
+    }
+
     requireArray(review.taskResults, `reviews[${reviewIndex}].taskResults`);
 
     review.taskResults.forEach((taskResult, taskResultIndex) => {
@@ -98,6 +117,10 @@ export function parseOverview(data, role) {
 
     if (typeof attempt.testId !== "string") {
       throw new Error(`attempts[${attemptIndex}].testId must be a string.`);
+    }
+
+    if (typeof attempt.assignmentId !== "string" || attempt.assignmentId.length === 0) {
+      throw new Error(`attempts[${attemptIndex}].assignmentId must be a non-empty string.`);
     }
 
     if (!Number.isInteger(attempt.testRevision) || attempt.testRevision < 0) {
@@ -135,6 +158,14 @@ export function parseReviewHistoryPage(data) {
   }
 
   data.reviews.forEach((review, reviewIndex) => {
+    if (typeof review.assignmentId !== "string" || review.assignmentId.length === 0) {
+      throw new Error(`reviews[${reviewIndex}].assignmentId must be a non-empty string.`);
+    }
+
+    if (typeof review.groupId !== "string" || review.groupId.length === 0) {
+      throw new Error(`reviews[${reviewIndex}].groupId must be a non-empty string.`);
+    }
+
     requireArray(review.taskResults, `reviews[${reviewIndex}].taskResults`);
     review.taskResults.forEach((taskResult, taskResultIndex) => {
       validateReviewTaskResult(

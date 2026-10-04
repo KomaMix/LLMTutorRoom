@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
@@ -137,7 +137,13 @@ namespace ReviewService.Migrations
                         .HasColumnType("jsonb")
                         .HasColumnName("Answers");
 
+                    b.Property<Guid>("AssignmentId")
+                        .HasColumnType("uuid");
+
                     b.Property<Guid>("AttemptId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("GroupId")
                         .HasColumnType("uuid");
 
                     b.Property<DateTimeOffset>("ReceivedAt")
@@ -166,6 +172,8 @@ namespace ReviewService.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("AssignmentId");
+
                     b.HasIndex("AttemptId")
                         .IsUnique();
 
@@ -178,22 +186,28 @@ namespace ReviewService.Migrations
 
             modelBuilder.Entity("ReviewService.Models.Reviews.Review", b =>
                 {
-                    b.Property<string>("GradingExamplesJson")
-                        .IsRequired()
-                        .HasColumnType("jsonb")
-                        .HasColumnName("GradingExamples");
-
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("integer");
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<Guid>("AssignmentId")
+                        .HasColumnType("uuid");
+
                     b.Property<Guid>("AttemptId")
                         .HasColumnType("uuid");
 
                     b.Property<DateTimeOffset?>("CompletedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("GradingExamplesJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("GradingExamples");
+
+                    b.Property<Guid>("GroupId")
+                        .HasColumnType("uuid");
 
                     b.Property<DateTimeOffset?>("LastEnqueuedAt")
                         .HasColumnType("timestamp with time zone");
@@ -278,8 +292,12 @@ namespace ReviewService.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("AssignmentId");
+
                     b.HasIndex("AttemptId")
                         .IsUnique();
+
+                    b.HasIndex("GroupId");
 
                     b.HasIndex("StudentUserId");
 
@@ -302,11 +320,6 @@ namespace ReviewService.Migrations
 
             modelBuilder.Entity("ReviewService.Models.Reviews.ReviewTask", b =>
                 {
-                    b.Property<string>("GradingExamplesJson")
-                        .IsRequired()
-                        .HasColumnType("jsonb")
-                        .HasColumnName("GradingExamples");
-
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("integer");
@@ -317,21 +330,6 @@ namespace ReviewService.Migrations
                         .IsRequired()
                         .HasColumnType("jsonb")
                         .HasColumnName("AnswerOptions");
-
-                    b.Property<int?>("LlmDeploymentId")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("LlmDeploymentName")
-                        .HasColumnType("text");
-
-                    b.Property<string>("LlmProviderModelId")
-                        .HasColumnType("text");
-
-                    b.Property<string>("LlmModelDisplayName")
-                        .HasColumnType("text");
-
-                    b.Property<DateTimeOffset?>("LlmDeploymentUpdatedAt")
-                        .HasColumnType("timestamp with time zone");
 
                     b.Property<int>("Attempts")
                         .HasColumnType("integer");
@@ -353,8 +351,28 @@ namespace ReviewService.Migrations
                         .HasColumnType("jsonb")
                         .HasColumnName("Findings");
 
+                    b.Property<string>("GradingExamplesJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("GradingExamples");
+
                     b.Property<string>("LastError")
                         .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int?>("LlmDeploymentId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("LlmDeploymentName")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset?>("LlmDeploymentUpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("LlmModelDisplayName")
+                        .HasColumnType("text");
+
+                    b.Property<string>("LlmProviderModelId")
                         .HasColumnType("text");
 
                     b.Property<decimal>("MaxScore")
@@ -410,16 +428,16 @@ namespace ReviewService.Migrations
 
             modelBuilder.Entity("ReviewService.Models.Reviews.TestReviewPolicy", b =>
                 {
-                    b.Property<string>("GradingExamplesJson")
-                        .IsRequired()
-                        .HasColumnType("jsonb")
-                        .HasColumnName("GradingExamples");
-
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("integer");
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("GradingExamplesJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("GradingExamples");
 
                     b.Property<int?>("ModelId")
                         .HasColumnType("integer");

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
@@ -31,6 +31,22 @@ namespace TeachingService.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "StudyGroups",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    Name = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
+                    TeacherUserId = table.Column<string>(type: "character varying(450)", maxLength: 450, nullable: false),
+                    CreatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    UpdatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    Revision = table.Column<int>(type: "integer", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_StudyGroups", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "Tests",
                 columns: table => new
                 {
@@ -41,6 +57,25 @@ namespace TeachingService.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_Tests", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "StudyGroupStudents",
+                columns: table => new
+                {
+                    StudyGroupId = table.Column<Guid>(type: "uuid", nullable: false),
+                    StudentUserId = table.Column<string>(type: "character varying(450)", maxLength: 450, nullable: false),
+                    AddedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_StudyGroupStudents", x => new { x.StudyGroupId, x.StudentUserId });
+                    table.ForeignKey(
+                        name: "FK_StudyGroupStudents_StudyGroups_StudyGroupId",
+                        column: x => x.StudyGroupId,
+                        principalTable: "StudyGroups",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
                 });
 
             migrationBuilder.CreateTable(
@@ -75,12 +110,12 @@ namespace TeachingService.Migrations
                     VersionSlot = table.Column<string>(type: "text", nullable: true),
                     Title = table.Column<string>(type: "text", nullable: false),
                     Subject = table.Column<string>(type: "text", nullable: false),
-                    Deadline = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     TimeLimitMinutes = table.Column<int>(type: "integer", nullable: false),
                     Summary = table.Column<string>(type: "text", nullable: false),
                     LlmModelId = table.Column<int>(type: "integer", nullable: true),
                     CreatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
-                    PublishedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true)
+                    PublishedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    GradingExamples = table.Column<string>(type: "jsonb", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -91,6 +126,34 @@ namespace TeachingService.Migrations
                         principalTable: "Tests",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "TestAssignments",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    StudyGroupId = table.Column<Guid>(type: "uuid", nullable: false),
+                    CourseTestVersionId = table.Column<Guid>(type: "uuid", nullable: false),
+                    AvailableFrom = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    Deadline = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    CreatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_TestAssignments", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_TestAssignments_StudyGroups_StudyGroupId",
+                        column: x => x.StudyGroupId,
+                        principalTable: "StudyGroups",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_TestAssignments_TestVersions_CourseTestVersionId",
+                        column: x => x.CourseTestVersionId,
+                        principalTable: "TestVersions",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.CreateTable(
@@ -106,7 +169,8 @@ namespace TeachingService.Migrations
                     MaxPoints = table.Column<decimal>(type: "numeric", nullable: false),
                     WrongAnswerPenalty = table.Column<decimal>(type: "numeric", nullable: false),
                     IsHidden = table.Column<bool>(type: "boolean", nullable: false),
-                    CreatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
+                    CreatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    GradingExamples = table.Column<string>(type: "jsonb", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -150,6 +214,26 @@ namespace TeachingService.Migrations
                 columns: new[] { "PublishedAt", "NextPublishAttemptAt" });
 
             migrationBuilder.CreateIndex(
+                name: "IX_StudyGroups_TeacherUserId",
+                table: "StudyGroups",
+                column: "TeacherUserId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_StudyGroupStudents_StudentUserId",
+                table: "StudyGroupStudents",
+                column: "StudentUserId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_TestAssignments_CourseTestVersionId",
+                table: "TestAssignments",
+                column: "CourseTestVersionId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_TestAssignments_StudyGroupId_Deadline",
+                table: "TestAssignments",
+                columns: new[] { "StudyGroupId", "Deadline" });
+
+            migrationBuilder.CreateIndex(
                 name: "IX_TestReviewPolicyRevisions_EventId",
                 table: "TestReviewPolicyRevisions",
                 column: "EventId",
@@ -187,10 +271,19 @@ namespace TeachingService.Migrations
                 name: "IntegrationOutboxMessages");
 
             migrationBuilder.DropTable(
+                name: "StudyGroupStudents");
+
+            migrationBuilder.DropTable(
+                name: "TestAssignments");
+
+            migrationBuilder.DropTable(
                 name: "TestReviewPolicyRevisions");
 
             migrationBuilder.DropTable(
                 name: "TestTasks");
+
+            migrationBuilder.DropTable(
+                name: "StudyGroups");
 
             migrationBuilder.DropTable(
                 name: "TestVersions");

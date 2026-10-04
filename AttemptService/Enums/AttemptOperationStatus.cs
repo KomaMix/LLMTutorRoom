@@ -6,6 +6,5 @@ public enum AttemptOperationStatus
     Success,
     NotFound,
     Conflict,
-    VersionConflict,
     InvalidInput
 }

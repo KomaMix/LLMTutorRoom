@@ -74,12 +74,16 @@ export function useAttemptCommands({
     }
 
     const deadline = new Date(operationContext.selectedTest?.deadline).getTime();
+    const availableFrom = new Date(operationContext.selectedTest?.availableFrom).getTime();
     if (!operationContext.selectedTest
-        || (Number.isFinite(deadline) && deadline <= Date.now())) {
+        || (Number.isFinite(deadline) && deadline <= Date.now())
+        || (Number.isFinite(availableFrom) && availableFrom > Date.now())) {
       if (isCurrentContext(operationContext)) {
         setMessageState({
           generation: operationContext.generation,
-          value: "Срок выполнения теста истёк."
+          value: Number.isFinite(availableFrom) && availableFrom > Date.now()
+            ? "Тест ещё не открыт для выполнения."
+            : "Срок выполнения теста истёк."
         });
       }
       return Promise.resolve(false);
@@ -95,32 +99,17 @@ export function useAttemptCommands({
 
     operation.promise = (async () => {
       try {
-        const expectedVersionNumber = operationContext.selectedTest?.versionNumber;
-        const attempt = await startAttempt(
-          operationContext.testId,
-          expectedVersionNumber
-        );
-        if (Number.isInteger(expectedVersionNumber)
-            && attempt.testRevision !== expectedVersionNumber) {
-          const refreshed = await callbacksRef.current.onAttemptVersionConflict?.();
-          if (!refreshed && isCurrentContext(operationContext)) {
-            setMessageState({
-              generation: operationContext.generation,
-              value: "Версия теста изменилась. Обновите страницу перед продолжением."
-            });
-          }
-          return Boolean(refreshed);
-        }
+        const attempt = await startAttempt(operationContext.testId);
 
         callbacksRef.current.updateAttempt(attempt);
         return true;
       } catch (error) {
         if (error instanceof ApiError && error.status === 409) {
-          await callbacksRef.current.onAttemptVersionConflict?.();
+          await callbacksRef.current.onAttemptStartConflict?.();
           if (isCurrentContext(operationContext)) {
             setMessageState({
               generation: operationContext.generation,
-              value: "Опубликована новая версия теста. Каталог обновлён — начните ещё раз."
+              value: "Данные назначения изменились. Каталог обновлён — начните ещё раз."
             });
           }
           return false;

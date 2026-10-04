@@ -5,7 +5,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
-using TeachingService.Contracts.Models;
+using TeachingService.Contracts.Responses;
 
 namespace AttemptService.Tests;
 
@@ -64,9 +64,13 @@ public sealed class TestAttemptDbContextFactory : IDbContextFactory<AttemptDbCon
     }
 }
 
-public sealed class SqliteAttemptModelCustomizer(
-    ModelCustomizerDependencies dependencies) : ModelCustomizer(dependencies)
+public class SqliteAttemptModelCustomizer : ModelCustomizer
 {
+    public SqliteAttemptModelCustomizer(ModelCustomizerDependencies dependencies)
+        : base(dependencies)
+    {
+    }
+
     public override void Customize(ModelBuilder modelBuilder, DbContext context)
     {
         base.Customize(modelBuilder, context);
@@ -78,22 +82,21 @@ public sealed class SqliteAttemptModelCustomizer(
 
 public sealed class StubTeachingServiceClient : ITeachingServiceClient
 {
-    public Dictionary<string, CourseTestDto> Tests { get; } = new();
+    public Dictionary<Guid, TestAssignmentResponse> Assignments { get; } = new();
     public int RequestCount { get; private set; }
-    public bool? LastIncludeHidden { get; private set; }
-    public int? LastVersionNumber { get; private set; }
+    public Guid? LastAssignmentId { get; private set; }
+    public string? LastStudentUserId { get; private set; }
 
-    public Task<CourseTestDto?> GetTestAsync(
-        Guid testId,
-        bool includeHidden,
-        int? versionNumber,
+    public Task<TestAssignmentResponse?> GetStudentAssignmentAsync(
+        Guid assignmentId,
+        string studentUserId,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         RequestCount++;
-        LastIncludeHidden = includeHidden;
-        LastVersionNumber = versionNumber;
-        Tests.TryGetValue(testId.ToString("D"), out var test);
-        return Task.FromResult(test);
+        LastAssignmentId = assignmentId;
+        LastStudentUserId = studentUserId;
+        Assignments.TryGetValue(assignmentId, out var assignment);
+        return Task.FromResult(assignment);
     }
 }

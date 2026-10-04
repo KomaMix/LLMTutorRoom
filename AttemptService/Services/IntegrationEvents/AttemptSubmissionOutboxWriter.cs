@@ -28,6 +28,8 @@ public class AttemptSubmissionOutboxWriter
         {
             EventId = eventId,
             AttemptId = attempt.Id,
+            AssignmentId = attempt.AssignmentId,
+            GroupId = attempt.GroupId,
             TestId = attempt.TestId,
             TestRevision = attempt.TestRevision,
             StudentUserId = attempt.StudentUserId,

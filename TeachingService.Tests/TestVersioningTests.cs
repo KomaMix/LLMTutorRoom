@@ -391,7 +391,6 @@ public sealed class TestVersioningTests
             Status = CourseTestStatus.Draft,
             Title = "Invalid task draft",
             Subject = "Subject",
-            Deadline = DateTimeOffset.UtcNow.AddDays(1),
             TimeLimitMinutes = 30,
             LlmModelId = 1,
             Tasks =
@@ -446,7 +445,6 @@ public sealed class TestVersioningTests
             Status = CourseTestStatus.Draft,
             Title = "Invalid review mode",
             Subject = "Subject",
-            Deadline = DateTimeOffset.UtcNow.AddDays(1),
             TimeLimitMinutes = 30,
             LlmModelId = 1,
             Tasks =
@@ -512,7 +510,6 @@ public sealed class TestVersioningTests
             Title = title,
             Subject = "Subject",
             Status = CourseTestStatus.Draft,
-            Deadline = DateTimeOffset.UtcNow.AddDays(7),
             TimeLimitMinutes = 45,
             Summary = "Summary",
             LlmModelId = 1

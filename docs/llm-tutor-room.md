@@ -7,7 +7,7 @@ React-приложения. Он проверяет JWT, объединяет о
 удобный для интерфейса overview и отдаёт собранный frontend.
 
 Собственной бизнесовой базы у сервиса нет. Пользователи принадлежат
-`AuthService`, каталог и версии тестов — `TeachingService`, попытки и ответы —
+`AuthService`, каталог, группы и назначения — `TeachingService`, попытки и ответы —
 `AttemptService`, результаты и доступы к моделям — `ReviewService`.
 
 ```mermaid
@@ -25,13 +25,14 @@ flowchart LR
 
 `GET /api/classroom/overview` формирует разные ответы по роли:
 
-- преподавателю возвращаются его тесты, доступные модели, незавершённые
-  проверки, первая страница истории и агрегированные метрики;
-- ученику — опубликованные тесты, его попытки, проверки и результаты.
+- преподавателю возвращаются его тесты, группы, попытки учеников, доступные
+  модели, проверки, первая страница истории и агрегированные метрики;
+- ученику — назначения его групп, попытки, проверки и результаты.
 
 Для student overview фасад получает попытки из internal API `AttemptService`.
-Если попытка привязана к предыдущей версии, `LLMTutorRoom` запрашивает именно
-эту версию у `TeachingService` и не подставляет задания новой публикации.
+Каждое назначение уже содержит точную версию. Если назначение перестало входить
+в обычную выдачу, но по нему существует попытка, `LLMTutorRoom` запрашивает его
+по ID и не подставляет задания новой публикации.
 Правильные ответы перед возвратом ученику удаляются из DTO.
 
 Завершённая история читается через
@@ -48,7 +49,7 @@ HTTP-граница фасада находится в
 Синхронные клиенты:
 
 - [`TeachingServiceClient`](../LLMTutorRoom/Services/Teaching/TeachingServiceClient.cs)
-  читает каталог и точные версии тестов;
+  читает каталог, группы и назначения с точными версиями;
 - [`AttemptServiceClient`](../LLMTutorRoom/Services/Attempts/AttemptServiceClient.cs)
   читает попытки ученика для overview;
 - [`ReviewServiceClient`](../LLMTutorRoom/Services/Reviews/ReviewServiceClient.cs)
@@ -74,8 +75,8 @@ ingress.
 Основные разделы:
 
 - `/login` и `/register`;
-- `/admin/teachers` и `/admin/model-access`;
-- `/teacher/dashboard`, `/teacher/tests`, `/teacher/reviews`, `/teacher/models`;
+- `/admin/teachers`, `/admin/groups` и `/admin/model-access`;
+- `/teacher/dashboard`, `/teacher/tests`, `/teacher/groups`, `/teacher/reviews`, `/teacher/models`;
 - `/student/tests` и `/student/results`.
 
 Во время попытки клиент сохраняет ответы напрямую в `AttemptService`,

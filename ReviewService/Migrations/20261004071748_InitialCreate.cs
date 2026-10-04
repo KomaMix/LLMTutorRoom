@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -30,6 +30,8 @@ namespace ReviewService.Migrations
                     Id = table.Column<int>(type: "integer", nullable: false)
                         .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
                     AttemptId = table.Column<Guid>(type: "uuid", nullable: false),
+                    AssignmentId = table.Column<Guid>(type: "uuid", nullable: false),
+                    GroupId = table.Column<Guid>(type: "uuid", nullable: false),
                     TestId = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
                     TestRevision = table.Column<int>(type: "integer", nullable: false),
                     StudentUserId = table.Column<string>(type: "character varying(450)", maxLength: 450, nullable: false),
@@ -50,6 +52,8 @@ namespace ReviewService.Migrations
                     Id = table.Column<int>(type: "integer", nullable: false)
                         .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
                     AttemptId = table.Column<Guid>(type: "uuid", nullable: false),
+                    AssignmentId = table.Column<Guid>(type: "uuid", nullable: false),
+                    GroupId = table.Column<Guid>(type: "uuid", nullable: false),
                     TestId = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
                     TestRevision = table.Column<int>(type: "integer", nullable: false),
                     TestTitle = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: false),
@@ -58,6 +62,7 @@ namespace ReviewService.Migrations
                     StudentName = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
                     Status = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
                     ModelId = table.Column<int>(type: "integer", nullable: true),
+                    GradingExamples = table.Column<string>(type: "jsonb", nullable: false),
                     SubmittedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     QueuedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
                     StartedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
@@ -129,6 +134,7 @@ namespace ReviewService.Migrations
                     TestTitle = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: false),
                     ModelId = table.Column<int>(type: "integer", nullable: true),
                     Tasks = table.Column<string>(type: "jsonb", nullable: false),
+                    GradingExamples = table.Column<string>(type: "jsonb", nullable: false),
                     PublishedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     ReceivedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
                 },
@@ -153,6 +159,7 @@ namespace ReviewService.Migrations
                     StudentAnswer = table.Column<string>(type: "text", nullable: false),
                     WrongAnswerPenalty = table.Column<decimal>(type: "numeric", nullable: false),
                     AnswerOptions = table.Column<string>(type: "jsonb", nullable: false),
+                    GradingExamples = table.Column<string>(type: "jsonb", nullable: false),
                     LlmDeploymentId = table.Column<int>(type: "integer", nullable: true),
                     LlmDeploymentName = table.Column<string>(type: "text", nullable: true),
                     LlmProviderModelId = table.Column<string>(type: "text", nullable: true),
@@ -184,6 +191,11 @@ namespace ReviewService.Migrations
                 column: "ProcessedAt");
 
             migrationBuilder.CreateIndex(
+                name: "IX_PendingSubmissions_AssignmentId",
+                table: "PendingSubmissions",
+                column: "AssignmentId");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_PendingSubmissions_AttemptId",
                 table: "PendingSubmissions",
                 column: "AttemptId",
@@ -200,10 +212,20 @@ namespace ReviewService.Migrations
                 columns: new[] { "TestId", "TestRevision" });
 
             migrationBuilder.CreateIndex(
+                name: "IX_Reviews_AssignmentId",
+                table: "Reviews",
+                column: "AssignmentId");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_Reviews_AttemptId",
                 table: "Reviews",
                 column: "AttemptId",
                 unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Reviews_GroupId",
+                table: "Reviews",
+                column: "GroupId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Reviews_Status_NextRetryAt_LastEnqueuedAt",

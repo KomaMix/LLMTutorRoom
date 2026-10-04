@@ -122,6 +122,38 @@ public sealed class ReviewPaginationTests
     }
 
     [Fact]
+    public async Task TeacherCurrentPage_IncludesAssignedSupersededRevision()
+    {
+        await using var dbContext = CreateDbContext();
+        dbContext.TestReviewPolicies.AddRange(
+            CreatePolicy(revision: 1),
+            CreatePolicy(revision: 2));
+        var assignedReview = CreateReview(
+            revision: 1,
+            ReviewStatus.Checked,
+            score: 2,
+            maxScore: 2,
+            attemptId: CreateAttemptId(1));
+        assignedReview.AssignmentId = Guid.NewGuid();
+        assignedReview.GroupId = Guid.NewGuid();
+        dbContext.Reviews.Add(assignedReview);
+        await dbContext.SaveChangesAsync();
+        var service = CreateService(dbContext);
+
+        var page = await service.GetTeacherReviewsAsync(
+            "teacher",
+            includeNonTerminal: true,
+            includeHistoricalVersions: false,
+            pageSize: 10,
+            cursor: null,
+            CancellationToken.None);
+
+        Assert.Equal(ReviewPageQueryStatus.Success, page.Status);
+        Assert.NotNull(page.Page);
+        Assert.Equal(assignedReview.AssignmentId, Assert.Single(page.Page.TerminalReviews).AssignmentId);
+    }
+
+    [Fact]
     public async Task InvalidCursorAndNonPositivePageSize_AreRejected()
     {
         await using var dbContext = CreateDbContext();

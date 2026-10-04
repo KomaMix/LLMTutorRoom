@@ -23,7 +23,6 @@ namespace TeachingService.Mappers
                 Title = version.Title,
                 Subject = version.Subject,
                 Status = version.Status,
-                Deadline = version.Deadline,
                 TimeLimitMinutes = version.TimeLimitMinutes,
                 Summary = version.Summary,
                 LlmModelId = version.LlmModelId,

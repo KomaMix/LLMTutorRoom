@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
@@ -79,9 +79,6 @@ namespace TeachingService.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTimeOffset>("Deadline")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<int?>("LlmModelId")
@@ -173,6 +170,88 @@ namespace TeachingService.Migrations
                     b.ToTable("IntegrationOutboxMessages");
                 });
 
+            modelBuilder.Entity("TeachingService.Models.StudyGroup", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<int>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("integer");
+
+                    b.Property<string>("TeacherUserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("character varying(450)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TeacherUserId");
+
+                    b.ToTable("StudyGroups");
+                });
+
+            modelBuilder.Entity("TeachingService.Models.StudyGroupStudent", b =>
+                {
+                    b.Property<Guid>("StudyGroupId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("StudentUserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("character varying(450)");
+
+                    b.Property<DateTimeOffset>("AddedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("StudyGroupId", "StudentUserId");
+
+                    b.HasIndex("StudentUserId");
+
+                    b.ToTable("StudyGroupStudents");
+                });
+
+            modelBuilder.Entity("TeachingService.Models.TestAssignment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("AvailableFrom")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("CourseTestVersionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("Deadline")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("StudyGroupId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CourseTestVersionId");
+
+                    b.HasIndex("StudyGroupId", "Deadline");
+
+                    b.ToTable("TestAssignments");
+                });
+
             modelBuilder.Entity("TeachingService.Models.TestReviewPolicyRevision", b =>
                 {
                     b.Property<Guid>("TestId")
@@ -260,8 +339,6 @@ namespace TeachingService.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.Navigation("CourseTest");
-
                     b.OwnsMany("TeachingService.Models.GradingExample", "GradingExamples", b1 =>
                         {
                             b1.Property<Guid>("CourseTestVersionId")
@@ -298,13 +375,47 @@ namespace TeachingService.Migrations
 
                             b1.ToTable("TestVersions");
 
-                            b1.ToJson("GradingExamples");
+                            b1
+                                .ToJson("GradingExamples")
+                                .HasColumnType("jsonb");
 
                             b1.WithOwner()
                                 .HasForeignKey("CourseTestVersionId");
                         });
 
+                    b.Navigation("CourseTest");
+
                     b.Navigation("GradingExamples");
+                });
+
+            modelBuilder.Entity("TeachingService.Models.StudyGroupStudent", b =>
+                {
+                    b.HasOne("TeachingService.Models.StudyGroup", "StudyGroup")
+                        .WithMany("Students")
+                        .HasForeignKey("StudyGroupId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("StudyGroup");
+                });
+
+            modelBuilder.Entity("TeachingService.Models.TestAssignment", b =>
+                {
+                    b.HasOne("TeachingService.Models.CourseTestVersion", "CourseTestVersion")
+                        .WithMany()
+                        .HasForeignKey("CourseTestVersionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("TeachingService.Models.StudyGroup", "StudyGroup")
+                        .WithMany("Assignments")
+                        .HasForeignKey("StudyGroupId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("CourseTestVersion");
+
+                    b.Navigation("StudyGroup");
                 });
 
             modelBuilder.Entity("TeachingService.Models.TestReviewPolicyRevision", b =>
@@ -360,7 +471,9 @@ namespace TeachingService.Migrations
 
                             b1.ToTable("TestTasks");
 
-                            b1.ToJson("GradingExamples");
+                            b1
+                                .ToJson("GradingExamples")
+                                .HasColumnType("jsonb");
 
                             b1.WithOwner()
                                 .HasForeignKey("TestTaskId");
@@ -377,6 +490,13 @@ namespace TeachingService.Migrations
             modelBuilder.Entity("TeachingService.Models.CourseTestVersion", b =>
                 {
                     b.Navigation("Tasks");
+                });
+
+            modelBuilder.Entity("TeachingService.Models.StudyGroup", b =>
+                {
+                    b.Navigation("Assignments");
+
+                    b.Navigation("Students");
                 });
 
             modelBuilder.Entity("TeachingService.Models.TestTask", b =>

@@ -11,6 +11,9 @@ namespace TeachingService.Data
         public DbSet<AnswerOption> AnswerOptions { get; set; } = null!;
         public DbSet<TestReviewPolicyRevision> TestReviewPolicyRevisions { get; set; } = null!;
         public DbSet<IntegrationOutboxMessage> IntegrationOutboxMessages { get; set; } = null!;
+        public DbSet<StudyGroup> StudyGroups { get; set; } = null!;
+        public DbSet<StudyGroupStudent> StudyGroupStudents { get; set; } = null!;
+        public DbSet<TestAssignment> TestAssignments { get; set; } = null!;
 
         public TeachingDbContext(DbContextOptions<TeachingDbContext> options) : base(options)
         {
@@ -80,6 +83,49 @@ namespace TeachingService.Data
             modelBuilder.Entity<AnswerOption>(entity =>
             {
                 entity.HasKey(option => option.Id);
+            });
+
+            modelBuilder.Entity<StudyGroup>(entity =>
+            {
+                entity.HasKey(group => group.Id);
+                entity.Property(group => group.Name).HasMaxLength(200);
+                entity.Property(group => group.TeacherUserId).HasMaxLength(450);
+                entity.Property(group => group.Revision).IsConcurrencyToken();
+                entity.HasIndex(group => group.TeacherUserId);
+                entity.HasMany(group => group.Students)
+                    .WithOne(student => student.StudyGroup)
+                    .HasForeignKey(student => student.StudyGroupId)
+                    .OnDelete(DeleteBehavior.Cascade);
+                entity.HasMany(group => group.Assignments)
+                    .WithOne(assignment => assignment.StudyGroup)
+                    .HasForeignKey(assignment => assignment.StudyGroupId)
+                    .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            modelBuilder.Entity<StudyGroupStudent>(entity =>
+            {
+                entity.HasKey(student => new
+                {
+                    student.StudyGroupId,
+                    student.StudentUserId
+                });
+                entity.Property(student => student.StudentUserId).HasMaxLength(450);
+                entity.HasIndex(student => student.StudentUserId);
+            });
+
+            modelBuilder.Entity<TestAssignment>(entity =>
+            {
+                entity.HasKey(assignment => assignment.Id);
+                entity.HasIndex(assignment => new
+                {
+                    assignment.StudyGroupId,
+                    assignment.Deadline
+                });
+                entity.HasIndex(assignment => assignment.CourseTestVersionId);
+                entity.HasOne(assignment => assignment.CourseTestVersion)
+                    .WithMany()
+                    .HasForeignKey(assignment => assignment.CourseTestVersionId)
+                    .OnDelete(DeleteBehavior.Restrict);
             });
 
             modelBuilder.Entity<TestReviewPolicyRevision>(entity =>

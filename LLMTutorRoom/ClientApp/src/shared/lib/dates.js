@@ -46,7 +46,7 @@ export function formatPeriod(seconds) {
   return `${safeSeconds} сек.`;
 }
 
-export function toInputDate(value) {
+function toInputDate(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
     return "";
@@ -59,12 +59,19 @@ export function toInputDate(value) {
   ].join("-");
 }
 
-export function endOfLocalDayToIso(value) {
-  const [year, month, day] = String(value).split("-").map(Number);
-  const date = new Date(year, month - 1, day, 23, 59, 0, 0);
+export function toInputDateTime(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
 
-  if (!year || !month || !day || Number.isNaN(date.getTime())) {
-    throw new Error("Некорректная дата дедлайна.");
+  return `${toInputDate(date)}T${padDatePart(date.getHours())}:${padDatePart(date.getMinutes())}`;
+}
+
+export function localDateTimeToIso(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    throw new Error("Некорректные дата и время.");
   }
 
   return date.toISOString();

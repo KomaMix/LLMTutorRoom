@@ -13,7 +13,7 @@ export function useStudentAttempt({
   selectedTest,
   selectedAttempt,
   updateAttempt,
-  onAttemptVersionConflict,
+  onAttemptStartConflict,
   onDeadlineReached,
   onSubmitted
 }) {
@@ -46,13 +46,13 @@ export function useStudentAttempt({
   const context = contextRef.current;
   const callbacksRef = useRef({
     updateAttempt,
-    onAttemptVersionConflict,
+    onAttemptStartConflict,
     onDeadlineReached,
     onSubmitted
   });
   callbacksRef.current = {
     updateAttempt,
-    onAttemptVersionConflict,
+    onAttemptStartConflict,
     onDeadlineReached,
     onSubmitted
   };

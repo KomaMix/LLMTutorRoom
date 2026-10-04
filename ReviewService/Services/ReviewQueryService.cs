@@ -11,13 +11,21 @@ using ReviewService.Models.Reviews;
 
 namespace ReviewService.Services;
 
-public sealed class ReviewQueryService(
-    ReviewDbContext dbContext,
-    IReviewScoringService scoringService) : IReviewQueryService
+public class ReviewQueryService : IReviewQueryService
 {
     private const string LegacyManualFeedbackPlaceholder = "Ожидает ручной проверки.";
     private const string LegacyManualFindingPlaceholder =
         "Задание ожидает ручной проверки преподавателем.";
+    private readonly ReviewDbContext _dbContext;
+    private readonly IReviewScoringService _scoringService;
+
+    public ReviewQueryService(
+        ReviewDbContext dbContext,
+        IReviewScoringService scoringService)
+    {
+        _dbContext = dbContext;
+        _scoringService = scoringService;
+    }
 
     public Task<ReviewPageQueryResult> GetTeacherReviewsAsync(
         string teacherUserId,
@@ -65,24 +73,39 @@ public sealed class ReviewQueryService(
         UpdateManualTaskReviewRequest request,
         CancellationToken cancellationToken)
     {
-        var review = await dbContext.Reviews
+        var review = await _dbContext.Reviews
             .Include(item => item.TaskResults)
             .SingleOrDefaultAsync(item => item.Id == reviewId, cancellationToken);
         if (review is null)
+        {
             return new ManualReviewUpdateResult(ManualReviewUpdateStatus.NotFound);
+        }
 
         if (!string.Equals(review.TeacherUserId, teacherUserId, StringComparison.OrdinalIgnoreCase))
+        {
             return new ManualReviewUpdateResult(ManualReviewUpdateStatus.Forbidden);
+        }
+
         if (review.Status != ReviewStatus.ManualReview)
+        {
             return new ManualReviewUpdateResult(ManualReviewUpdateStatus.InvalidState);
+        }
 
         var task = review.TaskResults.SingleOrDefault(item => item.TaskId == taskId);
         if (task is null)
+        {
             return new ManualReviewUpdateResult(ManualReviewUpdateStatus.NotFound);
+        }
+
         if (task.Status != ReviewTaskStatus.ManualReview)
+        {
             return new ManualReviewUpdateResult(ManualReviewUpdateStatus.InvalidState);
+        }
+
         if (request.Score < 0 || request.Score > task.MaxScore)
+        {
             return new ManualReviewUpdateResult(ManualReviewUpdateStatus.InvalidScore);
+        }
 
         var now = DateTimeOffset.UtcNow;
         task.Score = Math.Clamp(Math.Round(request.Score, 1), 0, task.MaxScore);
@@ -101,18 +124,18 @@ public sealed class ReviewQueryService(
         task.NextRetryAt = null;
         task.LastError = string.Empty;
 
-        scoringService.RecalculateReview(review);
-        review.Status = scoringService.GetReviewStatusAfterTaskProcessing(review);
+        _scoringService.RecalculateReview(review);
+        review.Status = _scoringService.GetReviewStatusAfterTaskProcessing(review);
         review.CompletedAt = review.Status == ReviewStatus.Checked ? now : null;
         review.LastError = string.Empty;
         review.ProcessingGeneration++;
         try
         {
-            await dbContext.SaveChangesAsync(cancellationToken);
+            await _dbContext.SaveChangesAsync(cancellationToken);
         }
         catch (DbUpdateConcurrencyException)
         {
-            dbContext.ChangeTracker.Clear();
+            _dbContext.ChangeTracker.Clear();
             return new ManualReviewUpdateResult(ManualReviewUpdateStatus.InvalidState);
         }
 
@@ -123,7 +146,7 @@ public sealed class ReviewQueryService(
 
     private IQueryable<Review> ReviewQuery()
     {
-        return dbContext.Reviews
+        return _dbContext.Reviews
             .AsNoTracking()
             .AsSplitQuery()
             .Include(review => review.TaskResults);
@@ -138,13 +161,17 @@ public sealed class ReviewQueryService(
         CancellationToken cancellationToken)
     {
         if (requestedPageSize <= 0)
+        {
             return new ReviewPageQueryResult(ReviewPageQueryStatus.InvalidPageSize);
+        }
 
         ReviewPageCursor? cursor = null;
         if (cursorValue is not null)
         {
             if (!ReviewPageCursor.TryDecode(cursorValue, out var decodedCursor))
+            {
                 return new ReviewPageQueryResult(ReviewPageQueryStatus.InvalidCursor);
+            }
 
             cursor = decodedCursor;
         }
@@ -166,10 +193,11 @@ public sealed class ReviewQueryService(
         if (currentTeacherVersionsOnly)
         {
             terminalQuery = terminalQuery.Where(review =>
-                dbContext.TestReviewPolicies
-                    .Where(policy => policy.TestId == review.TestId
-                        && policy.TeacherUserId == review.TeacherUserId)
-                    .Max(policy => (int?)policy.Revision) == review.TestRevision);
+                review.AssignmentId != Guid.Empty
+                || _dbContext.TestReviewPolicies
+                        .Where(policy => policy.TestId == review.TestId
+                            && policy.TeacherUserId == review.TeacherUserId)
+                        .Max(policy => (int?)policy.Revision) == review.TestRevision);
         }
 
         var averageScorePercentage = includeNonTerminal
@@ -196,7 +224,9 @@ public sealed class ReviewQueryService(
             .ToListAsync(cancellationToken);
         var hasMore = terminalReviews.Count > pageSize;
         if (hasMore)
+        {
             terminalReviews.RemoveAt(terminalReviews.Count - 1);
+        }
 
         var nextCursor = hasMore && terminalReviews.Count > 0
             ? ReviewPageCursor.Encode(
@@ -217,31 +247,35 @@ public sealed class ReviewQueryService(
 
     public static ReviewResponse ToResponse(Review review)
     {
-        return new ReviewResponse(
-            review.Id,
-            review.AttemptId,
-            review.TestId,
-            review.TestRevision,
-            review.TestTitle,
-            review.TeacherUserId,
-            review.StudentUserId,
-            review.StudentName,
-            review.Status,
-            review.ModelId,
-            review.SubmittedAt,
-            review.QueuedAt,
-            review.StartedAt,
-            review.CompletedAt,
-            review.NextRetryAt,
-            review.ProcessingAttempts,
-            review.LastError,
-            review.Score,
-            review.MaxScore,
-            review.Summary,
-            review.TaskResults
+        return new ReviewResponse
+        {
+            Id = review.Id,
+            AttemptId = review.AttemptId,
+            AssignmentId = review.AssignmentId,
+            GroupId = review.GroupId,
+            TestId = review.TestId,
+            TestRevision = review.TestRevision,
+            TestTitle = review.TestTitle,
+            TeacherUserId = review.TeacherUserId,
+            StudentUserId = review.StudentUserId,
+            StudentName = review.StudentName,
+            Status = review.Status,
+            ModelId = review.ModelId,
+            SubmittedAt = review.SubmittedAt,
+            QueuedAt = review.QueuedAt,
+            StartedAt = review.StartedAt,
+            CompletedAt = review.CompletedAt,
+            NextRetryAt = review.NextRetryAt,
+            ProcessingAttempts = review.ProcessingAttempts,
+            LastError = review.LastError,
+            Score = review.Score,
+            MaxScore = review.MaxScore,
+            Summary = review.Summary,
+            TaskResults = review.TaskResults
                 .OrderBy(task => task.Id)
                 .Select(task => ToResponse(task, review.ModelId))
-                .ToList());
+                .ToList()
+        };
     }
 
     private static ReviewTaskResponse ToResponse(ReviewTask task, int? modelId)
@@ -293,7 +327,9 @@ public sealed class ReviewQueryService(
     private static List<ReviewAnswerOptionResponse> DeserializeAnswerOptions(string json)
     {
         if (string.IsNullOrWhiteSpace(json))
+        {
             return [];
+        }
 
         return JsonSerializer.Deserialize<List<ReviewAnswerOptionResponse>>(
                 json,
@@ -304,7 +340,9 @@ public sealed class ReviewQueryService(
     private static List<string> DeserializeFindings(string json)
     {
         if (string.IsNullOrWhiteSpace(json))
+        {
             return [];
+        }
 
         return JsonSerializer.Deserialize<List<string>>(json, JsonHelper.Options) ?? [];
     }

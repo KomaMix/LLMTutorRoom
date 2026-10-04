@@ -1,5 +1,4 @@
 import { FileText } from "lucide-react";
-import { formatDate } from "../../shared/lib/dates.js";
 import { ConfirmDialog } from "../../shared/ui/ConfirmDialog.jsx";
 import { InfoTile } from "../../shared/ui/InfoTile.jsx";
 import { StatusBadge } from "../../shared/ui/StatusBadge.jsx";
@@ -91,7 +90,6 @@ export function TestDetails({
         <InfoTile label="Время" value={`${selectedTest.timeLimitMinutes} мин`} />
         <InfoTile label="Задания" value={createTaskCountSummary(selectedTest)} />
         <InfoTile label="Баллы" value={selectedTest.totalPoints} />
-        <InfoTile label="Дедлайн" value={formatDate(selectedTest.deadline)} />
         <InfoTile label="LLM" value={modelDisplayName} />
       </div>
 

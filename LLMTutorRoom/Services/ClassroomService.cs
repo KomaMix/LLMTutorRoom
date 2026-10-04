@@ -1,249 +1,271 @@
+using AttemptService.Contracts.Enums;
 using AttemptService.Contracts.Responses;
 using LLMTutorRoom.Interfaces;
 using LLMTutorRoom.Models;
 using LLMTutorRoom.Services.Reviews;
 using ReviewService.Contracts.Responses;
+using TeachingService.Contracts.Enums;
 using TeachingService.Contracts.Models;
+using TeachingService.Contracts.Responses;
 using ReviewTeacherModelAccessResponse = ReviewService.Contracts.Responses.TeacherModelAccessResponse;
 
-namespace LLMTutorRoom.Services
+namespace LLMTutorRoom.Services;
+
+public class ClassroomService
 {
-    public sealed class ClassroomService
+    private readonly IAttemptServiceClient _attemptServiceClient;
+    private readonly ITeachingServiceClient _teachingServiceClient;
+    private readonly IReviewServiceClient _reviewServiceClient;
+
+    public ClassroomService(
+        IAttemptServiceClient attemptServiceClient,
+        ITeachingServiceClient teachingServiceClient,
+        IReviewServiceClient reviewServiceClient)
     {
-        private readonly IAttemptServiceClient _attemptServiceClient;
-        private readonly ITeachingServiceClient _teachingServiceClient;
-        private readonly IReviewServiceClient _reviewServiceClient;
+        _attemptServiceClient = attemptServiceClient;
+        _teachingServiceClient = teachingServiceClient;
+        _reviewServiceClient = reviewServiceClient;
+    }
 
-        public ClassroomService(
-            IAttemptServiceClient attemptServiceClient,
-            ITeachingServiceClient teachingServiceClient,
-            IReviewServiceClient reviewServiceClient)
+    public async Task<TeacherClassroomOverviewResponse> GetTeacherOverviewAsync(
+        string teacherUserId,
+        CancellationToken cancellationToken)
+    {
+        var tests = await _teachingServiceClient.GetTestsAsync(
+            publishedOnly: false,
+            includeHidden: true,
+            cancellationToken);
+        tests = tests
+            .Where(test => test.TeacherUserId == teacherUserId)
+            .OrderBy(test => test.Title)
+            .ToList();
+        var groups = await _teachingServiceClient.GetTeacherGroupsAsync(
+            teacherUserId,
+            cancellationToken);
+        var attempts = await _attemptServiceClient.GetTeacherAttemptsAsync(
+            teacherUserId,
+            cancellationToken);
+        var reviewPage = await _reviewServiceClient.GetTeacherReviewsAsync(
+            teacherUserId,
+            cancellationToken);
+        var modelAccess = await _reviewServiceClient.GetTeacherModelAccessAsync(
+            teacherUserId,
+            includeDisabled: false,
+            cancellationToken);
+
+        return new TeacherClassroomOverviewResponse
         {
-            _attemptServiceClient = attemptServiceClient;
-            _teachingServiceClient = teachingServiceClient;
-            _reviewServiceClient = reviewServiceClient;
-        }
+            Tests = tests,
+            Groups = groups,
+            Models = modelAccess.Select(ToLanguageModel).ToList(),
+            Reviews = MergeReviewPage(reviewPage),
+            Attempts = attempts,
+            Metrics = CreateTeacherMetrics(groups, attempts, reviewPage.Aggregate),
+            TerminalReviewsNextCursor = reviewPage.NextCursor
+        };
+    }
 
-        public async Task<TeacherClassroomOverviewResponse> GetTeacherOverviewAsync(
-            string teacherUserId,
-            CancellationToken cancellationToken)
+    public async Task<StudentClassroomOverviewResponse> GetStudentOverviewAsync(
+        string studentUserId,
+        CancellationToken cancellationToken)
+    {
+        var attempts = await _attemptServiceClient.GetStudentAttemptsAsync(
+            studentUserId,
+            cancellationToken);
+        var assignments = await _teachingServiceClient.GetStudentAssignmentsAsync(
+            studentUserId,
+            cancellationToken);
+        assignments = await BindAssignmentsToAttemptsAsync(
+            assignments,
+            attempts,
+            cancellationToken);
+        var studentTests = assignments
+            .Select(CreateStudentTestResponse)
+            .OrderBy(test => test.Deadline)
+            .ToList();
+        var reviewPage = await _reviewServiceClient.GetStudentReviewsAsync(
+            studentUserId,
+            cancellationToken);
+
+        return new StudentClassroomOverviewResponse
         {
-            var tests = await _teachingServiceClient.GetTestsAsync(
-                publishedOnly: false,
-                includeHidden: true,
-                cancellationToken);
-            tests = tests
-                .Where(test => test.TeacherUserId == teacherUserId)
-                .ToList();
-            var reviewPage = await _reviewServiceClient.GetTeacherReviewsAsync(
-                teacherUserId,
-                cancellationToken);
-            var reviews = MergeReviewPage(reviewPage);
-            var modelAccess = await _reviewServiceClient.GetTeacherModelAccessAsync(
-                teacherUserId,
-                includeDisabled: false,
+            Tests = studentTests,
+            Models = new List<LanguageModel>(),
+            Reviews = MergeReviewPage(reviewPage),
+            Attempts = attempts,
+            Metrics = CreateStudentMetrics(studentTests, reviewPage.Aggregate),
+            TerminalReviewsNextCursor = reviewPage.NextCursor
+        };
+    }
+
+    public async Task<ReviewServiceResult<ReviewHistoryPageResponse>> GetReviewHistoryAsync(
+        string userId,
+        bool isTeacher,
+        bool includeHistoricalVersions,
+        int pageSize,
+        string? cursor,
+        CancellationToken cancellationToken)
+    {
+        var result = isTeacher
+            ? await _reviewServiceClient.GetTeacherReviewHistoryAsync(
+                userId,
+                includeHistoricalVersions,
+                pageSize,
+                cursor,
+                cancellationToken)
+            : await _reviewServiceClient.GetStudentReviewHistoryAsync(
+                userId,
+                pageSize,
+                cursor,
                 cancellationToken);
 
-            return new TeacherClassroomOverviewResponse(
-                Tests: tests
-                    .OrderByDescending(test => test.Deadline)
-                    .ToList(),
-                Models: modelAccess
-                    .Select(ToLanguageModel)
-                    .ToList(),
-                Reviews: reviews,
-                Attempts: [],
-                Metrics: CreateMetrics(tests, reviewPage.Aggregate),
-                TerminalReviewsNextCursor: reviewPage.NextCursor);
-        }
-
-        public async Task<StudentClassroomOverviewResponse> GetStudentOverviewAsync(
-            string studentUserId,
-            CancellationToken cancellationToken)
-        {
-            var attempts = await _attemptServiceClient.GetStudentAttemptsAsync(
-                studentUserId,
-                cancellationToken);
-            var tests = await _teachingServiceClient.GetTestsAsync(
-                publishedOnly: true,
-                includeHidden: false,
-                cancellationToken);
-            var testVersions = await BindTestsToAttemptVersionsAsync(
-                tests,
-                attempts,
-                cancellationToken);
-            var studentTests = testVersions
-                .Select(CreateStudentTestResponse)
-                .ToList();
-            var reviewPage = await _reviewServiceClient.GetStudentReviewsAsync(
-                studentUserId,
-                cancellationToken);
-            var reviews = MergeReviewPage(reviewPage);
-
-            return new StudentClassroomOverviewResponse(
-                Tests: studentTests,
-                Models: [],
-                Reviews: reviews,
-                Attempts: attempts,
-                Metrics: CreateMetrics(studentTests, reviewPage.Aggregate),
-                TerminalReviewsNextCursor: reviewPage.NextCursor);
-        }
-
-        public async Task<ReviewServiceResult<ReviewHistoryPageResponse>> GetReviewHistoryAsync(
-            string userId,
-            bool isTeacher,
-            bool includeHistoricalVersions,
-            int pageSize,
-            string? cursor,
-            CancellationToken cancellationToken)
-        {
-            var result = isTeacher
-                ? await _reviewServiceClient.GetTeacherReviewHistoryAsync(
-                    userId,
-                    includeHistoricalVersions,
-                    pageSize,
-                    cursor,
-                    cancellationToken)
-                : await _reviewServiceClient.GetStudentReviewHistoryAsync(
-                    userId,
-                    pageSize,
-                    cursor,
-                    cancellationToken);
-
-            var page = result.Value is null
-                ? null
-                : new ReviewHistoryPageResponse(
-                    result.Value.TerminalReviews.ToList(),
-                    result.Value.NextCursor);
-            return new ReviewServiceResult<ReviewHistoryPageResponse>(
-                result.StatusCode,
-                page,
-                result.Error);
-        }
-
-        private async Task<List<CourseTestDto>> BindTestsToAttemptVersionsAsync(
-            IEnumerable<CourseTestDto> publishedTests,
-            IEnumerable<TestAttemptResponse> attempts,
-            CancellationToken cancellationToken)
-        {
-            var testsById = publishedTests
-                .GroupBy(test => test.Id, StringComparer.OrdinalIgnoreCase)
-                .ToDictionary(
-                    group => group.Key,
-                    group => group.OrderByDescending(test => test.VersionNumber).First(),
-                    StringComparer.OrdinalIgnoreCase);
-
-            foreach (var attempt in attempts)
+        var page = result.Value is null
+            ? null
+            : new ReviewHistoryPageResponse
             {
-                if (testsById.TryGetValue(attempt.TestId, out var publishedTest)
-                    && publishedTest.VersionNumber == attempt.TestRevision)
-                {
-                    continue;
-                }
+                Reviews = result.Value.TerminalReviews.ToList(),
+                NextCursor = result.Value.NextCursor
+            };
+        return new ReviewServiceResult<ReviewHistoryPageResponse>(
+            result.StatusCode,
+            page,
+            result.Error);
+    }
 
-                var exactTestVersion = await _teachingServiceClient.GetTestAsync(
-                    attempt.TestId,
-                    includeHidden: false,
-                    versionNumber: attempt.TestRevision,
-                    cancellationToken);
+    private async Task<List<TestAssignmentResponse>> BindAssignmentsToAttemptsAsync(
+        IEnumerable<TestAssignmentResponse> assignedTests,
+        IEnumerable<TestAttemptResponse> attempts,
+        CancellationToken cancellationToken)
+    {
+        var assignmentsById = assignedTests.ToDictionary(
+            assignment => assignment.Id,
+            assignment => assignment);
 
-                if (exactTestVersion is null)
-                {
-                    testsById.Remove(attempt.TestId);
-                    continue;
-                }
-
-                testsById[attempt.TestId] = exactTestVersion;
+        foreach (var attempt in attempts)
+        {
+            if (assignmentsById.ContainsKey(attempt.AssignmentId))
+            {
+                continue;
             }
 
-            return testsById.Values
-                .OrderBy(test => test.Deadline)
-                .ToList();
-        }
-
-        private static DashboardMetrics CreateMetrics(
-            List<CourseTestDto> tests,
-            ReviewAggregateResponse reviewAggregate)
-        {
-            return new DashboardMetrics
+            var assignment = await _teachingServiceClient.GetAssignmentAsync(
+                attempt.AssignmentId,
+                includeHidden: false,
+                cancellationToken);
+            if (assignment is not null)
             {
-                ActiveTests = tests.Count(test =>
-                    test.Status == TeachingService.Contracts.Enums.CourseTestStatus.Published
-                    || test.PublishedVersionNumber.HasValue),
-                Tasks = tests.Sum(test => test.Tasks.Count(task => !task.IsHidden)),
-                PendingReviews = reviewAggregate.PendingReviews,
-                AverageScore = reviewAggregate.AverageScorePercentage
-            };
+                assignmentsById[assignment.Id] = assignment;
+            }
         }
 
-        private static DashboardMetrics CreateMetrics(
-            List<StudentCourseTestResponse> tests,
-            ReviewAggregateResponse reviewAggregate)
+        return assignmentsById.Values.ToList();
+    }
+
+    private static DashboardMetrics CreateTeacherMetrics(
+        List<StudyGroupResponse> groups,
+        List<TestAttemptResponse> attempts,
+        ReviewAggregateResponse reviewAggregate)
+    {
+        var now = DateTimeOffset.UtcNow;
+        return new DashboardMetrics
         {
-            return new DashboardMetrics
+            ActiveTests = groups
+                .SelectMany(group => group.Assignments)
+                .Count(assignment => assignment.AvailableFrom <= now && assignment.Deadline > now),
+            Tasks = groups
+                .SelectMany(group => group.Assignments)
+                .Sum(assignment => assignment.Test.Tasks.Count(task => !task.IsHidden)),
+            PendingReviews = reviewAggregate.PendingReviews,
+            AverageScore = reviewAggregate.AverageScorePercentage,
+            Students = groups
+                .SelectMany(group => group.StudentUserIds)
+                .Distinct(StringComparer.Ordinal)
+                .Count(),
+            InProgressAttempts = attempts.Count(attempt => attempt.Status == TestAttemptStatus.InProgress),
+            SubmittedAttempts = attempts.Count(attempt => attempt.Status == TestAttemptStatus.Submitted)
+        };
+    }
+
+    private static DashboardMetrics CreateStudentMetrics(
+        List<StudentCourseTestResponse> tests,
+        ReviewAggregateResponse reviewAggregate)
+    {
+        var now = DateTimeOffset.UtcNow;
+        return new DashboardMetrics
+        {
+            ActiveTests = tests.Count(test => test.AvailableFrom <= now && test.Deadline > now),
+            Tasks = tests.Sum(test => test.Tasks.Count(task => !task.IsHidden)),
+            PendingReviews = reviewAggregate.PendingReviews,
+            AverageScore = reviewAggregate.AverageScorePercentage
+        };
+    }
+
+    private static List<ReviewResponse> MergeReviewPage(ReviewPageResponse page)
+    {
+        return page.NonTerminalReviews
+            .Concat(page.TerminalReviews)
+            .DistinctBy(review => review.Id)
+            .OrderByDescending(review => review.SubmittedAt)
+            .ThenByDescending(review => review.Id)
+            .ToList();
+    }
+
+    private static StudentCourseTestResponse CreateStudentTestResponse(
+        TestAssignmentResponse assignment)
+    {
+        var test = assignment.Test;
+        return new StudentCourseTestResponse
+        {
+            Id = assignment.Id.ToString("D"),
+            AssignmentId = assignment.Id,
+            GroupId = assignment.GroupId,
+            GroupName = assignment.GroupName,
+            TestId = test.Id,
+            TeacherUserId = assignment.TeacherUserId,
+            Title = test.Title,
+            Subject = test.Subject,
+            Status = CourseTestStatus.Published,
+            AvailableFrom = assignment.AvailableFrom,
+            Deadline = assignment.Deadline,
+            TimeLimitMinutes = test.TimeLimitMinutes,
+            Summary = test.Summary,
+            LlmModelId = test.LlmModelId,
+            VersionNumber = test.VersionNumber,
+            TotalPoints = test.TotalPoints,
+            Tasks = test.Tasks.Select(task => new StudentTestTaskResponse
             {
-                ActiveTests = tests.Count(test =>
-                    test.Status == TeachingService.Contracts.Enums.CourseTestStatus.Published),
-                Tasks = tests.Sum(test => test.Tasks.Count(task => !task.IsHidden)),
-                PendingReviews = reviewAggregate.PendingReviews,
-                AverageScore = reviewAggregate.AverageScorePercentage
-            };
-        }
+                Id = task.Id,
+                Type = task.Type,
+                CheckMode = task.CheckMode,
+                Title = task.Title,
+                Prompt = task.Prompt,
+                MaxPoints = task.MaxPoints,
+                WrongAnswerPenalty = task.WrongAnswerPenalty,
+                IsHidden = task.IsHidden,
+                CreatedAt = task.CreatedAt,
+                Options = task.Options.Select(option => new StudentAnswerOptionResponse
+                {
+                    Id = option.Id,
+                    Text = option.Text
+                }).ToList()
+            }).ToList()
+        };
+    }
 
-        private static List<ReviewResponse> MergeReviewPage(ReviewPageResponse page)
+    private static LanguageModel ToLanguageModel(ReviewTeacherModelAccessResponse access)
+    {
+        return new LanguageModel
         {
-            return page.NonTerminalReviews
-                .Concat(page.TerminalReviews)
-                .DistinctBy(review => review.Id)
-                .OrderByDescending(review => review.SubmittedAt)
-                .ThenByDescending(review => review.Id)
-                .ToList();
-        }
-
-        private static StudentCourseTestResponse CreateStudentTestResponse(CourseTestDto test)
-        {
-            return new StudentCourseTestResponse(
-                Id: test.Id,
-                TeacherUserId: test.TeacherUserId,
-                Title: test.Title,
-                Subject: test.Subject,
-                Status: test.Status,
-                Deadline: test.Deadline,
-                TimeLimitMinutes: test.TimeLimitMinutes,
-                Summary: test.Summary,
-                LlmModelId: test.LlmModelId,
-                VersionNumber: test.VersionNumber,
-                TotalPoints: test.TotalPoints,
-                Tasks: test.Tasks.Select(task => new StudentTestTaskResponse(
-                    Id: task.Id,
-                    Type: task.Type,
-                    CheckMode: task.CheckMode,
-                    Title: task.Title,
-                    Prompt: task.Prompt,
-                    MaxPoints: task.MaxPoints,
-                    WrongAnswerPenalty: task.WrongAnswerPenalty,
-                    IsHidden: task.IsHidden,
-                    CreatedAt: task.CreatedAt,
-                    Options: task.Options.Select(option => new StudentAnswerOptionResponse(
-                        Id: option.Id,
-                        Text: option.Text)).ToList())).ToList());
-        }
-
-        private static LanguageModel ToLanguageModel(ReviewTeacherModelAccessResponse access)
-        {
-            return new LanguageModel
-            {
-                Id = access.ModelId,
-                DisplayName = access.DisplayName,
-                Status = access.RemainingChecks > 0 ? "available" : "standby",
-                Priority = 0,
-                MaxConcurrentRequests = 0,
-                PeriodSeconds = access.PeriodSeconds,
-                MaxChecks = access.MaxChecks,
-                UsedChecks = access.UsedChecks,
-                RemainingChecks = access.RemainingChecks,
-                PeriodEndsAt = access.PeriodEndsAt
-            };
-        }
+            Id = access.ModelId,
+            DisplayName = access.DisplayName,
+            Status = access.RemainingChecks > 0 ? "available" : "standby",
+            Priority = 0,
+            MaxConcurrentRequests = 0,
+            PeriodSeconds = access.PeriodSeconds,
+            MaxChecks = access.MaxChecks,
+            UsedChecks = access.UsedChecks,
+            RemainingChecks = access.RemainingChecks,
+            PeriodEndsAt = access.PeriodEndsAt
+        };
     }
 }

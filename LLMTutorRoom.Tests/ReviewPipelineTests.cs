@@ -9,6 +9,7 @@ using ReviewService.Contracts.Enums;
 using ReviewService.Contracts.Responses;
 using TeachingService.Contracts.Enums;
 using TeachingService.Contracts.Models;
+using TeachingService.Contracts.Responses;
 
 namespace LLMTutorRoom.Tests;
 
@@ -99,9 +100,12 @@ public sealed class ReviewPipelineTests
             title: "Version 4",
             currentTask);
         var teachingClient = new FakeTeachingServiceClient([oldVersion, currentVersion]);
+        var assignment = CreateAssignment(oldVersion);
+        teachingClient.StudentAssignments.Clear();
+        teachingClient.Assignments.Add(assignment.Id, assignment);
         var attemptClient = new FakeAttemptServiceClient
         {
-            Attempts = [CreateAttempt(oldVersion.Id, 3, attemptStatus)]
+            Attempts = [CreateAttempt(oldVersion.Id, 3, attemptStatus, assignment.Id)]
         };
         var service = new ClassroomService(
             attemptClient,
@@ -118,8 +122,8 @@ public sealed class ReviewPipelineTests
         Assert.Equal("task-v3", Assert.Single(returnedTest.Tasks).Id);
         Assert.DoesNotContain(returnedTest.Tasks, task => task.Id == "task-v4");
         Assert.Contains(
-            teachingClient.TestRequests,
-            request => request.TestId == oldVersion.Id && request.VersionNumber == 3);
+            teachingClient.AssignmentRequests,
+            request => request.AssignmentId == assignment.Id && !request.IncludeHidden);
     }
 
     [Fact]
@@ -132,14 +136,21 @@ public sealed class ReviewPipelineTests
             status: CourseTestStatus.Published,
             title: "Version 4",
             currentTask);
+        var unavailableAssignmentId = Guid.NewGuid();
         var attemptClient = new FakeAttemptServiceClient
         {
-            Attempts = [CreateAttempt(currentVersion.Id, 3, TestAttemptStatus.InProgress)]
+            Attempts = [CreateAttempt(
+                currentVersion.Id,
+                3,
+                TestAttemptStatus.InProgress,
+                unavailableAssignmentId)]
         };
-        var service = CreateClassroomService(
-            new FakeReviewServiceClient(),
+        var teachingClient = new FakeTeachingServiceClient([currentVersion]);
+        teachingClient.StudentAssignments.Clear();
+        var service = new ClassroomService(
             attemptClient,
-            currentVersion);
+            teachingClient,
+            new FakeReviewServiceClient());
 
         var overview = await service.GetStudentOverviewAsync(
             "student",
@@ -230,13 +241,19 @@ public sealed class ReviewPipelineTests
     private static TestAttemptResponse CreateAttempt(
         string testId,
         int testRevision,
-        TestAttemptStatus status)
+        TestAttemptStatus status,
+        Guid? assignmentId = null)
     {
         return new TestAttemptResponse
         {
             Id = Guid.NewGuid(),
+            AssignmentId = assignmentId ?? Guid.NewGuid(),
+            GroupId = Guid.NewGuid(),
             TestId = testId,
             TestRevision = testRevision,
+            TeacherUserId = "teacher",
+            StudentUserId = "student",
+            StudentName = "Student",
             Status = status,
             StartedAt = DateTimeOffset.UtcNow.AddMinutes(-5),
             EndsAt = DateTimeOffset.UtcNow.AddMinutes(40),
@@ -271,12 +288,26 @@ public sealed class ReviewPipelineTests
             Title = title,
             Subject = "Subject",
             Status = status,
-            Deadline = DateTimeOffset.UtcNow.AddDays(1),
             TimeLimitMinutes = 45,
             LlmModelId = 1,
             VersionNumber = versionNumber,
             TotalPoints = tasks.Sum(task => task.MaxPoints),
             Tasks = tasks.ToList()
+        };
+    }
+
+    private static TestAssignmentResponse CreateAssignment(CourseTestDto test)
+    {
+        return new TestAssignmentResponse
+        {
+            Id = Guid.NewGuid(),
+            GroupId = Guid.NewGuid(),
+            GroupName = "Group 1",
+            TeacherUserId = test.TeacherUserId,
+            AvailableFrom = DateTimeOffset.UtcNow.AddHours(-1),
+            Deadline = DateTimeOffset.UtcNow.AddDays(1),
+            CreatedAt = DateTimeOffset.UtcNow.AddDays(-1),
+            Test = test
         };
     }
 
@@ -312,28 +343,28 @@ public sealed class ReviewPipelineTests
 
     private static ReviewResponse CreateReview(CourseTestDto test)
     {
-        return new ReviewResponse(
-            Id: 1,
-            AttemptId: Guid.NewGuid(),
-            TestId: test.Id,
-            TestRevision: test.VersionNumber,
-            TestTitle: test.Title,
-            TeacherUserId: test.TeacherUserId,
-            StudentUserId: "student",
-            StudentName: "Student",
-            Status: ReviewStatus.ManualReview,
-            ModelId: test.LlmModelId,
-            SubmittedAt: DateTimeOffset.UtcNow,
-            QueuedAt: null,
-            StartedAt: null,
-            CompletedAt: null,
-            NextRetryAt: null,
-            ProcessingAttempts: 0,
-            LastError: string.Empty,
-            Score: 0,
-            MaxScore: test.TotalPoints,
-            Summary: string.Empty,
-            TaskResults: []);
+        return new ReviewResponse
+        {
+            Id = 1,
+            AttemptId = Guid.NewGuid(),
+            AssignmentId = Guid.NewGuid(),
+            GroupId = Guid.NewGuid(),
+            TestId = test.Id,
+            TestRevision = test.VersionNumber,
+            TestTitle = test.Title,
+            TeacherUserId = test.TeacherUserId,
+            StudentUserId = "student",
+            StudentName = "Student",
+            Status = ReviewStatus.ManualReview,
+            ModelId = test.LlmModelId,
+            SubmittedAt = DateTimeOffset.UtcNow,
+            ProcessingAttempts = 0,
+            LastError = string.Empty,
+            Score = 0,
+            MaxScore = test.TotalPoints,
+            Summary = string.Empty,
+            TaskResults = []
+        };
     }
 
     private sealed class FakeAttemptServiceClient : IAttemptServiceClient
@@ -348,14 +379,31 @@ public sealed class ReviewPipelineTests
             LastStudentUserId = studentUserId;
             return Task.FromResult(Attempts);
         }
+
+        public Task<List<TestAttemptResponse>> GetTeacherAttemptsAsync(
+            string teacherUserId,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult(Attempts);
+        }
     }
 
-    private sealed class FakeTeachingServiceClient(IEnumerable<CourseTestDto> tests)
-        : ITeachingServiceClient
+    private class FakeTeachingServiceClient : ITeachingServiceClient
     {
-        private readonly List<CourseTestDto> _tests = tests.ToList();
+        private readonly List<CourseTestDto> _tests;
 
-        public List<(string TestId, int? VersionNumber)> TestRequests { get; } = [];
+        public FakeTeachingServiceClient(IEnumerable<CourseTestDto> tests)
+        {
+            _tests = tests.ToList();
+            StudentAssignments = _tests
+                .Where(test => test.Status == CourseTestStatus.Published)
+                .Select(CreateAssignment)
+                .ToList();
+        }
+
+        public List<TestAssignmentResponse> StudentAssignments { get; }
+        public Dictionary<Guid, TestAssignmentResponse> Assignments { get; } = new();
+        public List<(Guid AssignmentId, bool IncludeHidden)> AssignmentRequests { get; } = [];
 
         public Task<List<CourseTestDto>> GetTestsAsync(
             bool publishedOnly,
@@ -375,7 +423,6 @@ public sealed class ReviewPipelineTests
             int? versionNumber,
             CancellationToken cancellationToken)
         {
-            TestRequests.Add((testId, versionNumber));
             var matchingTests = _tests.Where(test => test.Id == testId);
             var test = versionNumber.HasValue
                 ? matchingTests.SingleOrDefault(test => test.VersionNumber == versionNumber.Value)
@@ -389,6 +436,30 @@ public sealed class ReviewPipelineTests
                         .FirstOrDefault();
 
             return Task.FromResult(test);
+        }
+
+        public Task<List<TestAssignmentResponse>> GetStudentAssignmentsAsync(
+            string studentUserId,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult(StudentAssignments.ToList());
+        }
+
+        public Task<TestAssignmentResponse?> GetAssignmentAsync(
+            Guid assignmentId,
+            bool includeHidden,
+            CancellationToken cancellationToken)
+        {
+            AssignmentRequests.Add((assignmentId, includeHidden));
+            Assignments.TryGetValue(assignmentId, out var assignment);
+            return Task.FromResult(assignment);
+        }
+
+        public Task<List<StudyGroupResponse>> GetTeacherGroupsAsync(
+            string teacherUserId,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult<List<StudyGroupResponse>>([]);
         }
     }
 

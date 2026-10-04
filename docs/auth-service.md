@@ -2,7 +2,7 @@
 
 ## Назначение и границы владения
 
-`AuthService` — единственный владелец учётных записей, паролей и ролей пользователей. Он регистрирует студентов, проверяет email и пароль, выпускает JWT и даёт администратору минимальные операции для работы с преподавателями. Идентификатор пользователя из этого сервиса затем используется остальными частями системы как внешний строковый ID.
+`AuthService` — единственный владелец учётных записей, паролей и ролей пользователей. Он регистрирует студентов, проверяет email и пароль, выпускает JWT, даёт администратору минимальные операции для работы с преподавателями и отдаёт списки пользователей для формирования учебных групп. Идентификатор пользователя из этого сервиса затем используется остальными частями системы как внешний строковый ID.
 
 Сервис не хранит учебные данные, попытки, проверки работ или права преподавателей на LLM-модели. Эти данные принадлежат `TeachingService`, `AttemptService` и `ReviewService`. Здесь также нет обновления профиля, удаления пользователя, refresh token или серверной сессии. После выпуска токен проверяется принимающими сервисами локально через общую библиотеку [`Shared.Auth`](../Shared.Auth/JwtAuthenticationExtensions.cs), без обратного запроса в `AuthService`.
 
@@ -69,6 +69,7 @@ sequenceDiagram
 - `POST /api/auth/register` — публичная регистрация студента с немедленной выдачей JWT;
 - `GET /api/auth/me` — проверка текущего Bearer-токена;
 - `GET /api/users/teachers` — список преподавателей для администратора;
+- `GET /api/users/students` — список учеников для преподавателя или администратора;
 - `POST /api/users/teachers` — создание преподавателя администратором.
 
 Фронтенд использует маршруты `/api/auth/*` для регистрации, входа и восстановления сессии, а административные экраны — маршруты преподавателей. `LLMTutorRoom`, `TeachingService`, `AttemptService` и `ReviewService` подключают [`AddJwtAuthentication`](../Shared.Auth/JwtAuthenticationExtensions.cs) и должны иметь те же issuer, audience и signing key.
@@ -99,6 +100,6 @@ Signing key обязателен и должен занимать не мень�
 1. [`Program.cs`](../AuthService/Program.cs) — Identity, JWT, миграции и стартовая синхронизация.
 2. [`AuthController.cs`](../AuthService/Controllers/AuthController.cs) — регистрация студента, вход и проекция claims в `/me`.
 3. [`ConfiguredUsersService.cs`](../AuthService/Services/ConfiguredUsersService.cs) — правила bootstrap-пользователей.
-4. [`UsersController.cs`](../AuthService/Controllers/UsersController.cs) и [`UserAccountService.cs`](../AuthService/Services/UserAccountService.cs) — административный сценарий преподавателей.
+4. [`UsersController.cs`](../AuthService/Controllers/UsersController.cs) и [`UserAccountService.cs`](../AuthService/Services/UserAccountService.cs) — преподаватели и список учеников для состава групп.
 5. [`JwtTokenFactory.cs`](../Shared.Auth/JwtTokenFactory.cs) и [`JwtAuthenticationExtensions.cs`](../Shared.Auth/JwtAuthenticationExtensions.cs) — состав и проверка токена.
 6. [`AuthDbContext.cs`](../AuthService/Data/AuthDbContext.cs) и [initial migration](../AuthService/Migrations/20260823103951_InitialCreate.cs) — фактическая схема хранения.

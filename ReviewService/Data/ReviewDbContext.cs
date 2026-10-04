@@ -4,8 +4,13 @@ using ReviewService.Models.Reviews;
 
 namespace ReviewService.Data;
 
-public sealed class ReviewDbContext(DbContextOptions<ReviewDbContext> options) : DbContext(options)
+public class ReviewDbContext : DbContext
 {
+    public ReviewDbContext(DbContextOptions<ReviewDbContext> options)
+        : base(options)
+    {
+    }
+
     public DbSet<Review> Reviews => Set<Review>();
     public DbSet<ReviewTask> ReviewTasks => Set<ReviewTask>();
     public DbSet<TestReviewPolicy> TestReviewPolicies => Set<TestReviewPolicy>();
@@ -27,6 +32,8 @@ public sealed class ReviewDbContext(DbContextOptions<ReviewDbContext> options) :
             entity.Property(item => item.ProcessingGeneration).IsConcurrencyToken();
             entity.Property(item => item.GradingExamplesJson).HasColumnName("GradingExamples").HasColumnType("jsonb");
             entity.HasIndex(item => item.AttemptId).IsUnique();
+            entity.HasIndex(item => item.AssignmentId);
+            entity.HasIndex(item => item.GroupId);
             entity.HasIndex(item => item.TeacherUserId);
             entity.HasIndex(item => item.StudentUserId);
             entity.HasIndex(item => new
@@ -91,6 +98,7 @@ public sealed class ReviewDbContext(DbContextOptions<ReviewDbContext> options) :
             entity.Property(item => item.StudentName).HasMaxLength(500);
             entity.Property(item => item.AnswersJson).HasColumnName("Answers").HasColumnType("jsonb");
             entity.HasIndex(item => item.AttemptId).IsUnique();
+            entity.HasIndex(item => item.AssignmentId);
             entity.HasIndex(item => item.ReceivedAt);
             entity.HasIndex(item => new { item.TestId, item.TestRevision });
         });

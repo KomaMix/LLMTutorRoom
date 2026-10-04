@@ -21,11 +21,8 @@ export function getReviewHistory({
   return apiRequest(`/api/classroom/reviews/history?${search}`, { signal });
 }
 
-export function startAttempt(testId, versionNumber) {
-  const query = Number.isInteger(versionNumber) && versionNumber > 0
-    ? `?versionNumber=${encodeURIComponent(versionNumber)}`
-    : "";
-  return apiRequest(`/api/attempts/tests/${encodeURIComponent(testId)}/start${query}`, {
+export function startAttempt(assignmentId) {
+  return apiRequest(`/api/attempts/assignments/${encodeURIComponent(assignmentId)}/start`, {
     method: "POST"
   });
 }

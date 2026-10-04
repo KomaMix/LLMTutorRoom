@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
@@ -34,8 +34,11 @@ namespace AttemptService.Migrations
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    AssignmentId = table.Column<Guid>(type: "uuid", nullable: false),
+                    GroupId = table.Column<Guid>(type: "uuid", nullable: false),
                     TestId = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
                     TestRevision = table.Column<int>(type: "integer", nullable: false),
+                    TeacherUserId = table.Column<string>(type: "text", nullable: false),
                     StudentUserId = table.Column<string>(type: "character varying(450)", maxLength: 450, nullable: false),
                     StudentName = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: false),
                     Status = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false),
@@ -64,6 +67,17 @@ namespace AttemptService.Migrations
                 columns: new[] { "PublishedAt", "NextPublishAt" });
 
             migrationBuilder.CreateIndex(
+                name: "IX_TestAttempts_AssignmentId_StudentUserId",
+                table: "TestAttempts",
+                columns: new[] { "AssignmentId", "StudentUserId" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_TestAttempts_GroupId",
+                table: "TestAttempts",
+                column: "GroupId");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_TestAttempts_Status_EndsAt",
                 table: "TestAttempts",
                 columns: new[] { "Status", "EndsAt" });
@@ -75,10 +89,9 @@ namespace AttemptService.Migrations
                 descending: new[] { false, true });
 
             migrationBuilder.CreateIndex(
-                name: "IX_TestAttempts_TestId_StudentUserId",
+                name: "IX_TestAttempts_TeacherUserId",
                 table: "TestAttempts",
-                columns: new[] { "TestId", "StudentUserId" },
-                unique: true);
+                column: "TeacherUserId");
         }
 
         protected override void Down(MigrationBuilder migrationBuilder)

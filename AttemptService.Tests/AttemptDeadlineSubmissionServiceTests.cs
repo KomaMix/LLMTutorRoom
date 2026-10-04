@@ -107,8 +107,11 @@ public class AttemptDeadlineSubmissionServiceTests
         return new TestAttempt
         {
             Id = Guid.NewGuid(),
+            AssignmentId = Guid.NewGuid(),
+            GroupId = Guid.NewGuid(),
             TestId = testId.ToString("D"),
             TestRevision = 1,
+            TeacherUserId = "teacher-1",
             StudentUserId = "student-1",
             StudentName = "Alice Student",
             Status = status,

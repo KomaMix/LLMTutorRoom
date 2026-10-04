@@ -2,78 +2,99 @@ using AttemptService.Contracts.Responses;
 using ReviewService.Contracts.Responses;
 using TeachingService.Contracts.Enums;
 using TeachingService.Contracts.Models;
+using TeachingService.Contracts.Responses;
 
-namespace LLMTutorRoom.Models
+namespace LLMTutorRoom.Models;
+
+public class TeacherClassroomOverviewResponse
 {
-    public sealed record TeacherClassroomOverviewResponse(
-        List<CourseTestDto> Tests,
-        List<LanguageModel> Models,
-        List<ReviewResponse> Reviews,
-        List<TestAttemptResponse> Attempts,
-        DashboardMetrics Metrics,
-        string? TerminalReviewsNextCursor);
+    public List<CourseTestDto> Tests { get; set; } = new();
+    public List<StudyGroupResponse> Groups { get; set; } = new();
+    public List<LanguageModel> Models { get; set; } = new();
+    public List<ReviewResponse> Reviews { get; set; } = new();
+    public List<TestAttemptResponse> Attempts { get; set; } = new();
+    public DashboardMetrics Metrics { get; set; } = new();
+    public string? TerminalReviewsNextCursor { get; set; }
+}
 
-    public sealed record StudentClassroomOverviewResponse(
-        List<StudentCourseTestResponse> Tests,
-        List<LanguageModel> Models,
-        List<ReviewResponse> Reviews,
-        List<TestAttemptResponse> Attempts,
-        DashboardMetrics Metrics,
-        string? TerminalReviewsNextCursor);
+public class StudentClassroomOverviewResponse
+{
+    public List<StudentCourseTestResponse> Tests { get; set; } = new();
+    public List<LanguageModel> Models { get; set; } = new();
+    public List<ReviewResponse> Reviews { get; set; } = new();
+    public List<TestAttemptResponse> Attempts { get; set; } = new();
+    public DashboardMetrics Metrics { get; set; } = new();
+    public string? TerminalReviewsNextCursor { get; set; }
+}
 
-    public sealed record StudentCourseTestResponse(
-        string Id,
-        string TeacherUserId,
-        string Title,
-        string Subject,
-        CourseTestStatus Status,
-        DateTimeOffset Deadline,
-        int TimeLimitMinutes,
-        string Summary,
-        int? LlmModelId,
-        int VersionNumber,
-        decimal TotalPoints,
-        List<StudentTestTaskResponse> Tasks);
+public class StudentCourseTestResponse
+{
+    public string Id { get; set; } = string.Empty;
+    public Guid AssignmentId { get; set; }
+    public Guid GroupId { get; set; }
+    public string GroupName { get; set; } = string.Empty;
+    public string TestId { get; set; } = string.Empty;
+    public string TeacherUserId { get; set; } = string.Empty;
+    public string Title { get; set; } = string.Empty;
+    public string Subject { get; set; } = string.Empty;
+    public CourseTestStatus Status { get; set; }
+    public DateTimeOffset AvailableFrom { get; set; }
+    public DateTimeOffset Deadline { get; set; }
+    public int TimeLimitMinutes { get; set; }
+    public string Summary { get; set; } = string.Empty;
+    public int? LlmModelId { get; set; }
+    public int VersionNumber { get; set; }
+    public decimal TotalPoints { get; set; }
+    public List<StudentTestTaskResponse> Tasks { get; set; } = new();
+}
 
-    public sealed record StudentTestTaskResponse(
-        string Id,
-        TestTaskType Type,
-        TestTaskCheckMode CheckMode,
-        string Title,
-        string Prompt,
-        decimal MaxPoints,
-        decimal WrongAnswerPenalty,
-        bool IsHidden,
-        DateTimeOffset CreatedAt,
-        List<StudentAnswerOptionResponse> Options);
+public class StudentTestTaskResponse
+{
+    public string Id { get; set; } = string.Empty;
+    public TestTaskType Type { get; set; }
+    public TestTaskCheckMode CheckMode { get; set; }
+    public string Title { get; set; } = string.Empty;
+    public string Prompt { get; set; } = string.Empty;
+    public decimal MaxPoints { get; set; }
+    public decimal WrongAnswerPenalty { get; set; }
+    public bool IsHidden { get; set; }
+    public DateTimeOffset CreatedAt { get; set; }
+    public List<StudentAnswerOptionResponse> Options { get; set; } = new();
+}
 
-    public sealed record StudentAnswerOptionResponse(
-        string Id,
-        string Text);
+public class StudentAnswerOptionResponse
+{
+    public string Id { get; set; } = string.Empty;
+    public string Text { get; set; } = string.Empty;
+}
 
-    public sealed record ReviewHistoryPageResponse(
-        List<ReviewResponse> Reviews,
-        string? NextCursor);
+public class ReviewHistoryPageResponse
+{
+    public List<ReviewResponse> Reviews { get; set; } = new();
+    public string? NextCursor { get; set; }
+}
 
-    public sealed class DashboardMetrics
-    {
-        public int ActiveTests { get; set; }
-        public int Tasks { get; set; }
-        public int PendingReviews { get; set; }
-        public decimal AverageScore { get; set; }
-    }
+public class DashboardMetrics
+{
+    public int ActiveTests { get; set; }
+    public int Tasks { get; set; }
+    public int PendingReviews { get; set; }
+    public decimal AverageScore { get; set; }
+    public int Students { get; set; }
+    public int InProgressAttempts { get; set; }
+    public int SubmittedAttempts { get; set; }
+}
 
-    public sealed class LanguageModel
-    {
-        public int Id { get; set; }
-        public string DisplayName { get; set; } = string.Empty;
-        public string Status { get; set; } = string.Empty;
-        public int Priority { get; set; }
-        public int MaxConcurrentRequests { get; set; }
-        public int PeriodSeconds { get; set; }
-        public int MaxChecks { get; set; }
-        public int UsedChecks { get; set; }
-        public int RemainingChecks { get; set; }
-        public DateTimeOffset? PeriodEndsAt { get; set; }
-    }
+public class LanguageModel
+{
+    public int Id { get; set; }
+    public string DisplayName { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
+    public int Priority { get; set; }
+    public int MaxConcurrentRequests { get; set; }
+    public int PeriodSeconds { get; set; }
+    public int MaxChecks { get; set; }
+    public int UsedChecks { get; set; }
+    public int RemainingChecks { get; set; }
+    public DateTimeOffset? PeriodEndsAt { get; set; }
 }

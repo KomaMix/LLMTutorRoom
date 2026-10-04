@@ -1,4 +1,5 @@
 using TeachingService.Contracts.Models;
+using TeachingService.Contracts.Responses;
 
 namespace LLMTutorRoom.Interfaces
 {
@@ -13,6 +14,19 @@ namespace LLMTutorRoom.Interfaces
             string testId,
             bool includeHidden,
             int? versionNumber,
+            CancellationToken cancellationToken);
+
+        Task<List<TestAssignmentResponse>> GetStudentAssignmentsAsync(
+            string studentUserId,
+            CancellationToken cancellationToken);
+
+        Task<TestAssignmentResponse?> GetAssignmentAsync(
+            Guid assignmentId,
+            bool includeHidden,
+            CancellationToken cancellationToken);
+
+        Task<List<StudyGroupResponse>> GetTeacherGroupsAsync(
+            string teacherUserId,
             CancellationToken cancellationToken);
     }
 }

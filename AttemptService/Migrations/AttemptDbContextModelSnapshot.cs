@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using AttemptService.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
@@ -84,8 +84,14 @@ namespace AttemptService.Migrations
                         .HasColumnType("jsonb")
                         .HasColumnName("Answers");
 
+                    b.Property<Guid>("AssignmentId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTimeOffset>("EndsAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("GroupId")
+                        .HasColumnType("uuid");
 
                     b.Property<DateTimeOffset>("StartedAt")
                         .HasColumnType("timestamp with time zone");
@@ -116,6 +122,10 @@ namespace AttemptService.Migrations
                     b.Property<DateTimeOffset?>("SubmittedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("TeacherUserId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.Property<string>("TestId")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -126,13 +136,17 @@ namespace AttemptService.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("GroupId");
+
+                    b.HasIndex("TeacherUserId");
+
+                    b.HasIndex("AssignmentId", "StudentUserId")
+                        .IsUnique();
+
                     b.HasIndex("Status", "EndsAt");
 
                     b.HasIndex("StudentUserId", "StartedAt")
                         .IsDescending(false, true);
-
-                    b.HasIndex("TestId", "StudentUserId")
-                        .IsUnique();
 
                     b.ToTable("TestAttempts");
                 });

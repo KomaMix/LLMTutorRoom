@@ -30,6 +30,17 @@ namespace AuthService.Services
                 .ToList();
         }
 
+        public async Task<List<ApplicationUser>> GetStudentsAsync(
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var students = await _userManager.GetUsersInRoleAsync(UserRole.Student.ToString());
+
+            return students
+                .OrderBy(user => user.UserName)
+                .ToList();
+        }
+
         public async Task<ApplicationUser?> CreateTeacherAsync(
             string userName,
             string email,

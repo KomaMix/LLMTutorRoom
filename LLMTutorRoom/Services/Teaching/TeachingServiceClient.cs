@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using LLMTutorRoom.Interfaces;
 using TeachingService.Contracts.Models;
+using TeachingService.Contracts.Responses;
 
 namespace LLMTutorRoom.Services.Teaching
 {
@@ -69,6 +70,55 @@ namespace LLMTutorRoom.Services.Teaching
             return await response.Content.ReadFromJsonAsync<CourseTestDto>(
                 JsonOptions,
                 cancellationToken);
+        }
+
+        public async Task<List<TestAssignmentResponse>> GetStudentAssignmentsAsync(
+            string studentUserId,
+            CancellationToken cancellationToken)
+        {
+            using var response = await _httpClient.GetAsync(
+                $"/internal/teaching/students/{Uri.EscapeDataString(studentUserId)}/assignments",
+                cancellationToken);
+            response.EnsureSuccessStatusCode();
+
+            return await response.Content.ReadFromJsonAsync<List<TestAssignmentResponse>>(
+                    JsonOptions,
+                    cancellationToken)
+                ?? new List<TestAssignmentResponse>();
+        }
+
+        public async Task<TestAssignmentResponse?> GetAssignmentAsync(
+            Guid assignmentId,
+            bool includeHidden,
+            CancellationToken cancellationToken)
+        {
+            using var response = await _httpClient.GetAsync(
+                $"/internal/teaching/assignments/{assignmentId:D}?includeHidden={ToQueryValue(includeHidden)}",
+                cancellationToken);
+            if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                return null;
+            }
+
+            response.EnsureSuccessStatusCode();
+            return await response.Content.ReadFromJsonAsync<TestAssignmentResponse>(
+                JsonOptions,
+                cancellationToken);
+        }
+
+        public async Task<List<StudyGroupResponse>> GetTeacherGroupsAsync(
+            string teacherUserId,
+            CancellationToken cancellationToken)
+        {
+            using var response = await _httpClient.GetAsync(
+                $"/internal/teaching/teachers/{Uri.EscapeDataString(teacherUserId)}/groups",
+                cancellationToken);
+            response.EnsureSuccessStatusCode();
+
+            return await response.Content.ReadFromJsonAsync<List<StudyGroupResponse>>(
+                    JsonOptions,
+                    cancellationToken)
+                ?? new List<StudyGroupResponse>();
         }
 
         private static string ToQueryValue(bool value)

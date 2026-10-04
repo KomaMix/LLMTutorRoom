@@ -24,6 +24,20 @@ export function TeacherDashboard({
       caption: "требуют внимания",
       icon: Clock3,
       tone: "amber"
+    },
+    {
+      label: "Ученики",
+      value: overview.metrics.students,
+      caption: "в моих группах",
+      icon: UsersRound,
+      tone: "blue"
+    },
+    {
+      label: "Выполняют сейчас",
+      value: overview.metrics.inProgressAttempts,
+      caption: "активные попытки",
+      icon: Clock3,
+      tone: "violet"
     }
   ];
   return (

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import {
+  CalendarClock,
   CheckCircle2,
   ChevronDown,
   Clock3,
@@ -182,7 +183,7 @@ export function StudentWorkspace({
               onClick={() => onSelectTest(test.id)}
             >
               <span>{test.title}</span>
-              <small>{formatPoints(test.totalPoints)} · {test.timeLimitMinutes} мин</small>
+              <small>{test.groupName ? `${test.groupName} · ` : ""}{formatPoints(test.totalPoints)} · {test.timeLimitMinutes} мин</small>
             </button>
           ))}
         </div>
@@ -191,7 +192,7 @@ export function StudentWorkspace({
       <div className="detail-panel student-workspace-panel">
         <header className="student-test-header">
           <div>
-            <span className="eyebrow">{selectedTest.subject}</span>
+            <span className="eyebrow">{selectedTest.subject}{selectedTest.groupName ? ` · ${selectedTest.groupName}` : ""}</span>
             <h2>{selectedTest.title}</h2>
           </div>
           <StatusBadge
@@ -203,6 +204,7 @@ export function StudentWorkspace({
         <div className="student-test-facts" aria-label="Параметры теста">
           <span><Clock3 size={15} aria-hidden="true" />{selectedTest.timeLimitMinutes} мин</span>
           <span><FileCheck2 size={15} aria-hidden="true" />{formatPoints(selectedTest.totalPoints)}</span>
+          <span><CalendarClock size={15} aria-hidden="true" />до {formatDate(selectedTest.deadline)}</span>
         </div>
 
         <section className={`attempt-panel ${effectiveAttemptStatus ?? "not-started"}`}>

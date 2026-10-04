@@ -39,6 +39,22 @@ namespace AuthService.Controllers
             return Ok(responses);
         }
 
+        [Authorize(Roles = "Admin,Teacher")]
+        [HttpGet("students")]
+        public async Task<ActionResult<List<AuthUserResponse>>> GetStudents(
+            CancellationToken cancellationToken)
+        {
+            var students = await _userAccountService.GetStudentsAsync(cancellationToken);
+            var responses = new List<AuthUserResponse>();
+            foreach (var student in students)
+            {
+                var roles = (await _userManager.GetRolesAsync(student)).ToList();
+                responses.Add(student.ToAuthUserResponse(roles));
+            }
+
+            return Ok(responses);
+        }
+
         [Authorize(Roles = "Admin")]
         [HttpPost("teachers")]
         public async Task<ActionResult<AuthUserResponse>> CreateTeacher(

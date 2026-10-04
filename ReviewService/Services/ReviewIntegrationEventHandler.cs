@@ -11,45 +11,62 @@ using ReviewService.Models.Reviews;
 
 namespace ReviewService.Services;
 
-public sealed class ReviewIntegrationEventHandler(
-    ReviewDbContext dbContext,
-    IReviewCreationService reviewCreationService,
-    IReviewQueuePublisher queuePublisher,
-    ILogger<ReviewIntegrationEventHandler> logger) : IReviewIntegrationEventHandler
+public class ReviewIntegrationEventHandler : IReviewIntegrationEventHandler
 {
+    private readonly ReviewDbContext _dbContext;
+    private readonly IReviewCreationService _reviewCreationService;
+    private readonly IReviewQueuePublisher _queuePublisher;
+    private readonly ILogger<ReviewIntegrationEventHandler> _logger;
+
+    public ReviewIntegrationEventHandler(
+        ReviewDbContext dbContext,
+        IReviewCreationService reviewCreationService,
+        IReviewQueuePublisher queuePublisher,
+        ILogger<ReviewIntegrationEventHandler> logger)
+    {
+        _dbContext = dbContext;
+        _reviewCreationService = reviewCreationService;
+        _queuePublisher = queuePublisher;
+        _logger = logger;
+    }
+
     public async Task HandleAsync(
         AttemptSubmittedV1 message,
         CancellationToken cancellationToken)
     {
         Validate(message);
         if (await IsProcessedAsync(message.EventId, cancellationToken))
+        {
             return;
+        }
 
         var reviewsToPublish = new List<Review>();
         await using (var transaction = await BeginTransactionAsync(cancellationToken))
         {
-            dbContext.InboxMessages.Add(CreateInbox(message.EventId, nameof(AttemptSubmittedV1)));
+            _dbContext.InboxMessages.Add(CreateInbox(message.EventId, nameof(AttemptSubmittedV1)));
 
-            var attemptAlreadyKnown = await dbContext.Reviews.AnyAsync(
+            var attemptAlreadyKnown = await _dbContext.Reviews.AnyAsync(
                     review => review.AttemptId == message.AttemptId,
                     cancellationToken)
-                || await dbContext.PendingSubmissions.AnyAsync(
+                || await _dbContext.PendingSubmissions.AnyAsync(
                     submission => submission.AttemptId == message.AttemptId,
                     cancellationToken);
             if (!attemptAlreadyKnown)
             {
-                var policy = await dbContext.TestReviewPolicies.SingleOrDefaultAsync(
+                var policy = await _dbContext.TestReviewPolicies.SingleOrDefaultAsync(
                     item => item.TestId == message.TestId && item.Revision == message.TestRevision,
                     cancellationToken);
                 if (policy is null)
                 {
-                    dbContext.PendingSubmissions.Add(ToPendingSubmission(message));
+                    _dbContext.PendingSubmissions.Add(ToPendingSubmission(message));
                 }
                 else
                 {
-                    reviewsToPublish.Add(await reviewCreationService.CreateAsync(
+                    reviewsToPublish.Add(await _reviewCreationService.CreateAsync(
                         policy,
                         message.AttemptId,
+                        message.AssignmentId,
+                        message.GroupId,
                         message.StudentUserId,
                         message.StudentName,
                         message.Answers,
@@ -58,9 +75,11 @@ public sealed class ReviewIntegrationEventHandler(
                 }
             }
 
-            await dbContext.SaveChangesAsync(cancellationToken);
+            await _dbContext.SaveChangesAsync(cancellationToken);
             if (transaction is not null)
+            {
                 await transaction.CommitAsync(cancellationToken);
+            }
         }
 
         await TryPublishAsync(reviewsToPublish, cancellationToken);
@@ -72,14 +91,16 @@ public sealed class ReviewIntegrationEventHandler(
     {
         Validate(message);
         if (await IsProcessedAsync(message.EventId, cancellationToken))
+        {
             return;
+        }
 
         var reviewsToPublish = new List<Review>();
         await using (var transaction = await BeginTransactionAsync(cancellationToken))
         {
-            dbContext.InboxMessages.Add(CreateInbox(message.EventId, nameof(TestReviewPolicyPublishedV1)));
+            _dbContext.InboxMessages.Add(CreateInbox(message.EventId, nameof(TestReviewPolicyPublishedV1)));
 
-            var policy = await dbContext.TestReviewPolicies.SingleOrDefaultAsync(
+            var policy = await _dbContext.TestReviewPolicies.SingleOrDefaultAsync(
                 item => item.TestId == message.TestId && item.Revision == message.Revision,
                 cancellationToken);
             if (policy is null)
@@ -96,20 +117,20 @@ public sealed class ReviewIntegrationEventHandler(
                     PublishedAt = message.PublishedAt,
                     ReceivedAt = DateTimeOffset.UtcNow
                 };
-                dbContext.TestReviewPolicies.Add(policy);
+                _dbContext.TestReviewPolicies.Add(policy);
             }
 
-            var pendingSubmissions = await dbContext.PendingSubmissions
+            var pendingSubmissions = await _dbContext.PendingSubmissions
                 .Where(item => item.TestId == message.TestId && item.TestRevision == message.Revision)
                 .OrderBy(item => item.SubmittedAt)
                 .ToListAsync(cancellationToken);
             foreach (var pending in pendingSubmissions)
             {
-                if (await dbContext.Reviews.AnyAsync(
+                if (await _dbContext.Reviews.AnyAsync(
                         review => review.AttemptId == pending.AttemptId,
                         cancellationToken))
                 {
-                    dbContext.PendingSubmissions.Remove(pending);
+                    _dbContext.PendingSubmissions.Remove(pending);
                     continue;
                 }
 
@@ -117,20 +138,24 @@ public sealed class ReviewIntegrationEventHandler(
                         pending.AnswersJson,
                         JsonHelper.Options)
                     ?? [];
-                reviewsToPublish.Add(await reviewCreationService.CreateAsync(
+                reviewsToPublish.Add(await _reviewCreationService.CreateAsync(
                     policy,
                     pending.AttemptId,
+                    pending.AssignmentId,
+                    pending.GroupId,
                     pending.StudentUserId,
                     pending.StudentName,
                     answers,
                     pending.SubmittedAt,
                     cancellationToken));
-                dbContext.PendingSubmissions.Remove(pending);
+                _dbContext.PendingSubmissions.Remove(pending);
             }
 
-            await dbContext.SaveChangesAsync(cancellationToken);
+            await _dbContext.SaveChangesAsync(cancellationToken);
             if (transaction is not null)
+            {
                 await transaction.CommitAsync(cancellationToken);
+            }
         }
 
         await TryPublishAsync(reviewsToPublish, cancellationToken);
@@ -144,7 +169,7 @@ public sealed class ReviewIntegrationEventHandler(
         {
             try
             {
-                await queuePublisher.PublishAsync(
+                await _queuePublisher.PublishAsync(
                     new ReviewQueueMessage
                     {
                         ReviewId = review.Id,
@@ -154,9 +179,9 @@ public sealed class ReviewIntegrationEventHandler(
                     retryDelaySeconds: null,
                     cancellationToken);
                 var enqueuedAt = DateTimeOffset.UtcNow;
-                if (dbContext.Database.IsRelational())
+                if (_dbContext.Database.IsRelational())
                 {
-                    await dbContext.Reviews
+                    await _dbContext.Reviews
                         .Where(item => item.Id == review.Id)
                         .ExecuteUpdateAsync(
                             setters => setters.SetProperty(
@@ -167,12 +192,12 @@ public sealed class ReviewIntegrationEventHandler(
                 else
                 {
                     review.LastEnqueuedAt = enqueuedAt;
-                    await dbContext.SaveChangesAsync(cancellationToken);
+                    await _dbContext.SaveChangesAsync(cancellationToken);
                 }
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
-                logger.LogWarning(
+                _logger.LogWarning(
                     exception,
                     "Could not enqueue review {ReviewId}; queue maintenance will retry.",
                     review.Id);
@@ -182,7 +207,7 @@ public sealed class ReviewIntegrationEventHandler(
 
     private Task<bool> IsProcessedAsync(Guid eventId, CancellationToken cancellationToken)
     {
-        return dbContext.InboxMessages.AnyAsync(item => item.EventId == eventId, cancellationToken);
+        return _dbContext.InboxMessages.AnyAsync(item => item.EventId == eventId, cancellationToken);
     }
 
     private InboxMessage CreateInbox(Guid eventId, string eventType)
@@ -200,6 +225,8 @@ public sealed class ReviewIntegrationEventHandler(
         return new PendingSubmission
         {
             AttemptId = message.AttemptId,
+            AssignmentId = message.AssignmentId,
+            GroupId = message.GroupId,
             TestId = message.TestId,
             TestRevision = message.TestRevision,
             StudentUserId = message.StudentUserId,
@@ -215,8 +242,8 @@ public sealed class ReviewIntegrationEventHandler(
     private async Task<IDbContextTransaction?> BeginTransactionAsync(
         CancellationToken cancellationToken)
     {
-        return dbContext.Database.IsRelational()
-            ? await dbContext.Database.BeginTransactionAsync(
+        return _dbContext.Database.IsRelational()
+            ? await _dbContext.Database.BeginTransactionAsync(
                 IsolationLevel.Serializable,
                 cancellationToken)
             : null;
@@ -226,6 +253,8 @@ public sealed class ReviewIntegrationEventHandler(
     {
         if (message.EventId == Guid.Empty
             || message.AttemptId == Guid.Empty
+            || message.AssignmentId == Guid.Empty
+            || message.GroupId == Guid.Empty
             || string.IsNullOrWhiteSpace(message.TestId)
             || message.TestRevision <= 0
             || string.IsNullOrWhiteSpace(message.StudentUserId)
@@ -241,7 +270,9 @@ public sealed class ReviewIntegrationEventHandler(
         bool requireTaskPrompt)
     {
         if (examples is null || examples.Count > 5)
+        {
             throw new InvalidDataException("The policy must contain at most five grading examples at each level.");
+        }
 
         foreach (var example in examples)
         {
@@ -255,7 +286,9 @@ public sealed class ReviewIntegrationEventHandler(
                 || (example.TaskPrompt?.Length ?? 0) > 4000
                 || example.StudentAnswer.Length > 8000
                 || example.Feedback.Length > 4000)
+            {
                 throw new InvalidDataException("The policy contains an invalid grading example.");
+            }
         }
     }
 
@@ -273,7 +306,9 @@ public sealed class ReviewIntegrationEventHandler(
 
         if (message.ModelId is <= 0
             || (message.Tasks.Any(task => task.CheckMode == ReviewCheckMode.Llm) && message.ModelId is null))
+        {
             throw new InvalidDataException("An LLM review policy must reference a positive model ID.");
+        }
 
         ValidateGradingExamples(message.GradingExamples, requireTaskPrompt: true);
 
@@ -296,7 +331,9 @@ public sealed class ReviewIntegrationEventHandler(
 
             ValidateGradingExamples(task.GradingExamples, requireTaskPrompt: false);
             if (task.Type != ReviewTaskType.FreeText && task.GradingExamples.Count > 0)
+            {
                 throw new InvalidDataException("Grading examples are supported only for free-text tasks.");
+            }
 
             var optionIds = new HashSet<string>(StringComparer.Ordinal);
             if (task.Options.Any(option => string.IsNullOrWhiteSpace(option.Id)

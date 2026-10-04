@@ -7,6 +7,9 @@ namespace AuthService.Interfaces
         Task<List<ApplicationUser>> GetTeachersAsync(
             CancellationToken cancellationToken);
 
+        Task<List<ApplicationUser>> GetStudentsAsync(
+            CancellationToken cancellationToken);
+
         Task<ApplicationUser?> CreateTeacherAsync(
             string userName,
             string email,

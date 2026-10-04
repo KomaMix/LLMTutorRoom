@@ -81,14 +81,14 @@ function StudentTestsRoute({ overview, refresh, updateAttempt }) {
   const { registerBeforeLogout } = useNavigationGuard();
   const blockerRef = useRef(null);
   const allowSubmittedNavigationRef = useRef(false);
-  const { availableTests, attemptByTestId } = useStudentTestAvailability(
+  const { availableTests, attemptByAssignmentId } = useStudentTestAvailability(
     overview.tests,
     overview.attempts);
   const selectedTest = overview.tests.find(test => test.id === testId)
     ?? availableTests[0]
     ?? null;
   const selectedAttempt = selectedTest
-    ? attemptByTestId.get(selectedTest.id) ?? null
+    ? attemptByAssignmentId.get(selectedTest.id) ?? null
     : null;
   const selectedTestId = selectedTest?.id ?? null;
   const selectedAttemptId = selectedAttempt?.id ?? null;
@@ -100,7 +100,7 @@ function StudentTestsRoute({ overview, refresh, updateAttempt }) {
     selectedTest,
     selectedAttempt,
     updateAttempt,
-    onAttemptVersionConflict: refresh,
+    onAttemptStartConflict: refresh,
     onDeadlineReached: refresh,
     onSubmitted: () => {
       if (refresh) {

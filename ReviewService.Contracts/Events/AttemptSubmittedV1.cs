@@ -1,9 +1,11 @@
 namespace ReviewService.Contracts.Events;
 
-public sealed class AttemptSubmittedV1
+public class AttemptSubmittedV1
 {
     public Guid EventId { get; set; }
     public Guid AttemptId { get; set; }
+    public Guid AssignmentId { get; set; }
+    public Guid GroupId { get; set; }
     public string TestId { get; set; } = string.Empty;
     public int TestRevision { get; set; }
     public string StudentUserId { get; set; } = string.Empty;

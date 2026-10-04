@@ -1,7 +1,3 @@
-import {
-  endOfLocalDayToIso,
-  toInputDate
-} from "../../shared/lib/dates.js";
 import { getRussianPluralForm } from "../../shared/lib/russianPlural.js";
 import {
   copyGradingExamples,
@@ -25,7 +21,6 @@ export function createInitialTestForm(defaultModelId = "") {
     title: "",
     subject: "",
     summary: "",
-    deadline: toInputDate(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)),
     timeLimitMinutes: 45,
     llmModelId: defaultModelId,
     gradingExamples: []
@@ -55,7 +50,6 @@ export function createTestFormFromTest(test) {
     title: test.title,
     subject: test.subject,
     summary: test.summary,
-    deadline: toInputDate(test.deadline),
     timeLimitMinutes: test.timeLimitMinutes,
     llmModelId: test.llmModelId ?? "",
     gradingExamples: copyGradingExamples(test.gradingExamples)
@@ -67,7 +61,6 @@ export function createTestPayload(form) {
     title: form.title,
     subject: form.subject,
     summary: form.summary,
-    deadline: endOfLocalDayToIso(form.deadline),
     timeLimitMinutes: Number(form.timeLimitMinutes),
     llmModelId: form.llmModelId ? Number(form.llmModelId) : null,
     gradingExamples: createGradingExamplesPayload(form.gradingExamples)

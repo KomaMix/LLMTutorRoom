@@ -11,6 +11,7 @@ using Microsoft.EntityFrameworkCore;
 using ReviewService.Contracts.Events;
 using TeachingService.Contracts.Enums;
 using TeachingService.Contracts.Models;
+using TeachingService.Contracts.Responses;
 
 namespace AttemptService.Tests;
 
@@ -26,38 +27,40 @@ public sealed class AttemptLifecycleServiceTests
         var distantDeadlineTest = CreatePublishedTest(
             Guid.NewGuid(),
             versionNumber: 7,
-            deadline: DateTimeOffset.UtcNow.AddHours(3),
             timeLimitMinutes: 45,
             "task-a");
+        var distantDeadlineAssignment = CreateAssignment(
+            distantDeadlineTest,
+            DateTimeOffset.UtcNow.AddHours(3));
         var nearDeadline = DateTimeOffset.UtcNow.AddMinutes(5);
         var nearDeadlineTest = CreatePublishedTest(
             Guid.NewGuid(),
             versionNumber: 4,
-            deadline: nearDeadline,
             timeLimitMinutes: 60,
             "task-b");
-        teachingClient.Tests.Add(distantDeadlineTest.Id, distantDeadlineTest);
-        teachingClient.Tests.Add(nearDeadlineTest.Id, nearDeadlineTest);
+        var nearDeadlineAssignment = CreateAssignment(nearDeadlineTest, nearDeadline);
+        teachingClient.Assignments.Add(distantDeadlineAssignment.Id, distantDeadlineAssignment);
+        teachingClient.Assignments.Add(nearDeadlineAssignment.Id, nearDeadlineAssignment);
         var service = CreateService(factory, teachingClient);
 
         var beforeStart = DateTimeOffset.UtcNow;
         var timeLimitedResult = await service.StartAttemptAsync(
-            Guid.Parse(distantDeadlineTest.Id),
+            distantDeadlineAssignment.Id,
             "student-1",
             "Alice Student",
-            expectedVersionNumber: 7,
             CancellationToken.None);
         var afterStart = DateTimeOffset.UtcNow;
         var deadlineLimitedResult = await service.StartAttemptAsync(
-            Guid.Parse(nearDeadlineTest.Id),
+            nearDeadlineAssignment.Id,
             "student-1",
             "Alice Student",
-            expectedVersionNumber: 4,
             CancellationToken.None);
 
         Assert.Equal(AttemptOperationStatus.Created, timeLimitedResult.Status);
         var timeLimitedAttempt = Assert.IsType<TestAttemptResponse>(timeLimitedResult.Value);
         Assert.NotEqual(Guid.Empty, timeLimitedAttempt.Id);
+        Assert.Equal(distantDeadlineAssignment.Id, timeLimitedAttempt.AssignmentId);
+        Assert.Equal(distantDeadlineAssignment.GroupId, timeLimitedAttempt.GroupId);
         Assert.Equal(distantDeadlineTest.Id, timeLimitedAttempt.TestId);
         Assert.Equal(7, timeLimitedAttempt.TestRevision);
         Assert.InRange(timeLimitedAttempt.StartedAt, beforeStart, afterStart);
@@ -70,8 +73,8 @@ public sealed class AttemptLifecycleServiceTests
         var deadlineLimitedAttempt = Assert.IsType<TestAttemptResponse>(deadlineLimitedResult.Value);
         Assert.Equal(4, deadlineLimitedAttempt.TestRevision);
         Assert.Equal(nearDeadline, deadlineLimitedAttempt.EndsAt);
-        Assert.False(teachingClient.LastIncludeHidden);
-        Assert.Null(teachingClient.LastVersionNumber);
+        Assert.Equal(nearDeadlineAssignment.Id, teachingClient.LastAssignmentId);
+        Assert.Equal("student-1", teachingClient.LastStudentUserId);
         await using var dbContext = factory.CreateDbContext();
         var storedAttempt = await dbContext.TestAttempts
             .SingleAsync(item => item.Id == timeLimitedAttempt.Id);
@@ -79,51 +82,52 @@ public sealed class AttemptLifecycleServiceTests
     }
 
     [Fact]
-    public async Task StartAttempt_ReturnsVersionConflictWithoutCreatingAttempt()
+    public async Task StartAttempt_WhenAssignmentIsNotAvailable_ReturnsNotFoundWithoutCreatingAttempt()
     {
         await using var factory = TestAttemptDbContextFactory.CreateInMemory();
         var teachingClient = new StubTeachingServiceClient();
         var test = CreatePublishedTest(
             Guid.NewGuid(),
             versionNumber: 8,
-            deadline: DateTimeOffset.UtcNow.AddHours(1),
             timeLimitMinutes: 30,
             "task-a");
-        teachingClient.Tests.Add(test.Id, test);
+        var assignment = CreateAssignment(
+            test,
+            DateTimeOffset.UtcNow.AddHours(2),
+            DateTimeOffset.UtcNow.AddMinutes(10));
+        teachingClient.Assignments.Add(assignment.Id, assignment);
         var service = CreateService(factory, teachingClient);
 
         var result = await service.StartAttemptAsync(
-            Guid.Parse(test.Id),
+            assignment.Id,
             "student-1",
             "Alice Student",
-            expectedVersionNumber: 7,
             CancellationToken.None);
 
-        Assert.Equal(AttemptOperationStatus.VersionConflict, result.Status);
+        Assert.Equal(AttemptOperationStatus.NotFound, result.Status);
         Assert.Null(result.Value);
         await using var dbContext = factory.CreateDbContext();
         Assert.Empty(dbContext.TestAttempts);
     }
 
     [Fact]
-    public async Task StartAttempt_WhenTestDeadlinePassed_ReturnsNotFoundWithoutCreatingAttempt()
+    public async Task StartAttempt_WhenAssignmentDeadlinePassed_ReturnsNotFoundWithoutCreatingAttempt()
     {
         await using var factory = TestAttemptDbContextFactory.CreateInMemory();
         var teachingClient = new StubTeachingServiceClient();
         var test = CreatePublishedTest(
             Guid.NewGuid(),
             versionNumber: 3,
-            deadline: DateTimeOffset.UtcNow.AddMinutes(-1),
             timeLimitMinutes: 30,
             "task-a");
-        teachingClient.Tests.Add(test.Id, test);
+        var assignment = CreateAssignment(test, DateTimeOffset.UtcNow.AddMinutes(-1));
+        teachingClient.Assignments.Add(assignment.Id, assignment);
         var service = CreateService(factory, teachingClient);
 
         var result = await service.StartAttemptAsync(
-            Guid.Parse(test.Id),
+            assignment.Id,
             "student-1",
             "Alice Student",
-            expectedVersionNumber: 3,
             CancellationToken.None);
 
         Assert.Equal(AttemptOperationStatus.NotFound, result.Status);
@@ -140,23 +144,21 @@ public sealed class AttemptLifecycleServiceTests
         var test = CreatePublishedTest(
             Guid.NewGuid(),
             versionNumber: 2,
-            deadline: DateTimeOffset.UtcNow.AddHours(1),
             timeLimitMinutes: 20,
             "task-a");
-        teachingClient.Tests.Add(test.Id, test);
+        var assignment = CreateAssignment(test, DateTimeOffset.UtcNow.AddHours(1));
+        teachingClient.Assignments.Add(assignment.Id, assignment);
         var service = CreateService(factory, teachingClient);
 
         var firstResult = await service.StartAttemptAsync(
-            Guid.Parse(test.Id),
+            assignment.Id,
             "student-1",
             "Alice Student",
-            expectedVersionNumber: 2,
             CancellationToken.None);
         var repeatedResult = await service.StartAttemptAsync(
-            Guid.Parse(test.Id),
+            assignment.Id,
             "student-1",
             "Alice Student",
-            expectedVersionNumber: 999,
             CancellationToken.None);
 
         Assert.Equal(AttemptOperationStatus.Created, firstResult.Status);
@@ -171,6 +173,40 @@ public sealed class AttemptLifecycleServiceTests
     }
 
     [Fact]
+    public async Task StartAttempt_AllowsSameTestThroughDifferentAssignments()
+    {
+        await using var factory = TestAttemptDbContextFactory.CreateInMemory();
+        var teachingClient = new StubTeachingServiceClient();
+        var test = CreatePublishedTest(
+            Guid.NewGuid(),
+            versionNumber: 2,
+            timeLimitMinutes: 20,
+            "task-a");
+        var firstAssignment = CreateAssignment(test, DateTimeOffset.UtcNow.AddHours(1));
+        var secondAssignment = CreateAssignment(test, DateTimeOffset.UtcNow.AddHours(2));
+        teachingClient.Assignments.Add(firstAssignment.Id, firstAssignment);
+        teachingClient.Assignments.Add(secondAssignment.Id, secondAssignment);
+        var service = CreateService(factory, teachingClient);
+
+        var firstResult = await service.StartAttemptAsync(
+            firstAssignment.Id,
+            "student-1",
+            "Alice Student",
+            CancellationToken.None);
+        var secondResult = await service.StartAttemptAsync(
+            secondAssignment.Id,
+            "student-1",
+            "Alice Student",
+            CancellationToken.None);
+
+        Assert.Equal(AttemptOperationStatus.Created, firstResult.Status);
+        Assert.Equal(AttemptOperationStatus.Created, secondResult.Status);
+        Assert.NotEqual(firstResult.Value!.Id, secondResult.Value!.Id);
+        await using var dbContext = factory.CreateDbContext();
+        Assert.Equal(2, await dbContext.TestAttempts.CountAsync());
+    }
+
+    [Fact]
     public async Task SaveAnswers_KeepsOnlyTasksCapturedWhenAttemptStarted()
     {
         await using var factory = TestAttemptDbContextFactory.CreateInMemory();
@@ -178,18 +214,17 @@ public sealed class AttemptLifecycleServiceTests
         var test = CreatePublishedTest(
             Guid.NewGuid(),
             versionNumber: 3,
-            deadline: DateTimeOffset.UtcNow.AddHours(1),
             timeLimitMinutes: 30,
             "task-a",
             "task-b",
             "task-a");
-        teachingClient.Tests.Add(test.Id, test);
+        var assignment = CreateAssignment(test, DateTimeOffset.UtcNow.AddHours(1));
+        teachingClient.Assignments.Add(assignment.Id, assignment);
         var service = CreateService(factory, teachingClient);
         var startResult = await service.StartAttemptAsync(
-            Guid.Parse(test.Id),
+            assignment.Id,
             "student-1",
             "Alice Student",
-            expectedVersionNumber: 3,
             CancellationToken.None);
         var attempt = Assert.IsType<TestAttemptResponse>(startResult.Value);
 
@@ -391,17 +426,16 @@ public sealed class AttemptLifecycleServiceTests
         var test = CreatePublishedTest(
             Guid.NewGuid(),
             versionNumber: 6,
-            deadline: DateTimeOffset.UtcNow.AddHours(1),
             timeLimitMinutes: 30,
             "task-a",
             "task-b");
-        teachingClient.Tests.Add(test.Id, test);
+        var assignment = CreateAssignment(test, DateTimeOffset.UtcNow.AddHours(1));
+        teachingClient.Assignments.Add(assignment.Id, assignment);
         var service = CreateService(factory, teachingClient);
         var startResult = await service.StartAttemptAsync(
-            Guid.Parse(test.Id),
+            assignment.Id,
             "student-1",
             "Alice Student",
-            expectedVersionNumber: 6,
             CancellationToken.None);
         var attempt = Assert.IsType<TestAttemptResponse>(startResult.Value);
         await service.SaveAnswersAsync(
@@ -451,6 +485,8 @@ public sealed class AttemptLifecycleServiceTests
             Assert.Equal(expectedTraceState, outboxMessage.TraceState);
             Assert.Equal(outboxMessage.Id, submissionEvent.EventId);
             Assert.Equal(storedAttempt.Id, submissionEvent.AttemptId);
+            Assert.Equal(assignment.Id, submissionEvent.AssignmentId);
+            Assert.Equal(assignment.GroupId, submissionEvent.GroupId);
             Assert.Equal(test.Id, submissionEvent.TestId);
             Assert.Equal(6, submissionEvent.TestRevision);
             Assert.Equal("student-1", submissionEvent.StudentUserId);
@@ -644,18 +680,35 @@ public sealed class AttemptLifecycleServiceTests
     private static CourseTestDto CreatePublishedTest(
         Guid id,
         int versionNumber,
-        DateTimeOffset deadline,
         int timeLimitMinutes,
         params string[] taskIds)
     {
         return new CourseTestDto
         {
             Id = id.ToString("D"),
+            TeacherUserId = "teacher-1",
             Status = CourseTestStatus.Published,
             VersionNumber = versionNumber,
-            Deadline = deadline,
             TimeLimitMinutes = timeLimitMinutes,
             Tasks = taskIds.Select(taskId => new TestTaskDto { Id = taskId }).ToList()
+        };
+    }
+
+    private static TestAssignmentResponse CreateAssignment(
+        CourseTestDto test,
+        DateTimeOffset deadline,
+        DateTimeOffset? availableFrom = null)
+    {
+        return new TestAssignmentResponse
+        {
+            Id = Guid.NewGuid(),
+            GroupId = Guid.NewGuid(),
+            GroupName = "Group 1",
+            TeacherUserId = test.TeacherUserId,
+            AvailableFrom = availableFrom ?? DateTimeOffset.UtcNow.AddMinutes(-10),
+            Deadline = deadline,
+            CreatedAt = DateTimeOffset.UtcNow.AddMinutes(-20),
+            Test = test
         };
     }
 
@@ -695,8 +748,11 @@ public sealed class AttemptLifecycleServiceTests
         return new TestAttempt
         {
             Id = Guid.NewGuid(),
+            AssignmentId = Guid.NewGuid(),
+            GroupId = Guid.NewGuid(),
             TestId = testId.ToString("D"),
             TestRevision = 1,
+            TeacherUserId = "teacher-1",
             StudentUserId = studentUserId,
             StudentName = "Alice Student",
             Status = TestAttemptStatus.InProgress,

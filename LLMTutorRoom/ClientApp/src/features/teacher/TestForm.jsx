@@ -97,18 +97,6 @@ export function TestForm({
         </div>
 
         <div className="field">
-          <label htmlFor={`${idPrefix}-deadline`}>Дедлайн</label>
-          <input
-            id={`${idPrefix}-deadline`}
-            type="date"
-            value={form.deadline}
-            disabled={controlsDisabled}
-            onChange={event => updateForm("deadline", event.target.value)}
-            required
-          />
-        </div>
-
-        <div className="field">
           <label htmlFor={`${idPrefix}-llm-model`}>LLM-модель проверки</label>
           <select
             id={`${idPrefix}-llm-model`}

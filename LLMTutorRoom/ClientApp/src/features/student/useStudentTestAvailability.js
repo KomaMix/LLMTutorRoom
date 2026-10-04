@@ -8,24 +8,31 @@ function isTestAvailable(test, attempt, currentTime) {
 
   return test.status === "published"
     && test.versionNumber > 0
+    && new Date(test.availableFrom).getTime() <= currentTime
     && new Date(test.deadline).getTime() > currentTime;
 }
 
 export function getUnavailableTestStatus(test, currentTime) {
-  return new Date(test.deadline).getTime() <= currentTime
-    ? "expired"
-    : test.status === "published" ? "hidden" : test.status;
+  if (new Date(test.deadline).getTime() <= currentTime) {
+    return "expired";
+  }
+
+  if (new Date(test.availableFrom).getTime() > currentTime) {
+    return "scheduled";
+  }
+
+  return test.status === "published" ? "hidden" : test.status;
 }
 
 export function useStudentTestAvailability(tests, attempts) {
   const [clockTime, setClockTime] = useState(Date.now);
   const currentTime = Math.max(clockTime, Date.now());
-  const attemptByTestId = new Map(attempts.map(attempt => [attempt.testId, attempt]));
+  const attemptByAssignmentId = new Map(attempts.map(attempt => [attempt.assignmentId, attempt]));
   const availableTests = [];
   const unavailableTests = [];
 
   for (const test of tests) {
-    const target = isTestAvailable(test, attemptByTestId.get(test.id), currentTime)
+    const target = isTestAvailable(test, attemptByAssignmentId.get(test.id), currentTime)
       ? availableTests
       : unavailableTests;
     target.push(test);
@@ -35,6 +42,7 @@ export function useStudentTestAvailability(tests, attempts) {
     const now = Date.now();
     const deadlines = [
       ...tests.map(test => new Date(test.deadline).getTime()),
+      ...tests.map(test => new Date(test.availableFrom).getTime()),
       ...attempts
         .filter(attempt => attempt.status === "in-progress")
         .map(attempt => new Date(attempt.endsAt).getTime())
@@ -60,5 +68,5 @@ export function useStudentTestAvailability(tests, attempts) {
     return () => window.clearTimeout(timer);
   }, [tests, attempts, clockTime]);
 
-  return { availableTests, unavailableTests, attemptByTestId, currentTime };
+  return { availableTests, unavailableTests, attemptByAssignmentId, currentTime };
 }

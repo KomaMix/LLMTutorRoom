@@ -4,6 +4,10 @@ export function getTeachers({ signal } = {}) {
   return apiRequest("/api/users/teachers", { signal });
 }
 
+export function getStudents({ signal } = {}) {
+  return apiRequest("/api/users/students", { signal });
+}
+
 export function createTeacher(form) {
   return apiRequest("/api/users/teachers", {
     method: "POST",

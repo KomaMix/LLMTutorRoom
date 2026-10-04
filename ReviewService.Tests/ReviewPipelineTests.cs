@@ -641,6 +641,8 @@ public sealed class ReviewPipelineTests
         {
             EventId = eventId ?? Guid.NewGuid(),
             AttemptId = attemptId ?? Guid.NewGuid(),
+            AssignmentId = Guid.NewGuid(),
+            GroupId = Guid.NewGuid(),
             TestId = "test-1",
             TestRevision = 1,
             StudentUserId = "student",

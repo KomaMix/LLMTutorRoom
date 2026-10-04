@@ -17,6 +17,7 @@ export const statusText = {
   "multiple-choice": "Несколько ответов",
   "free-text": "Письменный ответ",
   hidden: "Скрыто",
+  scheduled: "Откроется позже",
   "in-progress": "Выполняется",
   submitted: "Отправлено",
   expired: "Время вышло"

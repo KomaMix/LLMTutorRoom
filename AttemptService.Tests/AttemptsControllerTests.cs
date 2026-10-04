@@ -83,11 +83,15 @@ public sealed class AttemptsControllerTests
             CancellationToken cancellationToken) =>
             throw new NotSupportedException();
 
+        public Task<List<TestAttemptResponse>> GetTeacherAttemptsAsync(
+            string teacherUserId,
+            CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
         public Task<Result<AttemptOperationStatus, TestAttemptResponse>> StartAttemptAsync(
-            Guid testId,
+            Guid assignmentId,
             string studentUserId,
             string studentUserName,
-            int? expectedVersionNumber,
             CancellationToken cancellationToken) =>
             throw new NotSupportedException();
 

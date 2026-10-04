@@ -7,4 +7,8 @@ public interface IAttemptServiceClient
     Task<List<TestAttemptResponse>> GetStudentAttemptsAsync(
         string studentUserId,
         CancellationToken cancellationToken);
+
+    Task<List<TestAttemptResponse>> GetTeacherAttemptsAsync(
+        string teacherUserId,
+        CancellationToken cancellationToken);
 }

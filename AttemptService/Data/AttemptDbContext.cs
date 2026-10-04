@@ -3,9 +3,13 @@ using Microsoft.EntityFrameworkCore;
 
 namespace AttemptService.Data;
 
-public sealed class AttemptDbContext(DbContextOptions<AttemptDbContext> options)
-    : DbContext(options)
+public class AttemptDbContext : DbContext
 {
+    public AttemptDbContext(DbContextOptions<AttemptDbContext> options)
+        : base(options)
+    {
+    }
+
     public DbSet<TestAttempt> TestAttempts { get; set; } = null!;
     public DbSet<AttemptSubmissionOutboxMessage> AttemptSubmissionOutboxMessages { get; set; } = null!;
 
@@ -35,8 +39,10 @@ public sealed class AttemptDbContext(DbContextOptions<AttemptDbContext> options)
                 .HasColumnType("jsonb");
             entity.Property(attempt => attempt.StateRevision)
                 .IsConcurrencyToken();
-            entity.HasIndex(attempt => new { attempt.TestId, attempt.StudentUserId })
+            entity.HasIndex(attempt => new { attempt.AssignmentId, attempt.StudentUserId })
                 .IsUnique();
+            entity.HasIndex(attempt => attempt.TeacherUserId);
+            entity.HasIndex(attempt => attempt.GroupId);
             entity.HasIndex(attempt => new { attempt.StudentUserId, attempt.StartedAt })
                 .IsDescending(false, true);
             entity.HasIndex(attempt => new { attempt.Status, attempt.EndsAt });

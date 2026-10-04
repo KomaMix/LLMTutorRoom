@@ -1,13 +1,12 @@
-using System.Globalization;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using AttemptService.Interfaces;
-using TeachingService.Contracts.Models;
+using TeachingService.Contracts.Responses;
 
 namespace AttemptService.Services;
 
-public sealed class TeachingServiceClient(HttpClient httpClient) : ITeachingServiceClient
+public class TeachingServiceClient : ITeachingServiceClient
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
     {
@@ -17,32 +16,29 @@ public sealed class TeachingServiceClient(HttpClient httpClient) : ITeachingServ
         }
     };
 
-    public async Task<CourseTestDto?> GetTestAsync(
-        Guid testId,
-        bool includeHidden,
-        int? versionNumber,
-        CancellationToken cancellationToken)
+    private readonly HttpClient _httpClient;
+
+    public TeachingServiceClient(HttpClient httpClient)
     {
-        var requestUri =
-            $"/internal/teaching/tests/{testId:D}?includeHidden={ToQueryValue(includeHidden)}";
-        if (versionNumber.HasValue)
-        {
-            requestUri +=
-                $"&versionNumber={versionNumber.Value.ToString(CultureInfo.InvariantCulture)}";
-        }
-
-        using var response = await httpClient.GetAsync(requestUri, cancellationToken);
-        if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
-            return null;
-
-        response.EnsureSuccessStatusCode();
-        return await response.Content.ReadFromJsonAsync<CourseTestDto>(
-            JsonOptions,
-            cancellationToken);
+        _httpClient = httpClient;
     }
 
-    private static string ToQueryValue(bool value)
+    public async Task<TestAssignmentResponse?> GetStudentAssignmentAsync(
+        Guid assignmentId,
+        string studentUserId,
+        CancellationToken cancellationToken)
     {
-        return value ? "true" : "false";
+        var requestUri = $"/internal/teaching/students/{Uri.EscapeDataString(studentUserId)}" +
+            $"/assignments/{assignmentId:D}";
+        using var response = await _httpClient.GetAsync(requestUri, cancellationToken);
+        if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            return null;
+        }
+
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<TestAssignmentResponse>(
+            JsonOptions,
+            cancellationToken);
     }
 }

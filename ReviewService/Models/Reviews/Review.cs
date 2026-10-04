@@ -2,10 +2,12 @@ using ReviewService.Contracts.Enums;
 
 namespace ReviewService.Models.Reviews;
 
-public sealed class Review
+public class Review
 {
     public int Id { get; set; }
     public Guid AttemptId { get; set; }
+    public Guid AssignmentId { get; set; }
+    public Guid GroupId { get; set; }
     public string TestId { get; set; } = string.Empty;
     public int TestRevision { get; set; }
     public string TestTitle { get; set; } = string.Empty;

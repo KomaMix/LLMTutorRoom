@@ -26,17 +26,18 @@ flowchart LR
 
 В собственной базе `llm_tutor_attempts` находятся две таблицы:
 
-- [`TestAttempts`](../AttemptService/Models/TestAttempt.cs) — выбранная версия
-  теста, ученик, статус, серверные времена, ответы и зафиксированный список
-  допустимых заданий;
+- [`TestAttempts`](../AttemptService/Models/TestAttempt.cs) — назначение, группа,
+  выбранная версия теста, ученик, статус, серверные времена, ответы и
+  зафиксированный список допустимых заданий;
 - [`AttemptSubmissionOutboxMessages`](../AttemptService/Models/AttemptSubmissionOutboxMessage.cs)
   — ещё не доставленные или сохранённые на время retention события
   [`AttemptSubmittedV1`](../ReviewService.Contracts/Events/AttemptSubmittedV1.cs).
 
-Пара `TestId + StudentUserId` уникальна: сейчас одному ученику разрешена одна
-попытка на логический тест. `TestRevision` и `AllowedTaskIds` фиксируются при
-старте, поэтому новая публикация не меняет уже начатую работу и нельзя сохранить
-ответ для задания, которого в этой версии не было.
+Пара `AssignmentId + StudentUserId` уникальна: одному ученику разрешена одна
+попытка на назначение. Тот же логический тест можно пройти снова после нового
+назначения. `TestRevision` и `AllowedTaskIds` фиксируются при старте, поэтому
+новая публикация не меняет уже начатую работу и нельзя сохранить ответ для
+задания, которого в закреплённой версии не было.
 
 Имя ученика также фиксируется при старте, чтобы фоновая отправка могла создать
 полное событие без обращения к `AuthService`. `SubmissionReason` различает
@@ -55,7 +56,7 @@ autosave, ручная отправка и автоматическая отпр
 
 ```mermaid
 stateDiagram-v2
-    [*] --> InProgress: старт опубликованной версии
+    [*] --> InProgress: старт доступного назначения
     InProgress --> InProgress: сохранить допустимые ответы
     InProgress --> Submitted: явная отправка до EndsAt
     InProgress --> Submitted: автоматическая отправка в EndsAt
@@ -64,10 +65,10 @@ stateDiagram-v2
 
 При старте сервис:
 
-1. запрашивает у `TeachingService` опубликованную версию;
-2. убеждается, что показанный клиенту `versionNumber` ещё актуален;
-3. фиксирует номер версии и видимые task id;
-4. рассчитывает `EndsAt` как минимум личного лимита и общего deadline теста;
+1. запрашивает у `TeachingService` назначение для конкретного ученика;
+2. проверяет членство в группе и интервал `AvailableFrom..Deadline`;
+3. фиксирует назначение, группу, преподавателя, номер версии и видимые task id;
+4. рассчитывает `EndsAt` как минимум личного лимита версии и дедлайна назначения;
 5. при конкурентном повторном запросе возвращает уже созданную попытку.
 
 Явный `submit` до дедлайна переводит попытку в `Submitted` с причиной `Student`.
@@ -103,8 +104,10 @@ sequenceDiagram
     Rabbit-->>Review: attempt.submitted.v1
 ```
 
-Повторный submit не создаёт второе сообщение. Доставка остаётся моделью at least
-once, а `ReviewService` подавляет дубли по `EventId` и `AttemptId`.
+`AttemptSubmittedV1` переносит также `AssignmentId` и `GroupId`, чтобы проверку
+можно было связать с учебной группой без синхронного запроса. Повторный submit не
+создаёт второе сообщение. Доставка остаётся моделью at least once, а
+`ReviewService` подавляет дубли по `EventId` и `AttemptId`.
 
 ## HTTP, аутентификация и сеть
 
@@ -112,7 +115,7 @@ once, а `ReviewService` подавляет дубли по `EventId` и `Attemp
 
 - `GET /api/attempts` — попытки вошедшего ученика;
 - `GET /api/attempts/{attemptId}` — одна принадлежащая ему попытка;
-- `POST /api/attempts/tests/{testId}/start?versionNumber=...` — начать попытку;
+- `POST /api/attempts/assignments/{assignmentId}/start` — начать попытку по назначению;
 - `PUT /api/attempts/{attemptId}/answers` — сохранить ответы;
 - `POST /api/attempts/{attemptId}/submit` — явно отправить работу.
 
@@ -123,8 +126,9 @@ DTO этой границы вынесены в
 чтобы фасад использовал тот же wire-контракт без зависимости от реализации
 сервиса.
 
-`GET /internal/attempts/students/{studentUserId}` используется только
-`LLMTutorRoom` при сборке student overview. nginx возвращает `404` для всех
+`GET /internal/attempts/students/{studentUserId}` и
+`GET /internal/attempts/teachers/{teacherUserId}` используются `LLMTutorRoom`
+при сборке overview ученика и прогресса групп преподавателя. nginx возвращает `404` для всех
 `/internal/*`; в полном Compose internal endpoint доступен только сервисам в
 закрытой сети `backend`.
 

@@ -327,7 +327,7 @@ namespace TeachingService.Services
                 .Include(task => task.Options)
                 .LoadAsync(cancellationToken);
 
-            var validationError = ValidateForPublishing(version, DateTimeOffset.UtcNow);
+            var validationError = ValidateForPublishing(version);
             if (validationError is not null)
                 return new(CatalogOperationStatus.ValidationFailed, error: validationError);
 
@@ -727,7 +727,8 @@ namespace TeachingService.Services
                 .ToList();
 
             return mapped
-                .OrderByDescending(test => test.Deadline)
+                .OrderBy(test => test.Title)
+                .ThenByDescending(test => test.VersionNumber)
                 .ToList();
         }
 
@@ -856,7 +857,6 @@ namespace TeachingService.Services
                 Status = CourseTestStatus.Draft,
                 Title = source.Title,
                 Subject = source.Subject,
-                Deadline = source.Deadline,
                 TimeLimitMinutes = source.TimeLimitMinutes,
                 Summary = source.Summary,
                 LlmModelId = source.LlmModelId,
@@ -904,7 +904,6 @@ namespace TeachingService.Services
         {
             version.Title = request.Title.Trim();
             version.Subject = request.Subject.Trim();
-            version.Deadline = GetRequiredDeadline(request);
             version.TimeLimitMinutes = request.TimeLimitMinutes;
             version.Summary = request.Summary?.Trim() ?? string.Empty;
             version.LlmModelId = request.LlmModelId;
@@ -979,13 +978,8 @@ namespace TeachingService.Services
             return checkMode is TestTaskCheckMode.Llm or TestTaskCheckMode.Manual;
         }
 
-        private static string? ValidateForPublishing(
-            CourseTestVersion version,
-            DateTimeOffset now)
+        private static string? ValidateForPublishing(CourseTestVersion version)
         {
-            if (version.Deadline <= now)
-                return "Deadline must be in the future before the version can be published.";
-
             var visibleTasks = version.Tasks.Where(task => !task.IsHidden).ToList();
             if (visibleTasks.Count == 0)
                 return "At least one visible task is required before publication.";
@@ -1037,10 +1031,5 @@ namespace TeachingService.Services
                 throw new ArgumentException("Teacher user id is required.", nameof(teacherUserId));
         }
 
-        private static DateTimeOffset GetRequiredDeadline(CreateTestRequest request)
-        {
-            return request.Deadline
-                ?? throw new ArgumentException("Deadline is required.", nameof(request));
-        }
     }
 }

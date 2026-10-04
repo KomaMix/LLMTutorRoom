@@ -3,10 +3,12 @@
 ## Назначение и границы владения
 
 `TeachingService` — источник истины для преподавательского каталога: логических
-тестов, их версий, заданий, вариантов ответа и настроек способа проверки. Владение
+тестов, их версий, заданий, учебных групп, назначений и настроек способа проверки. Владение
 зафиксировано в моделях [`CourseTest`](../TeachingService/Models/CourseTest.cs),
 [`CourseTestVersion`](../TeachingService/Models/CourseTestVersion.cs) и
-[`TestTask`](../TeachingService/Models/TestTask.cs). `TeacherUserId` берётся из JWT,
+[`TestTask`](../TeachingService/Models/TestTask.cs), а учебный процесс — в
+[`StudyGroup`](../TeachingService/Models/StudyGroup.cs) и
+[`TestAssignment`](../TeachingService/Models/TestAssignment.cs). `TeacherUserId` берётся из JWT,
 но сам пользователь принадлежит `AuthService`; внешнего ключа на auth-базу нет.
 
 Сервис не хранит попытки и ответы учеников — это зона `AttemptService` — и не
@@ -18,18 +20,20 @@
 
 ```mermaid
 flowchart LR
-    UI[Преподаватель / LLMTutorRoom] -->|JWT, публичные команды| API[TeachingController]
+    UI[Преподаватель или администратор] -->|JWT, публичные команды| API[Teaching controllers]
     Room[LLMTutorRoom backend] -->|внутреннее чтение| Internal[InternalTeachingController]
-    Attempt[AttemptService] -->|версия при старте попытки| Internal
-    API --> Catalog[TeachingCatalogService]
-    Internal --> Catalog
-    Catalog --> DB[(PostgreSQL: каталог + outbox)]
+    Attempt[AttemptService] -->|назначение ученика при старте| Internal
+    API --> Services[Catalog и StudyGroup services]
+    Internal --> Services
+    Services --> DB[(PostgreSQL: каталог, группы, назначения, outbox)]
     DB --> Worker[Outbox publisher]
     Worker --> MQ[RabbitMQ]
     MQ --> Review[ReviewService: политики и проверки]
 ```
 
-Публичный контроллер требует роль `Teacher`; внутренний контроллер прикладной
+Команды каталога требуют роль `Teacher`. Команды групп доступны `Teacher` и
+`Admin`: преподаватель ограничен собственными группами, администратор видит все
+группы и при создании выбирает их преподавателя. Внутренний контроллер прикладной
 аутентификации не имеет и должен оставаться доступным только в доверенной сети.
 
 ## Логический тест и неизменяемые версии
@@ -40,7 +44,7 @@ flowchart LR
 [`CourseTestStatus`](../TeachingService.Contracts/Enums/CourseTestStatus.cs):
 
 - `Draft` — единственная редактируемая версия;
-- `Published` — текущая версия для новых попыток;
+- `Published` — текущая версия каталога для новых назначений;
 - `Superseded` — ранее опубликованная неизменяемая история.
 
 Ограничение по `VersionSlot` в
@@ -63,20 +67,42 @@ flowchart LR
 создаётся только из текущей опубликованной версии, если другого черновика нет.
 Клиент передаёт ожидаемый номер публикации, чтобы не клонировать устаревший
 источник. Клонирование копирует метаданные, задания и варианты, но создаёт новые
-идентификаторы: попытка всегда привязана к точной версии и её набору заданий.
+идентификаторы. Назначение всегда закрепляет точную опубликованную версию и её
+набор заданий.
 
 Менять метаданные, добавлять, заменять, скрывать и удалять задания можно только в
 `Draft`. Каждая такая операция сверяет `VersionNumber` и `ContentRevision`, затем
 увеличивает ревизию. Удалять разрешено только черновик; если это единственная
 версия, удаляется и логический тест.
 
-Публикация проверяет будущий дедлайн, наличие хотя бы одного видимого задания,
+Публикация проверяет наличие хотя бы одного видимого задания,
 поддерживаемые enum и наличие `LlmModelId`, если видимое задание использует LLM.
 Предыдущий `Published` становится `Superseded`, черновик — `Published`; обе записи,
 снимок политики и outbox-сообщение сохраняются одной транзакцией. Обычное
 редактирование или сохранение черновика событий не создаёт. Основная реализация
 сценариев находится в
 [`TeachingCatalogService`](../TeachingService/Services/TeachingCatalogService.cs).
+
+## Учебные группы и назначения
+
+[`StudyGroup`](../TeachingService/Models/StudyGroup.cs) принадлежит одному
+преподавателю и хранит состав учеников. Один ученик может входить в несколько
+групп. Преподаватель управляет только своими группами; администратор может
+создать группу для выбранного преподавателя и менять её состав. Обновление
+сверяет `Revision`, поэтому устаревшая форма получает `409`, а не перезаписывает
+параллельные изменения.
+
+[`TestAssignment`](../TeachingService/Models/TestAssignment.cs) связывает группу
+с конкретной ранее опубликованной `CourseTestVersion`. Дата открытия
+`AvailableFrom` и `Deadline` принадлежат назначению, а не версии теста. Поэтому
+одну версию можно назначать повторно разным группам или той же группе с другими
+сроками. Публикация новой версии не меняет уже созданное назначение.
+
+Ученик получает только назначения групп, в состав которых он входит. Попытку
+можно начать в интервале от `AvailableFrom` до `Deadline`; `AttemptService`
+повторно проверяет членство через internal API. Для одного ученика допускается
+одна попытка на назначение, а новое назначение того же теста создаёт независимую
+попытку.
 
 ## Задания и способы проверки
 
@@ -123,9 +149,8 @@ flowchart LR
 В БД примеры хранятся в JSONB-полях версии и задания и отображаются в модели
 TeachingService как типизированные коллекции `GradingExample`. EF Core сопоставляет
 их с JSON напрямую, без промежуточной строки и ручной сериализации. Они включаются в
-`TestReviewPolicyPublishedV1` на обоих уровнях; отсутствие новых полей в старых
-сообщениях означает пустые списки. Миграция `AddGradingExamples` добавляет поля
-с пустыми списками для существующих записей. `LLMTutorRoom` преобразует полный
+`TestReviewPolicyPublishedV1` на обоих уровнях; отсутствие значений означает
+пустые списки. `LLMTutorRoom` преобразует полный
 контракт TeachingService в отдельные ученические response DTO. В этих типах нет
 примеров оценивания, идентификаторов правильных вариантов и признака правильности
 варианта, поэтому такие данные нельзя случайно включить в ученический ответ через
@@ -184,7 +209,9 @@ concurrency tokens, а уникальные индексы страхуют ин
 Начинать чтение кода удобно с:
 
 - [`TeachingController`](../TeachingService/Controllers/TeachingController.cs) — публичные команды, JWT и отображение ошибок;
+- [`StudyGroupsController`](../TeachingService/Controllers/StudyGroupsController.cs) — группы и назначения преподавателя или администратора;
 - [`InternalTeachingController`](../TeachingService/Controllers/InternalTeachingController.cs) — чтение каталога другими сервисами;
 - [`TeachingCatalogService`](../TeachingService/Services/TeachingCatalogService.cs) — бизнес-инварианты и транзакция публикации;
+- [`StudyGroupService`](../TeachingService/Services/StudyGroupService.cs) — состав групп, точные версии и сроки назначений;
 - [`CourseTestMapper`](../TeachingService/Mappers/CourseTestMapper.cs) — выбор версии и форма DTO;
 - [`TestVersioningTests`](../TeachingService.Tests/TestVersioningTests.cs) — исполняемые примеры жизненного цикла.

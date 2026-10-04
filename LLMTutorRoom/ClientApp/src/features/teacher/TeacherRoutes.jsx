@@ -6,26 +6,11 @@ import {
   TeacherDashboard,
   TeacherTests
 } from "./index.js";
+import { StudyGroupsPage } from "../groups/StudyGroupsPage.jsx";
 
 function TeacherDashboardRoute({ overview }) {
   const navigate = useNavigate();
-  const publishedVersions = new Map(overview.tests.map(test => [
-    test.id,
-    test.publishedVersionNumber
-      ?? (test.status === "published" ? test.versionNumber : null)
-  ]));
-  const activeReviews = overview.reviews.filter(item => {
-    if (item.status === "checked") {
-      return false;
-    }
-
-    if (item.status !== "failed") {
-      return true;
-    }
-
-    const currentVersion = publishedVersions.get(item.testId);
-    return currentVersion != null && item.testRevision === currentVersion;
-  });
+  const activeReviews = overview.reviews.filter(item => item.status !== "checked");
 
   return (
     <TeacherDashboard
@@ -75,6 +60,7 @@ export function TeacherRoutes({ overview, refresh }) {
     <Routes>
       <Route path="/teacher/dashboard" element={<TeacherDashboardRoute overview={overview} />} />
       <Route path="/teacher/tests/:testId?" element={<TeacherTestsRoute overview={overview} refresh={refresh} />} />
+      <Route path="/teacher/groups" element={<StudyGroupsPage attempts={overview.attempts} onChanged={refresh} />} />
       <Route
         path="/teacher/reviews"
         element={(

@@ -12,8 +12,15 @@ namespace AttemptService.Controllers;
 [ApiController]
 [Authorize(Roles = "Student")]
 [Route("api/attempts")]
-public sealed class AttemptsController(IAttemptLifecycleService attemptService) : ControllerBase
+public class AttemptsController : ControllerBase
 {
+    private readonly IAttemptLifecycleService _attemptService;
+
+    public AttemptsController(IAttemptLifecycleService attemptService)
+    {
+        _attemptService = attemptService;
+    }
+
     [HttpGet]
     public async Task<ActionResult<List<TestAttemptResponse>>> GetAttempts(
         CancellationToken cancellationToken)
@@ -22,7 +29,7 @@ public sealed class AttemptsController(IAttemptLifecycleService attemptService) 
         if (string.IsNullOrWhiteSpace(studentUserId))
             return Unauthorized();
 
-        return Ok(await attemptService.GetStudentAttemptsAsync(
+        return Ok(await _attemptService.GetStudentAttemptsAsync(
             studentUserId,
             cancellationToken));
     }
@@ -36,28 +43,26 @@ public sealed class AttemptsController(IAttemptLifecycleService attemptService) 
         if (string.IsNullOrWhiteSpace(studentUserId))
             return Unauthorized();
 
-        var attempt = await attemptService.GetAttemptAsync(
+        var attempt = await _attemptService.GetAttemptAsync(
             attemptId,
             studentUserId,
             cancellationToken);
         return attempt is null ? NotFound() : Ok(attempt);
     }
 
-    [HttpPost("tests/{testId}/start")]
+    [HttpPost("assignments/{assignmentId:guid}/start")]
     public async Task<ActionResult<TestAttemptResponse>> StartAttempt(
-        Guid testId,
-        [FromQuery] int? versionNumber,
+        Guid assignmentId,
         CancellationToken cancellationToken)
     {
         var studentUserId = GetUserId();
         if (string.IsNullOrWhiteSpace(studentUserId))
             return Unauthorized();
 
-        var result = await attemptService.StartAttemptAsync(
-            testId,
+        var result = await _attemptService.StartAttemptAsync(
+            assignmentId,
             studentUserId,
             GetUserName(),
-            versionNumber,
             cancellationToken);
 
         return result.Status switch
@@ -65,12 +70,6 @@ public sealed class AttemptsController(IAttemptLifecycleService attemptService) 
             AttemptOperationStatus.Created when result.Value is not null =>
                 Created($"/api/attempts/{result.Value.Id}", result.Value),
             AttemptOperationStatus.Success when result.Value is not null => Ok(result.Value),
-            AttemptOperationStatus.VersionConflict => Conflict(new ProblemDetails
-            {
-                Status = StatusCodes.Status409Conflict,
-                Title = "Test version changed",
-                Detail = "The published test version changed. Refresh the catalog before starting."
-            }),
             AttemptOperationStatus.NotFound => NotFound(),
             _ => Conflict(CreateWriteConflictProblem())
         };
@@ -86,7 +85,7 @@ public sealed class AttemptsController(IAttemptLifecycleService attemptService) 
         if (string.IsNullOrWhiteSpace(studentUserId))
             return Unauthorized();
 
-        var result = await attemptService.SaveAnswersAsync(
+        var result = await _attemptService.SaveAnswersAsync(
             attemptId,
             studentUserId,
             request.Answers ?? new Dictionary<string, string>(),
@@ -103,7 +102,7 @@ public sealed class AttemptsController(IAttemptLifecycleService attemptService) 
         if (string.IsNullOrWhiteSpace(studentUserId))
             return Unauthorized();
 
-        var result = await attemptService.SubmitAttemptAsync(
+        var result = await _attemptService.SubmitAttemptAsync(
             attemptId,
             studentUserId,
             GetUserName(),

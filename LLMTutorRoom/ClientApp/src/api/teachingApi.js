@@ -83,3 +83,38 @@ export function deleteTask(testId, versionNumber, contentRevision, taskId) {
     { method: "DELETE" }
   );
 }
+
+export function getStudyGroups({ signal } = {}) {
+  return apiRequest("/api/teaching/groups", { signal });
+}
+
+export function createStudyGroup(payload) {
+  return apiRequest("/api/teaching/groups", {
+    method: "POST",
+    body: payload
+  });
+}
+
+export function updateStudyGroup(groupId, payload) {
+  return apiRequest(`/api/teaching/groups/${encodeURIComponent(groupId)}`, {
+    method: "PUT",
+    body: payload
+  });
+}
+
+export function getAssignableTests(groupId, { signal } = {}) {
+  return apiRequest(
+    `/api/teaching/groups/${encodeURIComponent(groupId)}/assignable-tests`,
+    { signal }
+  );
+}
+
+export function createTestAssignment(groupId, payload) {
+  return apiRequest(
+    `/api/teaching/groups/${encodeURIComponent(groupId)}/assignments`,
+    {
+      method: "POST",
+      body: payload
+    }
+  );
+}
