@@ -101,6 +101,7 @@ function StudentTestsRoute({ overview, refresh, updateAttempt }) {
     selectedAttempt,
     updateAttempt,
     onAttemptStartConflict: refresh,
+    onAccessDenied: refresh,
     onDeadlineReached: refresh,
     onSubmitted: () => {
       if (refresh) {

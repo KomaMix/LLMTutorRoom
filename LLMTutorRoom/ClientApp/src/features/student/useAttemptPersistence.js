@@ -4,11 +4,13 @@ import {
   canAttemptAcceptAnswers,
   copyAnswers,
   createFinalSaveOptions,
-  getConflictAttempt
+  getConflictAttempt,
+  isAttemptAccessDenied
 } from "./attemptLifecycleUtils.js";
 
 export function useAttemptPersistence({
   accessTokenSnapshotRef,
+  accessDeniedAttemptIdsRef,
   answersRef,
   attemptQueuesRef,
   blockedAttemptIdsRef,
@@ -91,6 +93,21 @@ export function useAttemptPersistence({
     setMessageState
   ]);
 
+  const applyAccessDenied = useCallback(async operationContext => {
+    if (operationContext.attemptId != null) {
+      accessDeniedAttemptIdsRef.current.add(operationContext.attemptId);
+    }
+
+    applyConflict(
+      operationContext,
+      null,
+      "Доступ к назначению закрыт. Выполнение теста недоступно.",
+      false);
+    if (mountedRef.current) {
+      await callbacksRef.current.onAccessDenied?.();
+    }
+  }, [accessDeniedAttemptIdsRef, applyConflict, callbacksRef, mountedRef]);
+
   const persistAnswers = useCallback(async ({
     operationContext,
     answers,
@@ -129,6 +146,11 @@ export function useAttemptPersistence({
 
       return { conflict: false, attempt };
     } catch (error) {
+      if (isAttemptAccessDenied(error)) {
+        await applyAccessDenied(operationContext);
+        return { conflict: true, attempt: null };
+      }
+
       const conflictAttempt = getConflictAttempt(error);
       if (conflictAttempt) {
         applyConflict(
@@ -142,6 +164,7 @@ export function useAttemptPersistence({
       throw error;
     }
   }, [
+    applyAccessDenied,
     applyConflict,
     blockedAttemptIdsRef,
     callbacksRef,
@@ -208,6 +231,7 @@ export function useAttemptPersistence({
   ]);
 
   return {
+    applyAccessDenied,
     applyConflict,
     enqueueAttemptMutation,
     persistAnswers,

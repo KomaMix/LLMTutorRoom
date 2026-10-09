@@ -82,6 +82,25 @@ services:
       - edge
       - backend
 
+  group-service:
+    build:
+      context: .
+      dockerfile: GroupService/Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:8080
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://aspire-dashboard:18889
+      OTEL_EXPORTER_OTLP_PROTOCOL: grpc
+      ConnectionStrings__DefaultConnection: Host=postgres;Database=llm_tutor_groups;Username=postgres;Password=postgres;
+    expose:
+      - "8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - edge
+      - backend
+
   teaching-service:
     build:
       context: .
@@ -92,6 +111,7 @@ services:
       OTEL_EXPORTER_OTLP_ENDPOINT: http://aspire-dashboard:18889
       OTEL_EXPORTER_OTLP_PROTOCOL: grpc
       ConnectionStrings__DefaultConnection: Host=postgres;Database=llm_tutor_teaching;Username=postgres;Password=postgres;
+      GroupService__BaseUrl: http://group-service:8080
       IntegrationEvents__HostName: rabbitmq
       IntegrationEvents__Port: 5672
       IntegrationEvents__UserName: llm
@@ -103,6 +123,8 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+      group-service:
+        condition: service_started
     networks:
       - edge
       - backend
@@ -194,6 +216,7 @@ services:
       AttemptService__BaseUrl: http://attempt-service:8080
       TeachingService__BaseUrl: http://teaching-service:8080
       ReviewService__BaseUrl: http://review-service:8080
+      GroupService__BaseUrl: http://group-service:8080
     expose:
       - "8080"
     depends_on:
@@ -203,6 +226,8 @@ services:
         condition: service_started
       review-service:
         condition: service_healthy
+      group-service:
+        condition: service_started
     networks:
       - edge
       - backend
@@ -215,6 +240,8 @@ services:
       - ./infra/nginx/nginx.compose.conf:/etc/nginx/nginx.conf:ro
     depends_on:
       auth-service:
+        condition: service_started
+      group-service:
         condition: service_started
       tutor-room:
         condition: service_started

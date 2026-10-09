@@ -1,4 +1,4 @@
-namespace TeachingService.Contracts.Requests;
+namespace GroupService.Contracts.Requests;
 
 public class CreateStudyGroupRequest
 {

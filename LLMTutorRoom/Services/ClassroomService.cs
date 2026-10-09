@@ -16,15 +16,18 @@ public class ClassroomService
     private readonly IAttemptServiceClient _attemptServiceClient;
     private readonly ITeachingServiceClient _teachingServiceClient;
     private readonly IReviewServiceClient _reviewServiceClient;
+    private readonly IGroupServiceClient _groupServiceClient;
 
     public ClassroomService(
         IAttemptServiceClient attemptServiceClient,
         ITeachingServiceClient teachingServiceClient,
-        IReviewServiceClient reviewServiceClient)
+        IReviewServiceClient reviewServiceClient,
+        IGroupServiceClient groupServiceClient)
     {
         _attemptServiceClient = attemptServiceClient;
         _teachingServiceClient = teachingServiceClient;
         _reviewServiceClient = reviewServiceClient;
+        _groupServiceClient = groupServiceClient;
     }
 
     public async Task<TeacherClassroomOverviewResponse> GetTeacherOverviewAsync(
@@ -39,9 +42,24 @@ public class ClassroomService
             .Where(test => test.TeacherUserId == teacherUserId)
             .OrderBy(test => test.Title)
             .ToList();
-        var groups = await _teachingServiceClient.GetTeacherGroupsAsync(
+        var groupCatalog = await _groupServiceClient.GetTeacherGroupsAsync(
             teacherUserId,
             cancellationToken);
+        var assignments = await _teachingServiceClient.GetTeacherAssignmentsAsync(
+            teacherUserId,
+            cancellationToken);
+        var assignmentsByGroupId = assignments.ToLookup(assignment => assignment.GroupId);
+        var groups = groupCatalog.Select(group => new StudyGroupOverviewResponse
+        {
+            Id = group.Id,
+            Name = group.Name,
+            TeacherUserId = group.TeacherUserId,
+            StudentUserIds = group.StudentUserIds,
+            Assignments = assignmentsByGroupId[group.Id].ToList(),
+            CreatedAt = group.CreatedAt,
+            UpdatedAt = group.UpdatedAt,
+            Revision = group.Revision
+        }).ToList();
         var attempts = await _attemptServiceClient.GetTeacherAttemptsAsync(
             teacherUserId,
             cancellationToken);
@@ -75,6 +93,10 @@ public class ClassroomService
         var assignments = await _teachingServiceClient.GetStudentAssignmentsAsync(
             studentUserId,
             cancellationToken);
+        var currentAssignmentIds = assignments.Select(assignment => assignment.Id).ToHashSet();
+        attempts = attempts.Where(attempt => attempt.Status == TestAttemptStatus.Submitted
+                || currentAssignmentIds.Contains(attempt.AssignmentId))
+            .ToList();
         assignments = await BindAssignmentsToAttemptsAsync(
             assignments,
             attempts,
@@ -93,7 +115,9 @@ public class ClassroomService
             Models = new List<LanguageModel>(),
             Reviews = MergeReviewPage(reviewPage),
             Attempts = attempts,
-            Metrics = CreateStudentMetrics(studentTests, reviewPage.Aggregate),
+            Metrics = CreateStudentMetrics(
+                studentTests.Where(test => currentAssignmentIds.Contains(test.AssignmentId)).ToList(),
+                reviewPage.Aggregate),
             TerminalReviewsNextCursor = reviewPage.NextCursor
         };
     }
@@ -143,6 +167,11 @@ public class ClassroomService
 
         foreach (var attempt in attempts)
         {
+            if (attempt.Status != TestAttemptStatus.Submitted)
+            {
+                continue;
+            }
+
             if (assignmentsById.ContainsKey(attempt.AssignmentId))
             {
                 continue;
@@ -162,7 +191,7 @@ public class ClassroomService
     }
 
     private static DashboardMetrics CreateTeacherMetrics(
-        List<StudyGroupResponse> groups,
+        List<StudyGroupOverviewResponse> groups,
         List<TestAttemptResponse> attempts,
         ReviewAggregateResponse reviewAggregate)
     {

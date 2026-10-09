@@ -47,6 +47,18 @@ public class AttemptLifecycleService : IAttemptLifecycleService
             .OrderByDescending(attempt => attempt.StartedAt)
             .ToListAsync(cancellationToken);
 
+        if (attempts.Any(attempt => attempt.Status == TestAttemptStatus.InProgress))
+        {
+            var assignments = await _teachingServiceClient.GetStudentAssignmentsAsync(
+                studentUserId,
+                cancellationToken);
+            var availableAssignmentIds = assignments.Select(assignment => assignment.Id).ToHashSet();
+            attempts = attempts
+                .Where(attempt => attempt.Status != TestAttemptStatus.InProgress
+                    || availableAssignmentIds.Contains(attempt.AssignmentId))
+                .ToList();
+        }
+
         return attempts.Select(ToResponse).ToList();
     }
 
@@ -63,7 +75,21 @@ public class AttemptLifecycleService : IAttemptLifecycleService
             .SingleOrDefaultAsync(
                 item => item.Id == attemptId && item.StudentUserId == studentUserId,
                 cancellationToken);
-        return attempt is null ? null : ToResponse(attempt);
+        if (attempt is null)
+        {
+            return null;
+        }
+
+        if (attempt.Status == TestAttemptStatus.InProgress
+            && await _teachingServiceClient.GetStudentAssignmentAsync(
+                attempt.AssignmentId,
+                studentUserId,
+                cancellationToken) is null)
+        {
+            return null;
+        }
+
+        return ToResponse(attempt);
     }
 
     public async Task<List<TestAttemptResponse>> GetTeacherAttemptsAsync(
@@ -88,6 +114,18 @@ public class AttemptLifecycleService : IAttemptLifecycleService
     {
         await SubmitDueStudentAttemptsAsync(studentUserId, cancellationToken);
 
+        var assignment = await _teachingServiceClient.GetStudentAssignmentAsync(
+            assignmentId,
+            studentUserId,
+            cancellationToken);
+        if (assignment is null || assignment.Test.VersionNumber <= 0)
+        {
+            return new Result<AttemptOperationStatus, TestAttemptResponse>
+            {
+                Status = AttemptOperationStatus.NotFound
+            };
+        }
+
         await using (var readContext = await _dbContextFactory.CreateDbContextAsync(cancellationToken))
         {
             var existingAttempt = await readContext.TestAttempts
@@ -104,18 +142,6 @@ public class AttemptLifecycleService : IAttemptLifecycleService
                     Value = ToResponse(existingAttempt)
                 };
             }
-        }
-
-        var assignment = await _teachingServiceClient.GetStudentAssignmentAsync(
-            assignmentId,
-            studentUserId,
-            cancellationToken);
-        if (assignment is null || assignment.Test.VersionNumber <= 0)
-        {
-            return new Result<AttemptOperationStatus, TestAttemptResponse>
-            {
-                Status = AttemptOperationStatus.NotFound
-            };
         }
 
         var now = DateTimeOffset.UtcNow;
@@ -180,6 +206,7 @@ public class AttemptLifecycleService : IAttemptLifecycleService
         Dictionary<string, string> answers,
         CancellationToken cancellationToken)
     {
+        var assignmentAccessChecked = false;
         for (var mutationAttempt = 1; mutationAttempt <= MaxMutationAttempts; mutationAttempt++)
         {
             await using var dbContext = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
@@ -194,6 +221,23 @@ public class AttemptLifecycleService : IAttemptLifecycleService
                 {
                     Status = AttemptOperationStatus.NotFound
                 };
+            }
+
+            if (!assignmentAccessChecked)
+            {
+                var assignment = await _teachingServiceClient.GetStudentAssignmentAsync(
+                    attempt.AssignmentId,
+                    studentUserId,
+                    cancellationToken);
+                if (assignment is null)
+                {
+                    return new Result<AttemptOperationStatus, TestAttemptResponse>
+                    {
+                        Status = AttemptOperationStatus.NotFound
+                    };
+                }
+
+                assignmentAccessChecked = true;
             }
 
             if (attempt.Status != TestAttemptStatus.InProgress)
@@ -300,6 +344,7 @@ public class AttemptLifecycleService : IAttemptLifecycleService
         string studentUserName,
         CancellationToken cancellationToken)
     {
+        var assignmentAccessChecked = false;
         for (var mutationAttempt = 1; mutationAttempt <= MaxMutationAttempts; mutationAttempt++)
         {
             await using var dbContext = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
@@ -314,6 +359,23 @@ public class AttemptLifecycleService : IAttemptLifecycleService
                 {
                     Status = AttemptOperationStatus.NotFound
                 };
+            }
+
+            if (!assignmentAccessChecked)
+            {
+                var assignment = await _teachingServiceClient.GetStudentAssignmentAsync(
+                    attempt.AssignmentId,
+                    studentUserId,
+                    cancellationToken);
+                if (assignment is null)
+                {
+                    return new Result<AttemptOperationStatus, TestAttemptResponse>
+                    {
+                        Status = AttemptOperationStatus.NotFound
+                    };
+                }
+
+                assignmentAccessChecked = true;
             }
 
             if (attempt.Status == TestAttemptStatus.Submitted)

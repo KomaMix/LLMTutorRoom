@@ -12,6 +12,7 @@ infra-only Compose file):
 - AuthService: `http://localhost:5210`
 - LLMTutorRoom: `http://localhost:5206`
 - TeachingService: `http://localhost:5212`
+- GroupService: `http://localhost:5218`
 - AttemptService: `http://localhost:5216`
 - LLMGateway: `http://localhost:5200`
 - ReviewService: `http://127.0.0.1:5214`
@@ -23,6 +24,7 @@ Routes:
 - `/api/users/*` -> AuthService
 - `/api/classroom/*` -> LLMTutorRoom
 - `/api/teaching/*` -> TeachingService
+- `/api/groups` and `/api/groups/*` -> GroupService
 - `/api/attempts` and `/api/attempts/*` -> AttemptService
 - `/api/reviews/*` -> ReviewService
 - `/api/model-access/*` -> ReviewService
@@ -31,21 +33,21 @@ Routes:
 
 Nginx explicitly returns `404` for `/internal` and `/internal/*`; these paths
 are never passed to the frontend fallback or any backend service. Public routes
-of `AttemptService` and `ReviewService` validate JWT and roles themselves.
+of `GroupService`, `AttemptService` and `ReviewService` validate JWT and roles themselves.
 Their internal overview/history endpoints remain reachable only by backend
 services, while health endpoints are not routed through nginx.
 
-Run with local nginx:
+Run with local nginx from the repository root:
 
 ```bash
 brew install nginx
-nginx -c /Users/sabirovkamil/RiderProjects/LLMGateway/infra/nginx/nginx.local.conf -p /Users/sabirovkamil/RiderProjects/LLMGateway/infra/nginx
+nginx -c "$PWD/infra/nginx/nginx.local.conf" -p "$PWD/infra/nginx"
 ```
 
 Stop with:
 
 ```bash
-nginx -s stop -c /Users/sabirovkamil/RiderProjects/LLMGateway/infra/nginx/nginx.local.conf -p /Users/sabirovkamil/RiderProjects/LLMGateway/infra/nginx
+nginx -s stop -c "$PWD/infra/nginx/nginx.local.conf" -p "$PWD/infra/nginx"
 ```
 
 Run with Docker without Compose:
@@ -53,7 +55,7 @@ Run with Docker without Compose:
 ```bash
 docker run --rm --name llm-nginx \
   -p 8080:8080 \
-  -v /Users/sabirovkamil/RiderProjects/LLMGateway/infra/nginx/nginx.docker.conf:/etc/nginx/nginx.conf:ro \
+  -v "$PWD/infra/nginx/nginx.docker.conf:/etc/nginx/nginx.conf:ro" \
   nginx:1.27
 ```
 
@@ -64,7 +66,8 @@ host:
 docker compose -f docker-compose.infra.yml up
 ```
 
-In this mode, start `AttemptService` on `localhost:5216` and `ReviewService` on
+In this mode, start `GroupService` on `localhost:5218`, `AttemptService` on
+`localhost:5216` and `ReviewService` on
 `127.0.0.1:5214`. Nginx proxies their public API routes and continues to reject
 every `/internal/*` request.
 
@@ -90,3 +93,9 @@ Compose stack. Nginx reaches it as `http://teaching-service:8080` and exposes
 only `/api/teaching/*`; backend containers can use the same container address.
 Port `5212` is used only when TeachingService itself runs on the host (local or
 infra-only mode).
+
+`GroupService` owns group membership and teacher selection. It is reachable as
+`http://group-service:8080` inside Compose and has no published host port there.
+Nginx exposes its `/api/groups` routes; its `/internal/*` API remains available
+only to backend services without authentication. Test assignments stay in
+`TeachingService` and use the group's current membership.

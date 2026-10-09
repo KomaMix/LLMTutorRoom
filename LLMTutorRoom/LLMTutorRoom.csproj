@@ -17,6 +17,7 @@
         <ProjectReference Include="..\Shared.Auth\Shared.Auth.csproj" />
         <ProjectReference Include="..\Shared.Observability\Shared.Observability.csproj" />
         <ProjectReference Include="..\AttemptService.Contracts\AttemptService.Contracts.csproj" />
+        <ProjectReference Include="..\GroupService.Contracts\GroupService.Contracts.csproj" />
         <ProjectReference Include="..\ReviewService.Contracts\ReviewService.Contracts.csproj" />
         <ProjectReference Include="..\TeachingService.Contracts\TeachingService.Contracts.csproj" />
     </ItemGroup>

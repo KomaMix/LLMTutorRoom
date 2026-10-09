@@ -9,12 +9,24 @@ namespace LLMTutorRoom.Models;
 public class TeacherClassroomOverviewResponse
 {
     public List<CourseTestDto> Tests { get; set; } = new();
-    public List<StudyGroupResponse> Groups { get; set; } = new();
+    public List<StudyGroupOverviewResponse> Groups { get; set; } = new();
     public List<LanguageModel> Models { get; set; } = new();
     public List<ReviewResponse> Reviews { get; set; } = new();
     public List<TestAttemptResponse> Attempts { get; set; } = new();
     public DashboardMetrics Metrics { get; set; } = new();
     public string? TerminalReviewsNextCursor { get; set; }
+}
+
+public class StudyGroupOverviewResponse
+{
+    public Guid Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string TeacherUserId { get; set; } = string.Empty;
+    public IList<string> StudentUserIds { get; set; } = new List<string>();
+    public IList<TestAssignmentResponse> Assignments { get; set; } = new List<TestAssignmentResponse>();
+    public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset UpdatedAt { get; set; }
+    public int Revision { get; set; }
 }
 
 public class StudentClassroomOverviewResponse

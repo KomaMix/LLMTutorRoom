@@ -137,7 +137,7 @@ public sealed class AttemptLifecycleServiceTests
     }
 
     [Fact]
-    public async Task StartAttempt_WhenAttemptAlreadyExists_ReturnsItWithoutDuplicateOrTeachingCall()
+    public async Task StartAttempt_WhenAttemptAlreadyExists_RechecksAccessWithoutCreatingDuplicate()
     {
         await using var factory = TestAttemptDbContextFactory.CreateInMemory();
         var teachingClient = new StubTeachingServiceClient();
@@ -167,7 +167,7 @@ public sealed class AttemptLifecycleServiceTests
         var repeatedAttempt = Assert.IsType<TestAttemptResponse>(repeatedResult.Value);
         Assert.Equal(firstAttempt.Id, repeatedAttempt.Id);
         Assert.Equal(firstAttempt.TestRevision, repeatedAttempt.TestRevision);
-        Assert.Equal(1, teachingClient.RequestCount);
+        Assert.Equal(2, teachingClient.RequestCount);
         await using var dbContext = factory.CreateDbContext();
         Assert.Single(dbContext.TestAttempts);
     }
@@ -267,7 +267,7 @@ public sealed class AttemptLifecycleServiceTests
             new Dictionary<string, string> { ["task-a"] = "old-answer" },
             JsonOptions);
         await SeedAttemptsAsync(factory, attempt);
-        var service = CreateService(factory, new StubTeachingServiceClient());
+        var service = CreateService(factory, CreateTeachingClient(attempt));
 
         var result = await service.SaveAnswersAsync(
             attempt.Id,
@@ -308,7 +308,7 @@ public sealed class AttemptLifecycleServiceTests
         attempt.AnswersJson = existingAnswersJson;
         attempt.AllowedTaskIdsJson = "[\"task-a\",\"task-b\",\"task-c\"]";
         await SeedAttemptsAsync(factory, attempt);
-        var service = CreateService(factory, new StubTeachingServiceClient(), new AttemptInputLimitsOptions
+        var service = CreateService(factory, CreateTeachingClient(attempt), new AttemptInputLimitsOptions
         {
             MaxAnswerCount = 2,
             MaxAnswerLength = 20,
@@ -342,7 +342,7 @@ public sealed class AttemptLifecycleServiceTests
         const string existingAnswersJson = "{\"task-a\":\"saved-answer\"}";
         attempt.AnswersJson = existingAnswersJson;
         await SeedAttemptsAsync(factory, attempt);
-        var service = CreateService(factory, new StubTeachingServiceClient(), new AttemptInputLimitsOptions
+        var service = CreateService(factory, CreateTeachingClient(attempt), new AttemptInputLimitsOptions
         {
             MaxAnswerCount = 2,
             MaxAnswerLength = 5,
@@ -372,7 +372,7 @@ public sealed class AttemptLifecycleServiceTests
         attempt.AnswersJson = existingAnswersJson;
         attempt.AllowedTaskIdsJson = "[\"task-a\",\"task-b\"]";
         await SeedAttemptsAsync(factory, attempt);
-        var service = CreateService(factory, new StubTeachingServiceClient(), new AttemptInputLimitsOptions
+        var service = CreateService(factory, CreateTeachingClient(attempt), new AttemptInputLimitsOptions
         {
             MaxAnswerCount = 2,
             MaxAnswerLength = 5,
@@ -405,7 +405,7 @@ public sealed class AttemptLifecycleServiceTests
         const string existingAnswersJson = "{\"task-a\":\"saved-answer\"}";
         attempt.AnswersJson = existingAnswersJson;
         await SeedAttemptsAsync(factory, attempt);
-        var service = CreateService(factory, new StubTeachingServiceClient());
+        var service = CreateService(factory, CreateTeachingClient(attempt));
 
         var result = await service.SaveAnswersAsync(
             attempt.Id,
@@ -537,7 +537,7 @@ public sealed class AttemptLifecycleServiceTests
             await seedContext.SaveChangesAsync();
         }
 
-        var service = CreateService(factory, new StubTeachingServiceClient());
+        var service = CreateService(factory, CreateTeachingClient(attempt));
         var result = await service.SubmitAttemptAsync(
             attempt.Id,
             "student-1",
@@ -569,7 +569,7 @@ public sealed class AttemptLifecycleServiceTests
             await seedContext.SaveChangesAsync();
         }
 
-        var service = CreateService(factory, new StubTeachingServiceClient());
+        var service = CreateService(factory, CreateTeachingClient(attempt));
         var result = await service.SubmitAttemptAsync(
             attempt.Id,
             "student-1",
@@ -594,7 +594,7 @@ public sealed class AttemptLifecycleServiceTests
             "student-1",
             DateTimeOffset.UtcNow.AddMinutes(-1));
         await SeedAttemptsAsync(factory, attempt);
-        var service = CreateService(factory, new StubTeachingServiceClient());
+        var service = CreateService(factory, CreateTeachingClient(attempt));
 
         var result = await service.SubmitAttemptAsync(
             attempt.Id,
@@ -640,7 +640,7 @@ public sealed class AttemptLifecycleServiceTests
             DateTimeOffset.UtcNow.AddHours(1),
             DateTimeOffset.UtcNow);
         await SeedAttemptsAsync(factory, olderOwned, newerOwned, otherStudent);
-        var service = CreateService(factory, new StubTeachingServiceClient());
+        var service = CreateService(factory, CreateTeachingClient(olderOwned, newerOwned, otherStudent));
 
         var attempts = await service.GetStudentAttemptsAsync(
             "student-1",
@@ -661,7 +661,7 @@ public sealed class AttemptLifecycleServiceTests
             "student-1",
             DateTimeOffset.UtcNow.AddHours(1));
         await SeedAttemptsAsync(factory, attempt);
-        var service = CreateService(factory, new StubTeachingServiceClient());
+        var service = CreateService(factory, CreateTeachingClient(attempt));
 
         var ownedResult = await service.GetAttemptAsync(
             attempt.Id,
@@ -675,6 +675,217 @@ public sealed class AttemptLifecycleServiceTests
         Assert.NotNull(ownedResult);
         Assert.Equal(attempt.Id, ownedResult.Id);
         Assert.Null(foreignResult);
+    }
+
+    [Fact]
+    public async Task MembershipRemoved_RevokesActiveAttemptAccessAndPreservesSavedData()
+    {
+        await using var factory = TestAttemptDbContextFactory.CreateInMemory();
+        var teachingClient = new StubTeachingServiceClient();
+        var test = CreatePublishedTest(Guid.NewGuid(), 1, 30, "task-a");
+        var assignment = CreateAssignment(test, DateTimeOffset.UtcNow.AddHours(1));
+        teachingClient.Assignments.Add(assignment.Id, assignment);
+        var members = new HashSet<string> { "student-1" };
+        teachingClient.AssignmentStudentIds.Add(assignment.Id, members);
+        var service = CreateService(factory, teachingClient);
+        var started = await service.StartAttemptAsync(
+            assignment.Id,
+            "student-1",
+            "Alice Student",
+            CancellationToken.None);
+        var attempt = Assert.IsType<TestAttemptResponse>(started.Value);
+        var saved = await service.SaveAnswersAsync(
+            attempt.Id,
+            "student-1",
+            new Dictionary<string, string> { ["task-a"] = "saved-answer" },
+            CancellationToken.None);
+        Assert.Equal(AttemptOperationStatus.Success, saved.Status);
+        members.Remove("student-1");
+
+        var inaccessibleAttempt = await service.GetAttemptAsync(
+            attempt.Id,
+            "student-1",
+            CancellationToken.None);
+        var studentAttempts = await service.GetStudentAttemptsAsync("student-1", CancellationToken.None);
+        var repeatedStart = await service.StartAttemptAsync(
+            assignment.Id,
+            "student-1",
+            "Alice Student",
+            CancellationToken.None);
+        var rejectedSave = await service.SaveAnswersAsync(
+            attempt.Id,
+            "student-1",
+            new Dictionary<string, string> { ["task-a"] = "forbidden-answer" },
+            CancellationToken.None);
+        var rejectedSubmit = await service.SubmitAttemptAsync(
+            attempt.Id,
+            "student-1",
+            "Different Name",
+            CancellationToken.None);
+
+        Assert.Null(inaccessibleAttempt);
+        Assert.Empty(studentAttempts);
+        Assert.Equal(AttemptOperationStatus.NotFound, repeatedStart.Status);
+        Assert.Null(repeatedStart.Value);
+        Assert.Equal(AttemptOperationStatus.NotFound, rejectedSave.Status);
+        Assert.Null(rejectedSave.Value);
+        Assert.Equal(AttemptOperationStatus.NotFound, rejectedSubmit.Status);
+        Assert.Null(rejectedSubmit.Value);
+        Assert.Equal(6, teachingClient.RequestCount);
+        Assert.Equal(1, teachingClient.ListRequestCount);
+        var teacherAttempt = Assert.Single(await service.GetTeacherAttemptsAsync("teacher-1", CancellationToken.None));
+        Assert.Equal(attempt.Id, teacherAttempt.Id);
+        Assert.Equal("saved-answer", teacherAttempt.Answers["task-a"]);
+        Assert.Equal(TestAttemptStatus.InProgress, teacherAttempt.Status);
+        await using (var dbContext = factory.CreateDbContext())
+        {
+            var storedAttempt = await dbContext.TestAttempts.SingleAsync();
+            Assert.Equal(1, storedAttempt.StateRevision);
+            Assert.Equal("Alice Student", storedAttempt.StudentName);
+            Assert.Null(storedAttempt.SubmittedAt);
+            Assert.Empty(dbContext.AttemptSubmissionOutboxMessages);
+        }
+
+        members.Add("student-1");
+        var restoredStart = await service.StartAttemptAsync(
+            assignment.Id,
+            "student-1",
+            "Alice Student",
+            CancellationToken.None);
+        Assert.Equal(AttemptOperationStatus.Success, restoredStart.Status);
+        var restoredAttempt = Assert.IsType<TestAttemptResponse>(restoredStart.Value);
+        Assert.Equal(attempt.Id, restoredAttempt.Id);
+        Assert.Equal("saved-answer", restoredAttempt.Answers["task-a"]);
+    }
+
+    [Fact]
+    public async Task MembershipAdded_GrantsAccessToExistingGroupAssignmentWithoutCreatingNewAssignment()
+    {
+        await using var factory = TestAttemptDbContextFactory.CreateInMemory();
+        var teachingClient = new StubTeachingServiceClient();
+        var assignment = CreateAssignment(
+            CreatePublishedTest(Guid.NewGuid(), 1, 30, "task-a"),
+            DateTimeOffset.UtcNow.AddHours(1));
+        teachingClient.Assignments.Add(assignment.Id, assignment);
+        var members = new HashSet<string>();
+        teachingClient.AssignmentStudentIds.Add(assignment.Id, members);
+        var service = CreateService(factory, teachingClient);
+
+        var beforeMembership = await service.StartAttemptAsync(
+            assignment.Id,
+            "student-1",
+            "Alice Student",
+            CancellationToken.None);
+        members.Add("student-1");
+        var afterMembership = await service.StartAttemptAsync(
+            assignment.Id,
+            "student-1",
+            "Alice Student",
+            CancellationToken.None);
+
+        Assert.Equal(AttemptOperationStatus.NotFound, beforeMembership.Status);
+        Assert.Null(beforeMembership.Value);
+        Assert.Equal(AttemptOperationStatus.Created, afterMembership.Status);
+        var attempt = Assert.IsType<TestAttemptResponse>(afterMembership.Value);
+        Assert.Equal(assignment.Id, attempt.AssignmentId);
+        Assert.Equal(assignment.GroupId, attempt.GroupId);
+        Assert.Single(teachingClient.Assignments);
+        Assert.Equal(2, teachingClient.RequestCount);
+        await using var dbContext = factory.CreateDbContext();
+        Assert.Equal(attempt.Id, (await dbContext.TestAttempts.SingleAsync()).Id);
+    }
+
+    [Fact]
+    public async Task GetStudentAttempts_FiltersInProgressByCurrentMembershipWithOneRequestAndKeepsSubmittedHistory()
+    {
+        await using var factory = TestAttemptDbContextFactory.CreateInMemory();
+        var now = DateTimeOffset.UtcNow;
+        var revoked = CreateStoredAttempt(Guid.NewGuid(), "student-1", now.AddHours(1), now.AddMinutes(-1));
+        var available = CreateStoredAttempt(Guid.NewGuid(), "student-1", now.AddHours(1), now.AddMinutes(-2));
+        var submitted = CreateStoredAttempt(Guid.NewGuid(), "student-1", now.AddHours(1), now.AddMinutes(-3));
+        submitted.Status = TestAttemptStatus.Submitted;
+        submitted.SubmittedAt = now.AddMinutes(-2);
+        submitted.StateRevision = 1;
+        await SeedAttemptsAsync(factory, revoked, available, submitted);
+        var teachingClient = CreateTeachingClient(revoked, available, submitted);
+        teachingClient.AssignmentStudentIds[revoked.AssignmentId].Remove("student-1");
+        teachingClient.AssignmentStudentIds[submitted.AssignmentId].Remove("student-1");
+        var service = CreateService(factory, teachingClient);
+
+        var attempts = await service.GetStudentAttemptsAsync("student-1", CancellationToken.None);
+        var history = await service.GetAttemptAsync(submitted.Id, "student-1", CancellationToken.None);
+        var repeatedSubmit = await service.SubmitAttemptAsync(
+            submitted.Id,
+            "student-1",
+            "Changed Name",
+            CancellationToken.None);
+
+        Assert.Equal(new[] { available.Id, submitted.Id }, attempts.Select(attempt => attempt.Id));
+        Assert.Equal(1, teachingClient.ListRequestCount);
+        Assert.Equal(1, teachingClient.RequestCount);
+        var historicalAttempt = Assert.IsType<TestAttemptResponse>(history);
+        Assert.Equal(TestAttemptStatus.Submitted, historicalAttempt.Status);
+        Assert.Equal(submitted.SubmittedAt, historicalAttempt.SubmittedAt);
+        Assert.Equal(AttemptOperationStatus.NotFound, repeatedSubmit.Status);
+        Assert.Null(repeatedSubmit.Value);
+        await using var dbContext = factory.CreateDbContext();
+        var storedAttempt = await dbContext.TestAttempts.SingleAsync(attempt => attempt.Id == submitted.Id);
+        Assert.Equal(1, storedAttempt.StateRevision);
+        Assert.Equal("Alice Student", storedAttempt.StudentName);
+        Assert.Empty(dbContext.AttemptSubmissionOutboxMessages);
+    }
+
+    [Fact]
+    public async Task GetStudentAttempts_WhenRemovedStudentAttemptExpires_SubmitsSavedAnswersAndKeepsHistory()
+    {
+        await using var factory = TestAttemptDbContextFactory.CreateInMemory();
+        var attempt = CreateStoredAttempt(Guid.NewGuid(), "student-1", DateTimeOffset.UtcNow.AddMinutes(-1));
+        attempt.AnswersJson = "{\"task-a\":\"saved-answer\"}";
+        await SeedAttemptsAsync(factory, attempt);
+        var teachingClient = CreateTeachingClient(attempt);
+        teachingClient.AssignmentStudentIds[attempt.AssignmentId].Remove("student-1");
+        var service = CreateService(factory, teachingClient);
+
+        var history = Assert.Single(await service.GetStudentAttemptsAsync("student-1", CancellationToken.None));
+
+        Assert.Equal(attempt.Id, history.Id);
+        Assert.Equal(TestAttemptStatus.Submitted, history.Status);
+        Assert.Equal(AttemptSubmissionReason.Deadline, history.SubmissionReason);
+        Assert.Equal(attempt.EndsAt, history.SubmittedAt);
+        Assert.Equal("saved-answer", history.Answers["task-a"]);
+        Assert.Equal(0, teachingClient.RequestCount);
+        Assert.Equal(0, teachingClient.ListRequestCount);
+        await using var dbContext = factory.CreateDbContext();
+        var submissionEvent = JsonSerializer.Deserialize<AttemptSubmittedV1>(
+            (await dbContext.AttemptSubmissionOutboxMessages.SingleAsync()).PayloadJson,
+            JsonOptions);
+        Assert.NotNull(submissionEvent);
+        Assert.Equal("saved-answer", submissionEvent.Answers["task-a"]);
+    }
+
+    [Fact]
+    public async Task MembershipLookupUnavailable_DeniesReadingAndMutatingActiveAttempt()
+    {
+        await using var factory = TestAttemptDbContextFactory.CreateInMemory();
+        var attempt = CreateStoredAttempt(Guid.NewGuid(), "student-1", DateTimeOffset.UtcNow.AddHours(1));
+        attempt.AnswersJson = "{\"task-a\":\"saved-answer\"}";
+        await SeedAttemptsAsync(factory, attempt);
+        var teachingClient = CreateTeachingClient(attempt);
+        teachingClient.RequestException = new HttpRequestException("TeachingService is unavailable.");
+        var service = CreateService(factory, teachingClient);
+
+        await Assert.ThrowsAsync<HttpRequestException>(() => service.GetStudentAttemptsAsync("student-1", CancellationToken.None));
+        await Assert.ThrowsAsync<HttpRequestException>(() => service.GetAttemptAsync(attempt.Id, "student-1", CancellationToken.None));
+        await Assert.ThrowsAsync<HttpRequestException>(() => service.StartAttemptAsync(
+            attempt.AssignmentId, "student-1", "Alice Student", CancellationToken.None));
+        await Assert.ThrowsAsync<HttpRequestException>(() => service.SaveAnswersAsync(
+            attempt.Id, "student-1", new Dictionary<string, string> { ["task-a"] = "forbidden-answer" }, CancellationToken.None));
+        await Assert.ThrowsAsync<HttpRequestException>(() => service.SubmitAttemptAsync(
+            attempt.Id, "student-1", "Changed Name", CancellationToken.None));
+
+        await AssertAttemptWasNotChangedAsync(factory, attempt.Id, attempt.AnswersJson);
+        Assert.Equal(4, teachingClient.RequestCount);
+        Assert.Equal(1, teachingClient.ListRequestCount);
     }
 
     private static CourseTestDto CreatePublishedTest(
@@ -723,6 +934,31 @@ public sealed class AttemptLifecycleServiceTests
             new AttemptSubmissionOutboxWriter(),
             Microsoft.Extensions.Options.Options.Create(
                 inputLimits ?? new AttemptInputLimitsOptions()));
+    }
+
+    private static StubTeachingServiceClient CreateTeachingClient(params TestAttempt[] attempts)
+    {
+        var client = new StubTeachingServiceClient();
+        foreach (var attempt in attempts)
+        {
+            var assignment = new TestAssignmentResponse
+            {
+                Id = attempt.AssignmentId,
+                GroupId = attempt.GroupId,
+                TeacherUserId = attempt.TeacherUserId,
+                AvailableFrom = attempt.StartedAt.AddMinutes(-10),
+                Deadline = attempt.EndsAt,
+                Test = CreatePublishedTest(
+                    Guid.Parse(attempt.TestId),
+                    attempt.TestRevision,
+                    timeLimitMinutes: 30,
+                    "task-a")
+            };
+            client.Assignments.Add(assignment.Id, assignment);
+            client.AssignmentStudentIds.Add(assignment.Id, new HashSet<string> { attempt.StudentUserId });
+        }
+
+        return client;
     }
 
     private static async Task AssertAttemptWasNotChangedAsync(

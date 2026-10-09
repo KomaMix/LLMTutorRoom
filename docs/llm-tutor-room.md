@@ -7,16 +7,19 @@ React-приложения. Он проверяет JWT, объединяет о
 удобный для интерфейса overview и отдаёт собранный frontend.
 
 Собственной бизнесовой базы у сервиса нет. Пользователи принадлежат
-`AuthService`, каталог, группы и назначения — `TeachingService`, попытки и ответы —
+`AuthService`, группы и их состав — `GroupService`, каталог и назначения —
+`TeachingService`, попытки и ответы —
 `AttemptService`, результаты и доступы к моделям — `ReviewService`.
 
 ```mermaid
 flowchart LR
     Browser[React в браузере] --> Nginx[nginx]
     Nginx --> Room[LLMTutorRoom]
+    Nginx --> Groups[GroupService]
     Nginx --> Attempt[AttemptService]
     Nginx -->|ручная проверка и доступы| Review[ReviewService]
     Room --> Teaching[TeachingService]
+    Room -->|текущие группы| Groups
     Room -->|попытки для overview| Attempt
     Room -->|результаты для overview и истории| Review
 ```
@@ -31,8 +34,9 @@ flowchart LR
 
 Для student overview фасад получает попытки из internal API `AttemptService`.
 Каждое назначение уже содержит точную версию. Если назначение перестало входить
-в обычную выдачу, но по нему существует попытка, `LLMTutorRoom` запрашивает его
-по ID и не подставляет задания новой публикации.
+в обычную выдачу, но по нему существует сданная попытка, `LLMTutorRoom` запрашивает
+его для истории по ID и не подставляет задания новой публикации. Активные попытки
+исключённого из группы ученика в overview не возвращаются.
 Правильные ответы перед возвратом ученику удаляются из DTO.
 
 Завершённая история читается через
@@ -49,7 +53,9 @@ HTTP-граница фасада находится в
 Синхронные клиенты:
 
 - [`TeachingServiceClient`](../LLMTutorRoom/Services/Teaching/TeachingServiceClient.cs)
-  читает каталог, группы и назначения с точными версиями;
+  читает каталог и назначения с точными версиями;
+- [`GroupServiceClient`](../LLMTutorRoom/Services/Groups/GroupServiceClient.cs)
+  читает текущие группы, их состав и преподавателя;
 - [`AttemptServiceClient`](../LLMTutorRoom/Services/Attempts/AttemptServiceClient.cs)
   читает попытки ученика для overview;
 - [`ReviewServiceClient`](../LLMTutorRoom/Services/Reviews/ReviewServiceClient.cs)
@@ -58,6 +64,8 @@ HTTP-граница фасада находится в
 Команды жизненного цикла попытки идут от браузера на `/api/attempts/*`, а nginx
 направляет запрос напрямую в
 `AttemptService`, который сам проверяет JWT и роль ученика.
+Управление группами направляется на `/api/groups` в `GroupService`, а назначения
+тестов группам остаются в `TeachingService`.
 Аналогично, ручная оценка идёт на `/api/reviews/*`, а управление доступами — на
 `/api/model-access/*`: эти команды принимает и авторизует сам `ReviewService`.
 
@@ -87,7 +95,7 @@ ingress.
 
 Основные секции [`LLMTutorRoom/appsettings.json`](../LLMTutorRoom/appsettings.json):
 
-- `TeachingService`, `AttemptService` и `ReviewService` — адреса internal API и
+- `GroupService`, `TeachingService`, `AttemptService` и `ReviewService` — адреса internal API и
   timeout;
 - `Auth:Jwt` — общие параметры проверки токенов.
 

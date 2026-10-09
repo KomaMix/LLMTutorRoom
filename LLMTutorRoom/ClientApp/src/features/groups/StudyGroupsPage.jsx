@@ -10,12 +10,11 @@ import {
   UsersRound
 } from "lucide-react";
 import {
-  createStudyGroup,
   createTestAssignment,
   getAssignableTests,
-  getStudyGroups,
-  updateStudyGroup
+  getGroupAssignments
 } from "../../api/teachingApi.js";
+import { createStudyGroup, getStudyGroups, updateStudyGroup } from "../../api/groupsApi.js";
 import { getStudents, getTeachers } from "../../api/usersApi.js";
 import { ApiError } from "../../api/httpClient.js";
 import {
@@ -97,12 +96,16 @@ export function StudyGroupsPage({ attempts = [], isAdmin = false, onChanged = nu
         getStudents(),
         isAdmin ? getTeachers() : Promise.resolve([])
       ]);
-      setGroups(nextGroups);
+      const groupsWithAssignments = await Promise.all(nextGroups.map(async group => ({
+        ...group,
+        assignments: await getGroupAssignments(group.id)
+      })));
+      setGroups(groupsWithAssignments);
       setStudents(nextStudents);
       setTeachers(nextTeachers);
 
-      const nextSelected = nextGroups.find(group => group.id === preferredGroupId)
-        ?? nextGroups[0]
+      const nextSelected = groupsWithAssignments.find(group => group.id === preferredGroupId)
+        ?? groupsWithAssignments[0]
         ?? null;
       setSelectedGroupId(nextSelected?.id ?? "");
       setIsCreating(!nextSelected);

@@ -5,12 +5,14 @@ import {
   canAttemptAcceptAnswers,
   copyAnswers,
   getConflictAttempt,
+  isAttemptAccessDenied,
   isAttemptEditable
 } from "./attemptLifecycleUtils.js";
 
 export function useAttemptCommands({
   answersRef,
   applyConflict,
+  applyAccessDenied,
   blockedAttemptIdsRef,
   callbacksRef,
   clearAutosaveTimer,
@@ -104,6 +106,11 @@ export function useAttemptCommands({
         callbacksRef.current.updateAttempt(attempt);
         return true;
       } catch (error) {
+        if (isAttemptAccessDenied(error)) {
+          await applyAccessDenied(operationContext);
+          return false;
+        }
+
         if (error instanceof ApiError && error.status === 409) {
           await callbacksRef.current.onAttemptStartConflict?.();
           if (isCurrentContext(operationContext)) {
@@ -134,6 +141,7 @@ export function useAttemptCommands({
 
     return operation.promise;
   }, [
+    applyAccessDenied,
     callbacksRef,
     contextRef,
     isCurrentContext,
@@ -262,6 +270,11 @@ export function useAttemptCommands({
             callbacksRef.current.updateAttempt(attempt);
             return attempt;
           } catch (error) {
+            if (isAttemptAccessDenied(error)) {
+              await applyAccessDenied(operationContext);
+              return null;
+            }
+
             const conflictAttempt = getConflictAttempt(error);
             if (!conflictAttempt) {
               throw error;
@@ -317,6 +330,7 @@ export function useAttemptCommands({
     return operation.promise;
   }, [
     answersRef,
+    applyAccessDenied,
     applyConflict,
     blockedAttemptIdsRef,
     callbacksRef,

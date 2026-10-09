@@ -25,7 +25,7 @@ namespace LLMTutorRoom.Interfaces
             bool includeHidden,
             CancellationToken cancellationToken);
 
-        Task<List<StudyGroupResponse>> GetTeacherGroupsAsync(
+        Task<List<TestAssignmentResponse>> GetTeacherAssignmentsAsync(
             string teacherUserId,
             CancellationToken cancellationToken);
     }

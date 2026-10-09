@@ -6,6 +6,7 @@ using Shared.Auth;
 using Shared.Observability;
 using TeachingService.Data;
 using TeachingService.Interfaces;
+using TeachingService.Middleware;
 using TeachingService.Options;
 using TeachingService.Services.IntegrationEvents;
 using TeachingService.Services;
@@ -29,6 +30,8 @@ builder.Services.AddControllers()
     });
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+builder.Services.AddProblemDetails();
+builder.Services.AddExceptionHandler<GroupDependencyExceptionHandler>();
 builder.Services.AddPooledDbContextFactory<TeachingDbContext>(options =>
     options.UseNpgsql(connectionString));
 builder.Services.AddScoped(provider => provider
@@ -50,7 +53,12 @@ builder.Services.AddOptions<IntegrationEventOptions>()
         "IntegrationEvents contains invalid RabbitMQ or retry settings.")
     .ValidateOnStart();
 builder.Services.AddScoped<TeachingCatalogService>();
-builder.Services.AddScoped<StudyGroupService>();
+builder.Services.AddScoped<TestAssignmentService>();
+builder.Services.AddHttpClient<IGroupServiceClient, GroupServiceClient>(client =>
+{
+    client.BaseAddress = new Uri(builder.Configuration["GroupService:BaseUrl"] ?? "http://localhost:5218");
+    client.Timeout = TimeSpan.FromSeconds(10);
+});
 builder.Services.AddScoped<FeedbackTemplateService>();
 builder.Services.AddScoped<IReviewPolicyOutboxWriter, ReviewPolicyOutboxWriter>();
 builder.Services.AddSingleton<RabbitMqIntegrationConnectionProvider>();
@@ -72,6 +80,7 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+app.UseExceptionHandler();
 app.UseAuthentication();
 app.UseAuthorization();
 

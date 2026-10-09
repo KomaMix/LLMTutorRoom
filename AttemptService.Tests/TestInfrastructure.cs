@@ -83,9 +83,29 @@ public class SqliteAttemptModelCustomizer : ModelCustomizer
 public sealed class StubTeachingServiceClient : ITeachingServiceClient
 {
     public Dictionary<Guid, TestAssignmentResponse> Assignments { get; } = new();
+    public Dictionary<Guid, HashSet<string>> AssignmentStudentIds { get; } = new();
+    public HttpRequestException? RequestException { get; set; }
     public int RequestCount { get; private set; }
+    public int ListRequestCount { get; private set; }
     public Guid? LastAssignmentId { get; private set; }
     public string? LastStudentUserId { get; private set; }
+
+    public Task<List<TestAssignmentResponse>> GetStudentAssignmentsAsync(
+        string studentUserId,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        ListRequestCount++;
+        LastStudentUserId = studentUserId;
+        if (RequestException is not null)
+        {
+            throw RequestException;
+        }
+
+        return Task.FromResult(Assignments.Values
+            .Where(assignment => CanAccessAssignment(assignment.Id, studentUserId))
+            .ToList());
+    }
 
     public Task<TestAssignmentResponse?> GetStudentAssignmentAsync(
         Guid assignmentId,
@@ -96,7 +116,23 @@ public sealed class StubTeachingServiceClient : ITeachingServiceClient
         RequestCount++;
         LastAssignmentId = assignmentId;
         LastStudentUserId = studentUserId;
+        if (RequestException is not null)
+        {
+            throw RequestException;
+        }
+
+        if (!CanAccessAssignment(assignmentId, studentUserId))
+        {
+            return Task.FromResult<TestAssignmentResponse?>(null);
+        }
+
         Assignments.TryGetValue(assignmentId, out var assignment);
         return Task.FromResult(assignment);
+    }
+
+    private bool CanAccessAssignment(Guid assignmentId, string studentUserId)
+    {
+        return !AssignmentStudentIds.TryGetValue(assignmentId, out var studentIds)
+            || studentIds.Contains(studentUserId);
     }
 }

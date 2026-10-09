@@ -108,22 +108,8 @@ export function deleteFeedbackTemplate(templateId) {
   });
 }
 
-export function getStudyGroups({ signal } = {}) {
-  return apiRequest("/api/teaching/groups", { signal });
-}
-
-export function createStudyGroup(payload) {
-  return apiRequest("/api/teaching/groups", {
-    method: "POST",
-    body: payload
-  });
-}
-
-export function updateStudyGroup(groupId, payload) {
-  return apiRequest(`/api/teaching/groups/${encodeURIComponent(groupId)}`, {
-    method: "PUT",
-    body: payload
-  });
+export function getGroupAssignments(groupId, { signal } = {}) {
+  return apiRequest(`/api/teaching/groups/${encodeURIComponent(groupId)}/assignments`, { signal });
 }
 
 export function getAssignableTests(groupId, { signal } = {}) {

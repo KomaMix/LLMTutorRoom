@@ -14,6 +14,7 @@ export function useStudentAttempt({
   selectedAttempt,
   updateAttempt,
   onAttemptStartConflict,
+  onAccessDenied,
   onDeadlineReached,
   onSubmitted
 }) {
@@ -47,12 +48,14 @@ export function useStudentAttempt({
   const callbacksRef = useRef({
     updateAttempt,
     onAttemptStartConflict,
+    onAccessDenied,
     onDeadlineReached,
     onSubmitted
   });
   callbacksRef.current = {
     updateAttempt,
     onAttemptStartConflict,
+    onAccessDenied,
     onDeadlineReached,
     onSubmitted
   };
@@ -66,6 +69,7 @@ export function useStudentAttempt({
   const autosaveTimerRef = useRef(null);
   const hasUnsavedAnswersRef = useRef(false);
   const blockedAttemptIdsRef = useRef(new Set());
+  const accessDeniedAttemptIdsRef = useRef(new Set());
   const finalSaveRevisionsRef = useRef(new Map());
   const startOperationRef = useRef(null);
   const saveOperationRef = useRef(null);
@@ -119,11 +123,13 @@ export function useStudentAttempt({
 
   const {
     applyConflict,
+    applyAccessDenied,
     enqueueAttemptMutation,
     persistAnswers,
     scheduleFinalSave
   } = useAttemptPersistence({
     accessTokenSnapshotRef,
+    accessDeniedAttemptIdsRef,
     answersRef,
     attemptQueuesRef,
     blockedAttemptIdsRef,
@@ -170,6 +176,12 @@ export function useStudentAttempt({
 
   useEffect(() => {
     if (selectedAttempt?.status === "in-progress") {
+      if (accessDeniedAttemptIdsRef.current.has(selectedAttempt.id)
+        && new Date(selectedAttempt.endsAt).getTime() > Date.now()) {
+        accessDeniedAttemptIdsRef.current.delete(selectedAttempt.id);
+        blockedAttemptIdsRef.current.delete(selectedAttempt.id);
+      }
+
       return;
     }
 
@@ -198,6 +210,7 @@ export function useStudentAttempt({
     selectedAttempt?.answers,
     selectedAttempt?.id,
     selectedAttempt?.status,
+    selectedAttempt,
     setDirty
   ]);
 
@@ -273,6 +286,7 @@ export function useStudentAttempt({
   } = useAttemptCommands({
     answersRef,
     applyConflict,
+    applyAccessDenied,
     blockedAttemptIdsRef,
     callbacksRef,
     clearAutosaveTimer,

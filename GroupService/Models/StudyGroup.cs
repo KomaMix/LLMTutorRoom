@@ -1,4 +1,4 @@
-namespace TeachingService.Models;
+namespace GroupService.Models;
 
 public class StudyGroup
 {
@@ -9,5 +9,4 @@ public class StudyGroup
     public DateTimeOffset UpdatedAt { get; set; }
     public int Revision { get; set; }
     public List<StudyGroupStudent> Students { get; set; } = new();
-    public List<TestAssignment> Assignments { get; set; } = new();
 }

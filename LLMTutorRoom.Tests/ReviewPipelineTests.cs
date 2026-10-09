@@ -2,6 +2,7 @@ using System.Net;
 using System.Text.Json;
 using AttemptService.Contracts.Enums;
 using AttemptService.Contracts.Responses;
+using GroupService.Contracts.Responses;
 using LLMTutorRoom.Interfaces;
 using LLMTutorRoom.Services;
 using LLMTutorRoom.Services.Reviews;
@@ -64,10 +65,16 @@ public sealed class ReviewPipelineTests
         {
             Attempts = [attempt]
         };
-        var service = CreateClassroomService(
-            new FakeReviewServiceClient(),
+        var teachingClient = new FakeTeachingServiceClient([test]);
+        teachingClient.StudentAssignments.Clear();
+        var assignment = CreateAssignment(test);
+        assignment.Id = attempt.AssignmentId;
+        teachingClient.StudentAssignments.Add(assignment);
+        var service = new ClassroomService(
             attemptClient,
-            test);
+            teachingClient,
+            new FakeReviewServiceClient(),
+            new FakeGroupServiceClient());
 
         var overview = await service.GetStudentOverviewAsync(
             "student-id",
@@ -103,6 +110,10 @@ public sealed class ReviewPipelineTests
         var assignment = CreateAssignment(oldVersion);
         teachingClient.StudentAssignments.Clear();
         teachingClient.Assignments.Add(assignment.Id, assignment);
+        if (attemptStatus == TestAttemptStatus.InProgress)
+        {
+            teachingClient.StudentAssignments.Add(assignment);
+        }
         var attemptClient = new FakeAttemptServiceClient
         {
             Attempts = [CreateAttempt(oldVersion.Id, 3, attemptStatus, assignment.Id)]
@@ -110,7 +121,8 @@ public sealed class ReviewPipelineTests
         var service = new ClassroomService(
             attemptClient,
             teachingClient,
-            new FakeReviewServiceClient());
+            new FakeReviewServiceClient(),
+            new FakeGroupServiceClient());
 
         var overview = await service.GetStudentOverviewAsync(
             "student",
@@ -121,9 +133,16 @@ public sealed class ReviewPipelineTests
         Assert.Equal("Version 3", returnedTest.Title);
         Assert.Equal("task-v3", Assert.Single(returnedTest.Tasks).Id);
         Assert.DoesNotContain(returnedTest.Tasks, task => task.Id == "task-v4");
-        Assert.Contains(
-            teachingClient.AssignmentRequests,
-            request => request.AssignmentId == assignment.Id && !request.IncludeHidden);
+        if (attemptStatus == TestAttemptStatus.Submitted)
+        {
+            Assert.Contains(
+                teachingClient.AssignmentRequests,
+                request => request.AssignmentId == assignment.Id && !request.IncludeHidden);
+        }
+        else
+        {
+            Assert.Empty(teachingClient.AssignmentRequests);
+        }
     }
 
     [Fact]
@@ -142,7 +161,7 @@ public sealed class ReviewPipelineTests
             Attempts = [CreateAttempt(
                 currentVersion.Id,
                 3,
-                TestAttemptStatus.InProgress,
+                TestAttemptStatus.Submitted,
                 unavailableAssignmentId)]
         };
         var teachingClient = new FakeTeachingServiceClient([currentVersion]);
@@ -150,7 +169,8 @@ public sealed class ReviewPipelineTests
         var service = new ClassroomService(
             attemptClient,
             teachingClient,
-            new FakeReviewServiceClient());
+            new FakeReviewServiceClient(),
+            new FakeGroupServiceClient());
 
         var overview = await service.GetStudentOverviewAsync(
             "student",
@@ -158,6 +178,86 @@ public sealed class ReviewPipelineTests
 
         Assert.Empty(overview.Tests);
         Assert.Single(overview.Attempts);
+    }
+
+    [Fact]
+    public async Task GetStudentOverview_AfterRemovalHidesUnfinishedAttemptsAndKeepsSubmittedHistory()
+    {
+        var test = CreateTest(versionNumber: 3, CreateSingleChoiceTask());
+        var activeAssignment = CreateAssignment(test);
+        var submittedAssignment = CreateAssignment(test);
+        var activeAttempt = CreateAttempt(test.Id, 3, TestAttemptStatus.InProgress, activeAssignment.Id);
+        var submittedAttempt = CreateAttempt(test.Id, 3, TestAttemptStatus.Submitted, submittedAssignment.Id);
+        var review = CreateReview(test);
+        review.AttemptId = submittedAttempt.Id;
+        review.AssignmentId = submittedAssignment.Id;
+        var teachingClient = new FakeTeachingServiceClient([test]);
+        teachingClient.StudentAssignments.Clear();
+        teachingClient.Assignments.Add(activeAssignment.Id, activeAssignment);
+        teachingClient.Assignments.Add(submittedAssignment.Id, submittedAssignment);
+        var service = new ClassroomService(
+            new FakeAttemptServiceClient { Attempts = [activeAttempt, submittedAttempt] },
+            teachingClient,
+            new FakeReviewServiceClient { StudentReviews = [review] },
+            new FakeGroupServiceClient());
+
+        var overview = await service.GetStudentOverviewAsync("student", CancellationToken.None);
+
+        Assert.Same(submittedAttempt, Assert.Single(overview.Attempts));
+        Assert.Equal(submittedAssignment.Id, Assert.Single(overview.Tests).AssignmentId);
+        Assert.Same(review, Assert.Single(overview.Reviews));
+        Assert.Equal(0, overview.Metrics.ActiveTests);
+        Assert.Equal(submittedAssignment.Id, Assert.Single(teachingClient.AssignmentRequests).AssignmentId);
+        Assert.DoesNotContain(overview.Attempts, attempt => attempt.Id == activeAttempt.Id);
+    }
+
+    [Fact]
+    public async Task GetTeacherOverview_CombinesGroupCatalogWithTeachingAssignments()
+    {
+        var test = CreateTest(versionNumber: 3, CreateSingleChoiceTask());
+        var firstGroup = new StudyGroupResponse
+        {
+            Id = Guid.NewGuid(),
+            Name = "Current group",
+            TeacherUserId = "teacher",
+            StudentUserIds = ["student-1", "student-2"],
+            Revision = 4
+        };
+        var secondGroup = new StudyGroupResponse
+        {
+            Id = Guid.NewGuid(),
+            Name = "Empty group",
+            TeacherUserId = "teacher",
+            StudentUserIds = ["student-2", "student-3"]
+        };
+        var firstAssignment = CreateAssignment(test);
+        firstAssignment.GroupId = firstGroup.Id;
+        var secondAssignment = CreateAssignment(test);
+        secondAssignment.GroupId = firstGroup.Id;
+        var unrelatedAssignment = CreateAssignment(test);
+        var groupsClient = new FakeGroupServiceClient { Groups = [firstGroup, secondGroup] };
+        var teachingClient = new FakeTeachingServiceClient([test])
+        {
+            TeacherAssignments = [firstAssignment, secondAssignment, unrelatedAssignment]
+        };
+        var service = new ClassroomService(
+            new FakeAttemptServiceClient(),
+            teachingClient,
+            new FakeReviewServiceClient(),
+            groupsClient);
+
+        var overview = await service.GetTeacherOverviewAsync("teacher", CancellationToken.None);
+
+        Assert.Equal("teacher", groupsClient.LastTeacherUserId);
+        Assert.Equal(2, overview.Groups.Count);
+        var group = Assert.Single(overview.Groups, group => group.Id == firstGroup.Id);
+        Assert.Equal(firstGroup.Name, group.Name);
+        Assert.Equal(firstGroup.StudentUserIds, group.StudentUserIds);
+        Assert.Equal(firstGroup.Revision, group.Revision);
+        Assert.Equal([firstAssignment.Id, secondAssignment.Id], group.Assignments.Select(assignment => assignment.Id));
+        Assert.Empty(Assert.Single(overview.Groups, group => group.Id == secondGroup.Id).Assignments);
+        Assert.Equal(2, overview.Metrics.ActiveTests);
+        Assert.Equal(3, overview.Metrics.Students);
     }
 
     [Fact]
@@ -235,7 +335,8 @@ public sealed class ReviewPipelineTests
         return new ClassroomService(
             attemptServiceClient,
             new FakeTeachingServiceClient(tests),
-            reviewServiceClient);
+            reviewServiceClient,
+            new FakeGroupServiceClient());
     }
 
     private static TestAttemptResponse CreateAttempt(
@@ -455,11 +556,39 @@ public sealed class ReviewPipelineTests
             return Task.FromResult(assignment);
         }
 
+        public List<TestAssignmentResponse> TeacherAssignments { get; init; } = [];
+
+        public Task<List<TestAssignmentResponse>> GetTeacherAssignmentsAsync(
+            string teacherUserId,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult(TeacherAssignments);
+        }
+    }
+
+    private class FakeGroupServiceClient : IGroupServiceClient
+    {
+        public List<StudyGroupResponse> Groups { get; init; } = [];
+        public string? LastTeacherUserId { get; private set; }
+
+        public Task<StudyGroupResponse?> GetGroupAsync(Guid groupId, CancellationToken cancellationToken)
+        {
+            return Task.FromResult(Groups.SingleOrDefault(group => group.Id == groupId));
+        }
+
         public Task<List<StudyGroupResponse>> GetTeacherGroupsAsync(
             string teacherUserId,
             CancellationToken cancellationToken)
         {
-            return Task.FromResult<List<StudyGroupResponse>>([]);
+            LastTeacherUserId = teacherUserId;
+            return Task.FromResult(Groups);
+        }
+
+        public Task<List<StudyGroupResponse>> GetStudentGroupsAsync(
+            string studentUserId,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult(Groups);
         }
     }
 

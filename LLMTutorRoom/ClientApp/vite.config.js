@@ -13,6 +13,7 @@ export default defineConfig({
       "/api/auth": "http://localhost:5210",
       "/api/users": "http://localhost:5210",
       "/api/teaching": "http://localhost:5212",
+      "/api/groups": "http://localhost:5218",
       "/api/attempts": "http://localhost:5216",
       "/api/classroom": "http://localhost:5206",
       "/api/reviews": "http://127.0.0.1:5214",

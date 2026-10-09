@@ -3,13 +3,14 @@
 ## Назначение и границы владения
 
 `TeachingService` — источник истины для преподавательского каталога: логических
-тестов, их версий, заданий, учебных групп, назначений и настроек способа проверки. Владение
+тестов, их версий, заданий, назначений группам и настроек способа проверки. Владение
 зафиксировано в моделях [`CourseTest`](../TeachingService/Models/CourseTest.cs),
 [`CourseTestVersion`](../TeachingService/Models/CourseTestVersion.cs) и
-[`TestTask`](../TeachingService/Models/TestTask.cs), а учебный процесс — в
-[`StudyGroup`](../TeachingService/Models/StudyGroup.cs) и
+[`TestTask`](../TeachingService/Models/TestTask.cs) и
 [`TestAssignment`](../TeachingService/Models/TestAssignment.cs). `TeacherUserId` берётся из JWT,
 но сам пользователь принадлежит `AuthService`; внешнего ключа на auth-базу нет.
+Группы, их текущий состав и преподаватель принадлежат `GroupService`; `GroupId`
+в назначении также хранится как внешний идентификатор без связи между базами.
 
 Сервис не хранит попытки и ответы учеников — это зона `AttemptService` — и не
 создаёт результаты, не расходует квоты и не вызывает LLM: этим владеет
@@ -20,21 +21,22 @@
 
 ```mermaid
 flowchart LR
-    UI[Преподаватель или администратор] -->|JWT, публичные команды| API[Teaching controllers]
+    UI[Преподаватель] -->|JWT, публичные команды| API[Teaching controllers]
     Room[LLMTutorRoom backend] -->|внутреннее чтение| Internal[InternalTeachingController]
-    Attempt[AttemptService] -->|назначение ученика при старте| Internal
-    API --> Services[Catalog и StudyGroup services]
+    Attempt[AttemptService] -->|текущий доступ к назначению| Internal
+    API --> Services[Catalog и TestAssignment services]
     Internal --> Services
-    Services --> DB[(PostgreSQL: каталог, группы, назначения, outbox)]
+    Services --> Groups[GroupService: преподаватель и состав]
+    Services --> DB[(PostgreSQL: каталог, назначения, outbox)]
     DB --> Worker[Outbox publisher]
     Worker --> MQ[RabbitMQ]
     MQ --> Review[ReviewService: политики и проверки]
 ```
 
-Команды каталога требуют роль `Teacher`. Управление группами доступно `Teacher` и
-`Admin`: преподаватель ограничен собственными группами, администратор видит все
-группы и выбирает их преподавателя при создании и редактировании. Назначать тесты
-может только преподаватель своей группы. Внутренний контроллер прикладной
+Команды каталога и назначения требуют роль `Teacher`. Назначать тесты может
+только текущий преподаватель группы. Администратор может читать назначения,
+а состав и преподавателя группы меняет через публичный API `GroupService`.
+Внутренний контроллер прикладной
 аутентификации не имеет и должен оставаться доступным только в доверенной сети.
 
 ## Логический тест и неизменяемые версии
@@ -84,31 +86,44 @@ flowchart LR
 сценариев находится в
 [`TeachingCatalogService`](../TeachingService/Services/TeachingCatalogService.cs).
 
-## Учебные группы и назначения
+## Назначения группам
 
-[`StudyGroup`](../TeachingService/Models/StudyGroup.cs) принадлежит одному
-преподавателю и хранит состав учеников. Один ученик может входить в несколько
-групп. Преподаватель управляет только своими группами; администратор может
-создать группу для выбранного преподавателя, менять её состав и преподавателя.
-Обновление сверяет `Revision`, поэтому устаревшая форма получает `409`, а не перезаписывает
-параллельные изменения.
+Группы создаются и изменяются в [`GroupService`](group-service.md). Перед новым
+назначением `TeachingService` получает группу по internal HTTP и проверяет её
+текущего преподавателя. Учебные таблицы группы и её участников в teaching-базе
+отсутствуют.
 
 Назначения создаёт только текущий преподаватель группы. После смены преподавателя
 предыдущий теряет право назначать ей тесты, а новый может назначать свои опубликованные
 версии. Уже созданные назначения сохраняются, а их попытки и проверки остаются
 у автора назначенного теста.
 
-[`TestAssignment`](../TeachingService/Models/TestAssignment.cs) связывает группу
-с конкретной ранее опубликованной `CourseTestVersion`. Дата открытия
+[`TestAssignment`](../TeachingService/Models/TestAssignment.cs) хранит внешний
+`GroupId`, название группы на момент назначения и связь с конкретной ранее
+опубликованной `CourseTestVersion`. Дата открытия
 `AvailableFrom` и `Deadline` принадлежат назначению, а не версии теста. Поэтому
 одну версию можно назначать повторно разным группам или той же группе с другими
 сроками. Публикация новой версии не меняет уже созданное назначение.
 
-Ученик получает только назначения групп, в состав которых он входит. Попытку
-можно начать в интервале от `AvailableFrom` до `Deadline`; `AttemptService`
-повторно проверяет членство через internal API. Для одного ученика допускается
-одна попытка на назначение, а новое назначение того же теста создаёт независимую
-попытку.
+Получатели не фиксируются при создании назначения: ученик получает назначения
+групп, в текущий состав которых он входит. Добавленный участник сразу получает
+прежние назначения группы без создания новых. Исключённый теряет доступ к
+активным назначениям и попыткам, включая сохранение ответов и ручную сдачу.
+Сданная история и ответы остаются, автоматическая сдача по дедлайну продолжается.
+
+Попытку можно начать в интервале от `AvailableFrom` до `Deadline`.
+`AttemptService` проверяет текущий доступ через internal API `TeachingService`
+при чтении или возобновлении активной попытки, сохранении и сдаче. Для одного
+ученика допускается одна попытка на назначение, а новое назначение того же теста
+создаёт независимую попытку. При недоступности `GroupService` операции,
+требующие текущего состава или преподавателя группы, возвращают `503`.
+
+Публичные маршруты назначений:
+
+- `GET /api/teaching/groups/{groupId}/assignments` — назначения группы;
+- `GET /api/teaching/assignments/{assignmentId}` — отдельное назначение;
+- `GET /api/teaching/groups/{groupId}/assignable-tests` — доступные преподавателю версии;
+- `POST /api/teaching/groups/{groupId}/assignments` — назначить версию группе.
 
 ## Задания и способы проверки
 
@@ -196,10 +211,11 @@ submit ученика.
 схему — [`Migrations`](../TeachingService/Migrations/). При старте
 [`Program.cs`](../TeachingService/Program.cs) применяет миграции. Основные
 зависимости: .NET 9/ASP.NET Core, EF Core с PostgreSQL, RabbitMQ,
-`Shared.Auth`, `TeachingService.Contracts` и `ReviewService.Contracts`.
+`Shared.Auth`, `GroupService.Contracts`, `TeachingService.Contracts` и `ReviewService.Contracts`.
 
 Настройки лежат в [`appsettings.json`](../TeachingService/appsettings.json):
-`ConnectionStrings:DefaultConnection`, `Auth:Jwt` и `IntegrationEvents`. Последняя
+`ConnectionStrings:DefaultConnection`, `Auth:Jwt`, `GroupService` и `IntegrationEvents`.
+`GroupService` задаёт адрес internal API групп и timeout. Последняя
 секция управляет подключением RabbitMQ, polling, размером batch, retry и очисткой;
 значения валидируются при старте. При `Enabled=false` публикация и cleanup не
 работают, но транзакция публикации теста всё равно записывает outbox.
@@ -215,9 +231,9 @@ concurrency tokens, а уникальные индексы страхуют ин
 Начинать чтение кода удобно с:
 
 - [`TeachingController`](../TeachingService/Controllers/TeachingController.cs) — публичные команды, JWT и отображение ошибок;
-- [`StudyGroupsController`](../TeachingService/Controllers/StudyGroupsController.cs) — управление группами преподавателя или администратора и назначения преподавателя;
+- [`TestAssignmentsController`](../TeachingService/Controllers/TestAssignmentsController.cs) — назначения группам и права преподавателя;
 - [`InternalTeachingController`](../TeachingService/Controllers/InternalTeachingController.cs) — чтение каталога другими сервисами;
 - [`TeachingCatalogService`](../TeachingService/Services/TeachingCatalogService.cs) — бизнес-инварианты и транзакция публикации;
-- [`StudyGroupService`](../TeachingService/Services/StudyGroupService.cs) — состав групп, точные версии и сроки назначений;
+- [`TestAssignmentService`](../TeachingService/Services/TestAssignmentService.cs) — точные версии, сроки и актуальный доступ через GroupService;
 - [`CourseTestMapper`](../TeachingService/Mappers/CourseTestMapper.cs) — выбор версии и форма DTO;
 - [`TestVersioningTests`](../TeachingService.Tests/TestVersioningTests.cs) — исполняемые примеры жизненного цикла.

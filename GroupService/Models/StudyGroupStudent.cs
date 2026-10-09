@@ -1,4 +1,4 @@
-namespace TeachingService.Models;
+namespace GroupService.Models;
 
 public class StudyGroupStudent
 {

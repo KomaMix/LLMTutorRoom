@@ -44,6 +44,10 @@ export function getConflictAttempt(error) {
     : null;
 }
 
+export function isAttemptAccessDenied(error) {
+  return error instanceof ApiError && (error.status === 403 || error.status === 404);
+}
+
 export function canAttemptAcceptAnswers(attempt, blockedAttemptIds) {
   return Boolean(
     attempt

@@ -23,6 +23,18 @@ public class TeachingServiceClient : ITeachingServiceClient
         _httpClient = httpClient;
     }
 
+    public async Task<List<TestAssignmentResponse>> GetStudentAssignmentsAsync(
+        string studentUserId,
+        CancellationToken cancellationToken)
+    {
+        var requestUri = $"/internal/teaching/students/{Uri.EscapeDataString(studentUserId)}/assignments";
+        return await _httpClient.GetFromJsonAsync<List<TestAssignmentResponse>>(
+            requestUri,
+            JsonOptions,
+            cancellationToken)
+            ?? throw new HttpRequestException("TeachingService returned an empty assignment response.");
+    }
+
     public async Task<TestAssignmentResponse?> GetStudentAssignmentAsync(
         Guid assignmentId,
         string studentUserId,

@@ -1,9 +1,8 @@
 namespace TeachingService.Enums;
 
-public enum GroupOperationStatus
+public enum AssignmentOperationStatus
 {
     Success,
     NotFound,
-    Conflict,
     ValidationFailed
 }

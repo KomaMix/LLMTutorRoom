@@ -15,6 +15,8 @@
 - самостоятельная регистрация студентов с немедленным входом;
 - учебные группы, состав которых ведёт преподаватель или администратор; администратор
   выбирает преподавателя группы, а тесты назначает её преподаватель;
+- доступ к назначенным группе тестам по текущему составу: новые участники получают
+  прежние назначения, исключённые теряют доступ к активной работе;
 - повторные назначения точной опубликованной версии со своими датами открытия
   и дедлайнами;
 - неизменяемые опубликованные версии тестов и отдельный редактируемый черновик;
@@ -36,6 +38,7 @@
 flowchart LR
     User["Браузер"] --> Nginx["nginx"]
     Nginx --> Auth["AuthService"]
+    Nginx --> Groups["GroupService"]
     Nginx --> Teaching["TeachingService"]
     Nginx --> Attempt["AttemptService"]
     Nginx --> Tutor["LLMTutorRoom + React"]
@@ -43,9 +46,11 @@ flowchart LR
     Nginx --> Gateway["LLMGateway"]
 
     Tutor --> Teaching
+    Tutor -- "текущие группы" --> Groups
     Tutor -- "попытки для overview" --> Attempt
     Tutor -- "результаты для overview" --> Review
     Attempt --> Teaching
+    Teaching -- "преподаватель и текущий состав" --> Groups
     Teaching -- "TestReviewPolicyPublishedV1" --> Rabbit[(RabbitMQ)]
     Attempt -- "AttemptSubmittedV1" --> Rabbit
     Rabbit --> Review
@@ -55,7 +60,8 @@ flowchart LR
 | Проект | Ответственность | Документация |
 | --- | --- | --- |
 | `AuthService` | Пользователи, роли, пароли и JWT | [Подробнее](docs/auth-service.md) |
-| `TeachingService` | Тесты, версии, учебные группы, назначения и опубликованные правила проверки | [Подробнее](docs/teaching-service.md) |
+| `GroupService` | Учебные группы, текущий состав и преподаватель | [Подробнее](docs/group-service.md) |
+| `TeachingService` | Тесты, версии, назначения группам и опубликованные правила проверки | [Подробнее](docs/teaching-service.md) |
 | `AttemptService` | Попытки, ответы, серверный таймер и отправка работ | [Подробнее](docs/attempt-service.md) |
 | `LLMTutorRoom` | React-приложение и web-фасад для сборки overview | [Подробнее](docs/llm-tutor-room.md) |
 | `ReviewService` | Результаты, ручная и LLM-проверка, квоты и очередь обработки | [Подробнее](docs/review-service.md) |
@@ -65,6 +71,14 @@ flowchart LR
 Полный индекс находится в [`docs/README.md`](docs/README.md).
 Настройка телеметрии описана в
 [`docs/observability.md`](docs/observability.md).
+
+Состав группы хранится в отдельной базе `llm_tutor_groups`. Назначения в
+`TeachingService` связаны с группой по внешнему `GroupId`; список получателей
+при назначении не фиксируется. Текущий состав проверяется при старте,
+возобновлении, сохранении и ручной сдаче попытки. Исключённый ученик получает
+`404` для активной работы, а его сданная история и ответы сохраняются.
+Автосдача по дедлайну продолжает работать. Смена преподавателя группы не
+переносит историю прежних работ: она остаётся у автора назначенного теста.
 
 ## Как проходит проверка
 
@@ -133,9 +147,11 @@ docker compose up --build
 | Aspire Dashboard | `http://localhost:18888` |
 | PostgreSQL | `localhost:5433` |
 
-`TeachingService`, `AttemptService`, `ReviewService` и `LLMTutorRoom` в полном
+`GroupService`, `TeachingService`, `AttemptService`, `ReviewService` и `LLMTutorRoom` в полном
 Compose не публикуют host-порты. Интерфейс и публичные маршруты доступны через
 nginx, а межсервисные endpoints — только внутри Docker-сетей приложения.
+Управление группами направляется на `/api/groups` в `GroupService`, назначения
+тестов группам — на `/api/teaching/*` в `TeachingService`.
 Ручная проверка и управление доступами к моделям направляются в `ReviewService`,
 который самостоятельно проверяет JWT и роль. `/internal/*` через nginx всегда
 возвращает `404`.
@@ -190,6 +206,7 @@ dotnet test LLMTutorRoom.sln --no-restore
 | Сервис | Адрес |
 | --- | --- |
 | AuthService | `http://localhost:5210` |
+| GroupService | `http://localhost:5218` |
 | TeachingService | `http://localhost:5212` |
 | AttemptService | `http://localhost:5216` |
 | LLMGateway | `http://localhost:5200` |
@@ -205,6 +222,7 @@ dotnet test LLMTutorRoom.sln --no-restore
 
 ```bash
 dotnet run --project AuthService/AuthService.csproj
+dotnet run --project GroupService/GroupService.csproj
 dotnet run --project TeachingService/TeachingService.csproj
 dotnet run --project AttemptService/AttemptService.csproj
 dotnet run --project LLMGateway/LLMGateway.csproj
@@ -227,7 +245,9 @@ dotnet run --project LLMTutorRoom/LLMTutorRoom.csproj
 
 ```text
 AuthService/                 пользователи и JWT
-TeachingService/             тесты и версии
+GroupService/                группы, преподаватель и текущий состав
+GroupService.Contracts/      DTO групп и состава
+TeachingService/             тесты, версии и назначения группам
 TeachingService.Contracts/   DTO каталога
 AttemptService/              попытки, таймер и отправка работ
 AttemptService.Contracts/    DTO публичного и internal API попыток

@@ -2,6 +2,7 @@ using LLMTutorRoom.Interfaces;
 using LLMTutorRoom.Options;
 using LLMTutorRoom.Services;
 using LLMTutorRoom.Services.Attempts;
+using LLMTutorRoom.Services.Groups;
 using LLMTutorRoom.Services.Reviews;
 using LLMTutorRoom.Services.Teaching;
 using Microsoft.AspNetCore.StaticFiles;
@@ -41,6 +42,13 @@ builder.Services.AddOptions<ReviewServiceOptions>()
     .Validate(options => options.RequestTimeoutSeconds > 0,
         "ReviewService request timeout must be positive.")
     .ValidateOnStart();
+builder.Services.AddOptions<GroupServiceOptions>()
+    .Bind(builder.Configuration.GetSection(GroupServiceOptions.SectionName))
+    .Validate(options => Uri.TryCreate(options.BaseUrl, UriKind.Absolute, out _),
+        "GroupService:BaseUrl must be an absolute URL.")
+    .Validate(options => options.RequestTimeoutSeconds > 0,
+        "GroupService request timeout must be positive.")
+    .ValidateOnStart();
 builder.Services.AddScoped<ClassroomService>();
 builder.Services.AddHttpClient<IAttemptServiceClient, AttemptServiceClient>((serviceProvider, client) =>
 {
@@ -64,6 +72,15 @@ builder.Services.AddHttpClient<IReviewServiceClient, ReviewServiceClient>((servi
 {
     var options = serviceProvider
         .GetRequiredService<Microsoft.Extensions.Options.IOptions<ReviewServiceOptions>>()
+        .Value;
+
+    client.BaseAddress = new Uri(options.BaseUrl);
+    client.Timeout = TimeSpan.FromSeconds(options.RequestTimeoutSeconds);
+});
+builder.Services.AddHttpClient<IGroupServiceClient, GroupServiceClient>((serviceProvider, client) =>
+{
+    var options = serviceProvider
+        .GetRequiredService<Microsoft.Extensions.Options.IOptions<GroupServiceOptions>>()
         .Value;
 
     client.BaseAddress = new Uri(options.BaseUrl);

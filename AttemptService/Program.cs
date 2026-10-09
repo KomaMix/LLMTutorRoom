@@ -111,7 +111,7 @@ await using (var dbContext = await app.Services
 
 app.UseExceptionHandler();
 app.UseStatusCodePages();
-app.Use(HandleBadHttpRequestAsync);
+app.Use(HandleRequestErrorsAsync);
 
 if (app.Environment.IsDevelopment())
     app.MapOpenApi();
@@ -131,7 +131,7 @@ app.MapControllers();
 
 await app.RunAsync();
 
-static async Task HandleBadHttpRequestAsync(HttpContext context, RequestDelegate next)
+static async Task HandleRequestErrorsAsync(HttpContext context, RequestDelegate next)
 {
     try
     {
@@ -140,6 +140,14 @@ static async Task HandleBadHttpRequestAsync(HttpContext context, RequestDelegate
     catch (BadHttpRequestException exception)
     {
         context.Response.StatusCode = exception.StatusCode;
+    }
+    catch (HttpRequestException)
+    {
+        context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
+    }
+    catch (OperationCanceledException) when (!context.RequestAborted.IsCancellationRequested)
+    {
+        context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
     }
 }
 

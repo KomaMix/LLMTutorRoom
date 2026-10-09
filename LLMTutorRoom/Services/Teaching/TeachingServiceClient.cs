@@ -106,19 +106,19 @@ namespace LLMTutorRoom.Services.Teaching
                 cancellationToken);
         }
 
-        public async Task<List<StudyGroupResponse>> GetTeacherGroupsAsync(
+        public async Task<List<TestAssignmentResponse>> GetTeacherAssignmentsAsync(
             string teacherUserId,
             CancellationToken cancellationToken)
         {
             using var response = await _httpClient.GetAsync(
-                $"/internal/teaching/teachers/{Uri.EscapeDataString(teacherUserId)}/groups",
+                $"/internal/teaching/teachers/{Uri.EscapeDataString(teacherUserId)}/assignments",
                 cancellationToken);
             response.EnsureSuccessStatusCode();
 
-            return await response.Content.ReadFromJsonAsync<List<StudyGroupResponse>>(
+            return await response.Content.ReadFromJsonAsync<List<TestAssignmentResponse>>(
                     JsonOptions,
                     cancellationToken)
-                ?? new List<StudyGroupResponse>();
+                ?? new List<TestAssignmentResponse>();
         }
 
         private static string ToQueryValue(bool value)

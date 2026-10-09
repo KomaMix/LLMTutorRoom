@@ -1,0 +1,43 @@
+@baseUrl = http://localhost:5218
+@token = replace-with-jwt
+@groupId = 00000000-0000-0000-0000-000000000001
+
+###
+GET {{baseUrl}}/api/groups
+Authorization: Bearer {{token}}
+
+###
+POST {{baseUrl}}/api/groups
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "name": "Group 1",
+  "teacherUserId": "teacher-1",
+  "studentUserIds": ["student-1", "student-2"]
+}
+
+###
+GET {{baseUrl}}/api/groups/{{groupId}}
+Authorization: Bearer {{token}}
+
+###
+PUT {{baseUrl}}/api/groups/{{groupId}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "name": "Group 1",
+  "teacherUserId": "teacher-2",
+  "studentUserIds": ["student-2", "student-3"],
+  "revision": 0
+}
+
+###
+GET {{baseUrl}}/internal/groups/{{groupId}}
+
+###
+GET {{baseUrl}}/internal/teachers/teacher-1/groups
+
+###
+GET {{baseUrl}}/internal/students/student-1/groups

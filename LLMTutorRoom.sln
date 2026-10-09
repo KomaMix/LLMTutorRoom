@@ -22,6 +22,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "docs", "docs", "{955A505C-D
 		docs\architecture.md = docs\architecture.md
 		docs\attempt-service.md = docs\attempt-service.md
 		docs\auth-service.md = docs\auth-service.md
+		docs\group-service.md = docs\group-service.md
 		docs\images\llmtutorroom-student-attempt.png = docs\images\llmtutorroom-student-attempt.png
 		docs\images\llmtutorroom-teacher-tests.png = docs\images\llmtutorroom-teacher-tests.png
 		docs\llm-gateway.md = docs\llm-gateway.md
@@ -67,6 +68,12 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AttemptService", "AttemptService\AttemptService.csproj", "{C2388C5A-FF3D-4DF9-A187-D152BC9F0107}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AttemptService.Tests", "AttemptService.Tests\AttemptService.Tests.csproj", "{AB765D66-FE0F-4109-825A-9EF18E010B8B}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GroupService", "GroupService\GroupService.csproj", "{D185485E-B404-4B2F-ACD0-A94FEC2D7685}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GroupService.Contracts", "GroupService.Contracts\GroupService.Contracts.csproj", "{67FCE558-5924-49FB-B0AA-4D471A9248E0}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GroupService.Tests", "GroupService.Tests\GroupService.Tests.csproj", "{DAF05E4C-4692-46AE-A93F-CD9A77362E51}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -138,6 +145,18 @@ Global
 		{AB765D66-FE0F-4109-825A-9EF18E010B8B}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{AB765D66-FE0F-4109-825A-9EF18E010B8B}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{AB765D66-FE0F-4109-825A-9EF18E010B8B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D185485E-B404-4B2F-ACD0-A94FEC2D7685}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D185485E-B404-4B2F-ACD0-A94FEC2D7685}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D185485E-B404-4B2F-ACD0-A94FEC2D7685}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D185485E-B404-4B2F-ACD0-A94FEC2D7685}.Release|Any CPU.Build.0 = Release|Any CPU
+		{67FCE558-5924-49FB-B0AA-4D471A9248E0}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{67FCE558-5924-49FB-B0AA-4D471A9248E0}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{67FCE558-5924-49FB-B0AA-4D471A9248E0}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{67FCE558-5924-49FB-B0AA-4D471A9248E0}.Release|Any CPU.Build.0 = Release|Any CPU
+		{DAF05E4C-4692-46AE-A93F-CD9A77362E51}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{DAF05E4C-4692-46AE-A93F-CD9A77362E51}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{DAF05E4C-4692-46AE-A93F-CD9A77362E51}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{DAF05E4C-4692-46AE-A93F-CD9A77362E51}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
