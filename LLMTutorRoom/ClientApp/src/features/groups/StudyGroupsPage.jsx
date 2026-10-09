@@ -122,7 +122,7 @@ export function StudyGroupsPage({ attempts = [], isAdmin = false, onChanged = nu
   }, [loadData]);
 
   useEffect(() => {
-    if (!selectedGroupId || isCreating) {
+    if (isAdmin || !selectedGroupId || isCreating) {
       setAssignableTests([]);
       return;
     }
@@ -149,7 +149,7 @@ export function StudyGroupsPage({ attempts = [], isAdmin = false, onChanged = nu
       });
 
     return () => controller.abort();
-  }, [isCreating, selectedGroupId]);
+  }, [isAdmin, isCreating, selectedGroupId]);
 
   function selectGroup(group) {
     setSelectedGroupId(group.id);
@@ -192,7 +192,7 @@ export function StudyGroupsPage({ attempts = [], isAdmin = false, onChanged = nu
       return;
     }
 
-    if (isAdmin && isCreating && !form.teacherUserId) {
+    if (isAdmin && !form.teacherUserId) {
       setMessage({ type: "error", text: "Выберите преподавателя группы." });
       return;
     }
@@ -208,6 +208,7 @@ export function StudyGroupsPage({ attempts = [], isAdmin = false, onChanged = nu
           })
         : await updateStudyGroup(selectedGroupId, {
             name: form.name,
+            teacherUserId: isAdmin ? form.teacherUserId : null,
             studentUserIds: form.studentUserIds,
             revision: form.revision
           });
@@ -226,6 +227,10 @@ export function StudyGroupsPage({ attempts = [], isAdmin = false, onChanged = nu
 
   async function assignTest(event) {
     event.preventDefault();
+    if (isAdmin) {
+      return;
+    }
+
     const [testId, revisionValue] = assignmentForm.testVersion.split(":");
     const testRevision = Number(revisionValue);
     if (!testId || !Number.isInteger(testRevision)) {
@@ -281,7 +286,9 @@ export function StudyGroupsPage({ attempts = [], isAdmin = false, onChanged = nu
           <div>
             <span className="eyebrow">Учебный процесс</span>
             <h2>Группы и назначения</h2>
-            <p>Формируйте состав групп и назначайте им зафиксированные версии тестов.</p>
+            <p>{isAdmin
+              ? "Управляйте составом групп и преподавателями, просматривайте назначенные тесты."
+              : "Формируйте состав групп и назначайте им зафиксированные версии тестов."}</p>
           </div>
         </div>
         <div className="groups-heading-actions">
@@ -356,17 +363,14 @@ export function StudyGroupsPage({ attempts = [], isAdmin = false, onChanged = nu
               {isAdmin && (
                 <label className="field">
                   <span>Преподаватель</span>
-                  {isCreating ? (
-                    <select value={form.teacherUserId} required
-                      onChange={event => setForm(current => ({ ...current, teacherUserId: event.target.value }))}>
-                      <option value="">Выберите преподавателя</option>
-                      {teachers.map(teacher => (
-                        <option key={teacher.id} value={teacher.id}>{getUserLabel(teacher)}</option>
-                      ))}
-                    </select>
-                  ) : (
-                    <input value={getUserLabel(usersById.get(selectedGroup?.teacherUserId))} disabled />
-                  )}
+                  <select value={form.teacherUserId} required
+                    onChange={event => setForm(current => ({ ...current, teacherUserId: event.target.value }))}>
+                    <option value="">Выберите преподавателя</option>
+                    {teachers.map(teacher => (
+                      <option key={teacher.id} value={teacher.id}>{getUserLabel(teacher)}</option>
+                    ))}
+                  </select>
+                  {!isCreating && <small className="muted">Ранее назначенные тесты остаются на проверке у их автора.</small>}
                 </label>
               )}
             </div>
@@ -407,7 +411,7 @@ export function StudyGroupsPage({ attempts = [], isAdmin = false, onChanged = nu
                 <strong className="groups-count">{selectedGroup.assignments.length}</strong>
               </header>
 
-              <form className="groups-assignment-form" onSubmit={assignTest}>
+              {!isAdmin && <form className="groups-assignment-form" onSubmit={assignTest}>
                 <label className="field groups-test-select">
                   <span>Опубликованная версия</span>
                   <select value={assignmentForm.testVersion} required
@@ -434,9 +438,9 @@ export function StudyGroupsPage({ attempts = [], isAdmin = false, onChanged = nu
                   {isAssigning ? <Loader2 className="spin" size={16} /> : <CalendarClock size={16} />}
                   {isAssigning ? "Назначение..." : "Назначить"}
                 </button>
-              </form>
+              </form>}
 
-              {assignableTests.length === 0 && (
+              {!isAdmin && assignableTests.length === 0 && (
                 <p className="muted groups-assignment-hint">У преподавателя нет опубликованных версий тестов.</p>
               )}
 

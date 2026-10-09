@@ -96,9 +96,10 @@ public class StudyGroupService
         string? teacherUserId,
         CancellationToken cancellationToken)
     {
+        var nextTeacherUserId = teacherUserId ?? request.TeacherUserId;
         var validationError = ValidateGroup(
             request.Name,
-            teacherUserId ?? "admin",
+            nextTeacherUserId ?? string.Empty,
             request.StudentUserIds);
         if (validationError is not null || request.Revision < 0)
         {
@@ -140,6 +141,7 @@ public class StudyGroupService
         var now = DateTimeOffset.UtcNow;
         var nextStudentIds = NormalizeStudentIds(request.StudentUserIds).ToHashSet(StringComparer.Ordinal);
         group.Name = request.Name.Trim();
+        group.TeacherUserId = nextTeacherUserId!.Trim();
         group.UpdatedAt = now;
         group.Revision = checked(group.Revision + 1);
 
@@ -182,16 +184,12 @@ public class StudyGroupService
 
     public async Task<List<TeachingService.Contracts.Models.CourseTestDto>?> GetAssignableTestsAsync(
         Guid groupId,
-        string? teacherUserId,
+        string teacherUserId,
         CancellationToken cancellationToken)
     {
-        var groupQuery = _dbContext.StudyGroups.AsNoTracking().Where(group => group.Id == groupId);
-        if (!string.IsNullOrWhiteSpace(teacherUserId))
-        {
-            groupQuery = groupQuery.Where(group => group.TeacherUserId == teacherUserId);
-        }
-
-        var ownerUserId = await groupQuery
+        var ownerUserId = await _dbContext.StudyGroups
+            .AsNoTracking()
+            .Where(group => group.Id == groupId && group.TeacherUserId == teacherUserId)
             .Select(group => group.TeacherUserId)
             .SingleOrDefaultAsync(cancellationToken);
         if (ownerUserId is null)
@@ -231,7 +229,7 @@ public class StudyGroupService
     public async Task<Result<GroupOperationStatus, TestAssignmentResponse>> CreateAssignmentAsync(
         Guid groupId,
         CreateTestAssignmentRequest request,
-        string? teacherUserId,
+        string teacherUserId,
         CancellationToken cancellationToken)
     {
         if (request.TestId == Guid.Empty || request.TestRevision <= 0)
@@ -249,14 +247,10 @@ public class StudyGroupService
             return InvalidAssignment("Deadline must be in the future.");
         }
 
-        var groupQuery = _dbContext.StudyGroups
-            .Where(group => group.Id == groupId);
-        if (!string.IsNullOrWhiteSpace(teacherUserId))
-        {
-            groupQuery = groupQuery.Where(group => group.TeacherUserId == teacherUserId);
-        }
-
-        var group = await groupQuery.SingleOrDefaultAsync(cancellationToken);
+        var group = await _dbContext.StudyGroups
+            .SingleOrDefaultAsync(group => group.Id == groupId
+                && group.TeacherUserId == teacherUserId,
+                cancellationToken);
         if (group is null)
         {
             return new Result<GroupOperationStatus, TestAssignmentResponse>(
@@ -397,7 +391,7 @@ public class StudyGroupService
             Id = assignment.Id,
             GroupId = assignment.StudyGroupId,
             GroupName = assignment.StudyGroup.Name,
-            TeacherUserId = assignment.StudyGroup.TeacherUserId,
+            TeacherUserId = version.CourseTest.TeacherUserId,
             AvailableFrom = assignment.AvailableFrom,
             Deadline = assignment.Deadline,
             CreatedAt = assignment.CreatedAt,

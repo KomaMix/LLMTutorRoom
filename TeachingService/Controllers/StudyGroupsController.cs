@@ -100,11 +100,18 @@ public class StudyGroupsController : ControllerBase
     }
 
     [HttpGet("{groupId:guid}/assignable-tests")]
+    [Authorize(Roles = "Teacher")]
     public async Task<ActionResult<List<CourseTestDto>>> GetAssignableTests(
         Guid groupId,
         CancellationToken cancellationToken)
     {
-        if (!TryGetTeacherScope(out var teacherUserId))
+        if (!User.IsInRole("Teacher"))
+        {
+            return Forbid();
+        }
+
+        var teacherUserId = GetCurrentUserId();
+        if (string.IsNullOrWhiteSpace(teacherUserId))
         {
             return Unauthorized();
         }
@@ -117,12 +124,19 @@ public class StudyGroupsController : ControllerBase
     }
 
     [HttpPost("{groupId:guid}/assignments")]
+    [Authorize(Roles = "Teacher")]
     public async Task<ActionResult<TestAssignmentResponse>> CreateAssignment(
         Guid groupId,
         [FromBody] CreateTestAssignmentRequest request,
         CancellationToken cancellationToken)
     {
-        if (!TryGetTeacherScope(out var teacherUserId))
+        if (!User.IsInRole("Teacher"))
+        {
+            return Forbid();
+        }
+
+        var teacherUserId = GetCurrentUserId();
+        if (string.IsNullOrWhiteSpace(teacherUserId))
         {
             return Unauthorized();
         }
