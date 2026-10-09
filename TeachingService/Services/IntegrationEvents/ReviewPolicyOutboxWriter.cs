@@ -45,6 +45,9 @@ namespace TeachingService.Services.IntegrationEvents
             var revision = version.VersionNumber;
             var eventId = Guid.NewGuid();
             var publishedAt = version.PublishedAt ?? DateTimeOffset.UtcNow;
+            var feedbackTemplate = FeedbackTemplateJson.DeserializeSnapshot(
+                    version.FeedbackTemplateSnapshotJson)
+                ?? throw new InvalidOperationException("A feedback template snapshot is required.");
 
             var integrationEvent = new TestReviewPolicyPublishedV1
             {
@@ -54,6 +57,7 @@ namespace TeachingService.Services.IntegrationEvents
                 TeacherUserId = test.TeacherUserId,
                 TestTitle = version.Title,
                 ModelId = version.LlmModelId,
+                FeedbackTemplate = ToFeedbackTemplateSnapshot(feedbackTemplate),
                 GradingExamples = ToGradingExamples(version.GradingExamples),
                 Tasks = version.Tasks
                     .Where(task => !task.IsHidden)
@@ -119,6 +123,53 @@ namespace TeachingService.Services.IntegrationEvents
                 MaxScore = example.MaxScore,
                 Feedback = example.Feedback
             }).ToList();
+        }
+
+        private static FeedbackTemplateSnapshot ToFeedbackTemplateSnapshot(
+            TeachingService.Contracts.Models.FeedbackTemplateDto template)
+        {
+            return new FeedbackTemplateSnapshot
+            {
+                Id = template.Id,
+                Name = template.Name,
+                Tone = template.Tone switch
+                {
+                    TeachingService.Contracts.Enums.FeedbackTone.Neutral => ReviewService.Contracts.Enums.FeedbackTone.Neutral,
+                    TeachingService.Contracts.Enums.FeedbackTone.Supportive => ReviewService.Contracts.Enums.FeedbackTone.Supportive,
+                    TeachingService.Contracts.Enums.FeedbackTone.Formal => ReviewService.Contracts.Enums.FeedbackTone.Formal,
+                    TeachingService.Contracts.Enums.FeedbackTone.Direct => ReviewService.Contracts.Enums.FeedbackTone.Direct,
+                    _ => throw new ArgumentOutOfRangeException(nameof(template.Tone))
+                },
+                DetailLevel = template.DetailLevel switch
+                {
+                    TeachingService.Contracts.Enums.FeedbackDetailLevel.Concise => ReviewService.Contracts.Enums.FeedbackDetailLevel.Concise,
+                    TeachingService.Contracts.Enums.FeedbackDetailLevel.Standard => ReviewService.Contracts.Enums.FeedbackDetailLevel.Standard,
+                    TeachingService.Contracts.Enums.FeedbackDetailLevel.Detailed => ReviewService.Contracts.Enums.FeedbackDetailLevel.Detailed,
+                    _ => throw new ArgumentOutOfRangeException(nameof(template.DetailLevel))
+                },
+                AnswerDisclosure = template.AnswerDisclosure switch
+                {
+                    TeachingService.Contracts.Enums.FeedbackAnswerDisclosure.HintsOnly => ReviewService.Contracts.Enums.FeedbackAnswerDisclosure.HintsOnly,
+                    TeachingService.Contracts.Enums.FeedbackAnswerDisclosure.ExplainApproach => ReviewService.Contracts.Enums.FeedbackAnswerDisclosure.ExplainApproach,
+                    TeachingService.Contracts.Enums.FeedbackAnswerDisclosure.MayShowAnswer => ReviewService.Contracts.Enums.FeedbackAnswerDisclosure.MayShowAnswer,
+                    _ => throw new ArgumentOutOfRangeException(nameof(template.AnswerDisclosure))
+                },
+                CustomInstruction = template.CustomInstruction,
+                Sections = template.Sections.Select(section => new FeedbackTemplateSectionSnapshot
+                {
+                    Id = section.Id,
+                    Title = section.Title,
+                    Instruction = section.Instruction,
+                    Format = section.Format switch
+                    {
+                        TeachingService.Contracts.Enums.FeedbackSectionFormat.Text => ReviewService.Contracts.Enums.FeedbackSectionFormat.Text,
+                        TeachingService.Contracts.Enums.FeedbackSectionFormat.List => ReviewService.Contracts.Enums.FeedbackSectionFormat.List,
+                        _ => throw new ArgumentOutOfRangeException(nameof(section.Format))
+                    },
+                    MaxItems = section.MaxItems,
+                    IsRequired = section.IsRequired
+                }).ToList()
+            };
         }
 
         private static ReviewTaskType ToReviewTaskType(TeachingTaskType taskType)

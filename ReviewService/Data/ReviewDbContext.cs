@@ -30,6 +30,10 @@ public class ReviewDbContext : DbContext
             entity.Property(item => item.StudentName).HasMaxLength(500);
             entity.Property(item => item.Status).HasConversion<string>().HasMaxLength(40);
             entity.Property(item => item.ProcessingGeneration).IsConcurrencyToken();
+            entity.Property(item => item.FeedbackTemplateJson)
+                .HasColumnName("FeedbackTemplate")
+                .HasColumnType("jsonb")
+                .HasDefaultValue("{}");
             entity.Property(item => item.GradingExamplesJson).HasColumnName("GradingExamples").HasColumnType("jsonb");
             entity.HasIndex(item => item.AttemptId).IsUnique();
             entity.HasIndex(item => item.AssignmentId);
@@ -78,6 +82,10 @@ public class ReviewDbContext : DbContext
             entity.Property(item => item.AnswerOptionsJson).HasColumnName("AnswerOptions").HasColumnType("jsonb");
             entity.Property(item => item.GradingExamplesJson).HasColumnName("GradingExamples").HasColumnType("jsonb");
             entity.Property(item => item.FindingsJson).HasColumnName("Findings").HasColumnType("jsonb");
+            entity.Property(item => item.FeedbackSectionsJson)
+                .HasColumnName("FeedbackSections")
+                .HasColumnType("jsonb")
+                .HasDefaultValue("[]");
             entity.HasIndex(item => new { item.ReviewId, item.TaskId }).IsUnique();
         });
 
@@ -86,6 +94,10 @@ public class ReviewDbContext : DbContext
             entity.Property(item => item.TestId).HasMaxLength(200);
             entity.Property(item => item.TeacherUserId).HasMaxLength(450);
             entity.Property(item => item.TestTitle).HasMaxLength(500);
+            entity.Property(item => item.FeedbackTemplateJson)
+                .HasColumnName("FeedbackTemplate")
+                .HasColumnType("jsonb")
+                .HasDefaultValue("{}");
             entity.Property(item => item.TasksJson).HasColumnName("Tasks").HasColumnType("jsonb");
             entity.Property(item => item.GradingExamplesJson).HasColumnName("GradingExamples").HasColumnType("jsonb");
             entity.HasIndex(item => new { item.TestId, item.Revision }).IsUnique();

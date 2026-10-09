@@ -112,6 +112,9 @@ public class ReviewIntegrationEventHandler : IReviewIntegrationEventHandler
                     TeacherUserId = message.TeacherUserId,
                     TestTitle = message.TestTitle,
                     ModelId = message.ModelId,
+                    FeedbackTemplateJson = JsonSerializer.Serialize(
+                        message.FeedbackTemplate,
+                        JsonHelper.Options),
                     TasksJson = JsonSerializer.Serialize(message.Tasks, JsonHelper.Options),
                     GradingExamplesJson = JsonSerializer.Serialize(message.GradingExamples, JsonHelper.Options),
                     PublishedAt = message.PublishedAt,
@@ -266,7 +269,7 @@ public class ReviewIntegrationEventHandler : IReviewIntegrationEventHandler
     }
 
     private static void ValidateGradingExamples(
-        IReadOnlyList<GradingExampleSnapshot>? examples,
+        IList<GradingExampleSnapshot>? examples,
         bool requireTaskPrompt)
     {
         if (examples is null || examples.Count > 5)
@@ -309,6 +312,8 @@ public class ReviewIntegrationEventHandler : IReviewIntegrationEventHandler
         {
             throw new InvalidDataException("An LLM review policy must reference a positive model ID.");
         }
+
+        ValidateFeedbackTemplate(message.FeedbackTemplate);
 
         ValidateGradingExamples(message.GradingExamples, requireTaskPrompt: true);
 
@@ -362,6 +367,41 @@ public class ReviewIntegrationEventHandler : IReviewIntegrationEventHandler
             {
                 throw new InvalidDataException(
                     $"Review task '{task.Id}' has an invalid type, check mode, or answer-option shape.");
+            }
+        }
+    }
+
+    private static void ValidateFeedbackTemplate(FeedbackTemplateSnapshot? template)
+    {
+        if (template is null
+            || template.Id == Guid.Empty
+            || string.IsNullOrWhiteSpace(template.Name)
+            || template.Name.Length > 120
+            || (template.CustomInstruction?.Length ?? 0) > 2000
+            || !Enum.IsDefined(template.Tone)
+            || !Enum.IsDefined(template.DetailLevel)
+            || !Enum.IsDefined(template.AnswerDisclosure)
+            || template.Sections is null
+            || template.Sections.Count is < 1 or > 6)
+        {
+            throw new InvalidDataException("The policy contains an invalid feedback template.");
+        }
+
+        var sectionIds = new HashSet<Guid>();
+        foreach (var section in template.Sections)
+        {
+            if (section is null
+                || section.Id == Guid.Empty
+                || !sectionIds.Add(section.Id)
+                || string.IsNullOrWhiteSpace(section.Title)
+                || section.Title.Length > 120
+                || string.IsNullOrWhiteSpace(section.Instruction)
+                || section.Instruction.Length > 1000
+                || !Enum.IsDefined(section.Format)
+                || section.MaxItems is < 1 or > 5
+                || section.Format == FeedbackSectionFormat.Text && section.MaxItems != 1)
+            {
+                throw new InvalidDataException("The policy contains an invalid feedback template section.");
             }
         }
     }

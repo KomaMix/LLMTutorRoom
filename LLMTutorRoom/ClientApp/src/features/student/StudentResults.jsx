@@ -15,6 +15,7 @@ import { formatDate } from "../../shared/lib/dates.js";
 import { parseReviewHistoryPage } from "../../shared/lib/overview.js";
 import { isTerminalReview, mergeReviews } from "../../shared/lib/reviews.js";
 import { ChoiceReviewAnswers } from "../../shared/ui/ChoiceReviewAnswers.jsx";
+import { FeedbackSections } from "../../shared/ui/FeedbackSections.jsx";
 import { StatusBadge } from "../../shared/ui/StatusBadge.jsx";
 import {
   getEffectiveAttemptStatus,
@@ -112,13 +113,15 @@ function ReviewProgress({ attemptStatus, isReviewDeferred, review }) {
 function ReviewTaskDetails({ result, taskIndex }) {
   const isAuto = result.checkMode === "auto";
   const findings = [...new Set(
-    result.findings
+    (result.findings ?? [])
       .filter(finding => typeof finding === "string")
       .map(finding => finding.trim())
       .filter(Boolean))];
   const studentAnswer = formatReviewAnswer(
     result.studentAnswer,
     result.answerOptions);
+  const hasStructuredFeedback = Array.isArray(result.feedbackSections)
+    && result.feedbackSections.length > 0;
 
   return (
     <section className="student-result-task">
@@ -148,14 +151,18 @@ function ReviewTaskDetails({ result, taskIndex }) {
         </div>
       )}
 
-      {!isAuto && result.feedback && (
+      {!isAuto && hasStructuredFeedback && (
+        <FeedbackSections sections={result.feedbackSections} />
+      )}
+
+      {!isAuto && !hasStructuredFeedback && result.feedback && (
         <div className="student-result-copy-block feedback">
           <span>Комментарий к ответу</span>
           <p>{result.feedback}</p>
         </div>
       )}
 
-      {!isAuto && findings.length > 0 && (
+      {!isAuto && !hasStructuredFeedback && findings.length > 0 && (
         <details className="student-result-findings">
           <summary>Рекомендации по ответу · {findings.length}</summary>
           <ul>

@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using OptionsFactory = Microsoft.Extensions.Options.Options;
+using ReviewService.Contracts.Enums;
 using ReviewService.Contracts.Events;
 using ReviewService.Helpers;
 using ReviewService.Models.Reviews;
@@ -12,6 +13,8 @@ namespace ReviewService.Tests;
 
 public sealed class LlmGatewayReviewClientTests
 {
+    private static readonly Guid SectionId = Guid.Parse("10f2c819-bb4b-4ea6-a11d-90af2e8d5012");
+
     [Theory]
     [InlineData(false, false)]
     [InlineData(true, false)]
@@ -55,7 +58,11 @@ public sealed class LlmGatewayReviewClientTests
         }));
 
         var result = await client.ReviewFreeTextAnswerAsync(
-            7, task, generalExamples, CancellationToken.None);
+            7,
+            task,
+            generalExamples,
+            CreateFeedbackTemplate(),
+            CancellationToken.None);
 
         Assert.Equal("/internal/chat/7", handler.RequestUri?.AbsolutePath);
         var messages = handler.Request.GetProperty("messages");
@@ -81,6 +88,12 @@ public sealed class LlmGatewayReviewClientTests
         Assert.Equal(task.TaskPrompt, payload.GetProperty("taskPrompt").GetString());
         Assert.Equal(20m, payload.GetProperty("maxScore").GetDecimal());
         Assert.Equal(task.StudentAnswer, payload.GetProperty("studentAnswer").GetString());
+        Assert.Equal(
+            SectionId,
+            payload.GetProperty("feedbackTemplate")
+                .GetProperty("sections")[0]
+                .GetProperty("id")
+                .GetGuid());
         Assert.False(payload.TryGetProperty("testGradingExamples", out _));
         Assert.False(payload.TryGetProperty("taskGradingExamples", out _));
         Assert.Equal(originalExamplesJson, task.GradingExamplesJson);
@@ -89,8 +102,35 @@ public sealed class LlmGatewayReviewClientTests
         Assert.Equal(7, result.Execution.ModelId);
         Assert.Equal(12, result.Execution.DeploymentId);
         Assert.Equal("gemma3:12b", result.Execution.ProviderModelId);
-        Assert.Equal("Checked current answer.", result.Feedback);
-        Assert.Equal(new[] { "Missing a requirement." }, result.Findings);
+        var section = Assert.Single(result.Sections);
+        Assert.Equal(SectionId, section.SectionId);
+        Assert.Equal("Что улучшить", section.Title);
+        Assert.Equal(FeedbackSectionFormat.List, section.Format);
+        Assert.Equal(new[] { "Missing a requirement." }, section.Items);
+    }
+
+    private static FeedbackTemplateSnapshot CreateFeedbackTemplate()
+    {
+        return new FeedbackTemplateSnapshot
+        {
+            Id = Guid.Parse("dfd1a633-334e-4cf9-8040-8825720082ee"),
+            Name = "Review template",
+            Tone = FeedbackTone.Supportive,
+            DetailLevel = FeedbackDetailLevel.Standard,
+            AnswerDisclosure = FeedbackAnswerDisclosure.ExplainApproach,
+            Sections =
+            [
+                new FeedbackTemplateSectionSnapshot
+                {
+                    Id = SectionId,
+                    Title = "Что улучшить",
+                    Instruction = "List the most important issue.",
+                    Format = FeedbackSectionFormat.List,
+                    MaxItems = 3,
+                    IsRequired = true
+                }
+            ]
+        };
     }
 
     private sealed class RecordingHandler : HttpMessageHandler
@@ -115,7 +155,7 @@ public sealed class LlmGatewayReviewClientTests
                     deploymentName = "Local provider",
                     providerModelId = "gemma3:12b",
                     deploymentUpdatedAt = new DateTimeOffset(2026, 9, 27, 10, 0, 0, TimeSpan.Zero),
-                    text = """{"score":12,"feedback":"Checked current answer.","findings":["Missing a requirement."]}"""
+                    text = $$"""{"score":12,"sections":[{"sectionId":"{{SectionId}}","text":"","items":["Missing a requirement."]}]}"""
                 })
             };
         }

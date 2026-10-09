@@ -3,6 +3,7 @@ import { TestList } from "./TestList.jsx";
 import { useTeacherTestsController } from "./useTeacherTestsController.js";
 
 export function TeacherTests({
+  feedbackTemplates = [],
   tests,
   models,
   selectedTest,
@@ -11,6 +12,7 @@ export function TeacherTests({
   onTestsChanged
 }) {
   const controller = useTeacherTestsController({
+    feedbackTemplates,
     models,
     onTestsChanged,
     selectedTest
@@ -25,6 +27,7 @@ export function TeacherTests({
         isCreating={controller.isCreatingTest}
         message={controller.testMessage}
         models={models}
+        feedbackTemplates={feedbackTemplates}
         onCreate={controller.handleCreateTest}
         onFormChange={controller.setTestForm}
         onSelectTest={onSelectTest}
@@ -42,6 +45,7 @@ export function TeacherTests({
         isSavingTest={controller.isSavingTest}
         isVersionBusy={controller.hasMutationInProgress}
         models={models}
+        feedbackTemplates={feedbackTemplates}
         onCreateTask={controller.handleCreateTask}
         onCreateVersion={controller.handleCreateVersion}
         onDeleteVersion={controller.handleDeleteVersion}

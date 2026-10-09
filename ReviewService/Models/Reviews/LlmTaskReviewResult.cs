@@ -2,10 +2,9 @@ using ReviewService.Contracts.Responses;
 
 namespace ReviewService.Models.Reviews;
 
-public sealed record LlmTaskReviewResult(
-    decimal Score,
-    string Feedback,
-    List<string> Findings)
+public class LlmTaskReviewResult
 {
-    public LlmExecutionResponse? Execution { get; init; }
+    public decimal Score { get; set; }
+    public List<LlmFeedbackSectionResult> Sections { get; set; } = new();
+    public LlmExecutionResponse? Execution { get; set; }
 }

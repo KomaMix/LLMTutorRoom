@@ -16,13 +16,14 @@ export const taskCheckModes = [
   { value: "manual", label: "Вручную" }
 ];
 
-export function createInitialTestForm(defaultModelId = "") {
+export function createInitialTestForm(defaultModelId = "", defaultFeedbackTemplateId = "") {
   return {
     title: "",
     subject: "",
     summary: "",
     timeLimitMinutes: 45,
     llmModelId: defaultModelId,
+    feedbackTemplateId: defaultFeedbackTemplateId,
     gradingExamples: []
   };
 }
@@ -52,6 +53,7 @@ export function createTestFormFromTest(test) {
     summary: test.summary,
     timeLimitMinutes: test.timeLimitMinutes,
     llmModelId: test.llmModelId ?? "",
+    feedbackTemplateId: test.feedbackTemplateId ?? "",
     gradingExamples: copyGradingExamples(test.gradingExamples)
   };
 }
@@ -63,6 +65,7 @@ export function createTestPayload(form) {
     summary: form.summary,
     timeLimitMinutes: Number(form.timeLimitMinutes),
     llmModelId: form.llmModelId ? Number(form.llmModelId) : null,
+    feedbackTemplateId: form.feedbackTemplateId || null,
     gradingExamples: createGradingExamplesPayload(form.gradingExamples)
   };
 }
@@ -128,6 +131,21 @@ export function getModelOptionLabel(model) {
   }
 
   return `${name} (${model.remainingChecks}/${model.maxChecks})`;
+}
+
+export function getFeedbackTemplateOptions(templates, currentTemplateId) {
+  if (!currentTemplateId || templates.some(template => template.id === currentTemplateId)) {
+    return templates;
+  }
+
+  return [
+    ...templates,
+    {
+      id: currentTemplateId,
+      name: `Шаблон ${currentTemplateId} (недоступен)`,
+      isSystem: false
+    }
+  ];
 }
 
 export function validateTaskForm(form) {

@@ -12,6 +12,7 @@ import { createTeacherVersionActions } from "./teacherVersionActions.js";
 import { useTeacherUnsavedChangesGuard } from "./useTeacherUnsavedChangesGuard.js";
 
 export function useTeacherTestsController({
+  feedbackTemplates,
   models,
   onTestsChanged,
   selectedTest
@@ -30,13 +31,14 @@ export function useTeacherTestsController({
   const logicalSelectionGeneration = useRef(0);
   const operationGenerations = useRef({});
   const hasInitializedDefaultModel = useRef(models.length > 0);
+  const hasInitializedDefaultFeedbackTemplate = useRef(feedbackTemplates.length > 0);
   selectedTestRef.current = activeTest;
   catalogTestRef.current = selectedTest;
   currentSelectedTestIdRef.current = currentSelectedTestId;
   currentSelectedTestKeyRef.current = currentSelectedTestKey;
 
   const [testForm, setTestForm] = useState(() =>
-    createInitialTestForm(models[0]?.id ?? ""));
+    createInitialTestForm(models[0]?.id ?? "", feedbackTemplates[0]?.id ?? ""));
   const [testEditForm, setTestEditForm] = useState(() => createTestFormFromTest(activeTest));
   const [taskForm, setTaskForm] = useState(createInitialTaskForm);
   const [taskEditForm, setTaskEditForm] = useState(createInitialTaskForm);
@@ -236,6 +238,26 @@ export function useTeacherTestsController({
     });
   }, [models]);
 
+  useEffect(() => {
+    if (hasInitializedDefaultFeedbackTemplate.current || feedbackTemplates.length === 0) {
+      return;
+    }
+
+    hasInitializedDefaultFeedbackTemplate.current = true;
+    setTestForm(current => {
+      if (current.feedbackTemplateId) {
+        return current;
+      }
+
+      const next = { ...current, feedbackTemplateId: feedbackTemplates[0].id };
+      createTestBaselineRef.current = {
+        ...createTestBaselineRef.current,
+        feedbackTemplateId: feedbackTemplates[0].id
+      };
+      return next;
+    });
+  }, [feedbackTemplates]);
+
   const testActions = createTeacherTestActions({
     activeTest,
     beginOperation,
@@ -249,6 +271,7 @@ export function useTeacherTestsController({
     isSavingTask,
     isSavingTest,
     isVersionBusy,
+    feedbackTemplates,
     models,
     onTestsChanged,
     setIsCreatingTest,

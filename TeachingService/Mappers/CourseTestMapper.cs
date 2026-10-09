@@ -26,6 +26,9 @@ namespace TeachingService.Mappers
                 TimeLimitMinutes = version.TimeLimitMinutes,
                 Summary = version.Summary,
                 LlmModelId = version.LlmModelId,
+                FeedbackTemplateId = version.FeedbackTemplateId,
+                FeedbackTemplate = FeedbackTemplateJson.DeserializeSnapshot(
+                    version.FeedbackTemplateSnapshotJson),
                 GradingExamples = GradingExamples.ToDtos(version.GradingExamples),
                 VersionNumber = version.VersionNumber,
                 ContentRevision = version.ContentRevision,

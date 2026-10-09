@@ -6,6 +6,7 @@ import { createTestListSummary } from "./teacherTestHelpers.js";
 
 export function TestList({
   form,
+  feedbackTemplates,
   hasUnsavedChanges,
   isBusy,
   isCreating,
@@ -95,6 +96,7 @@ export function TestList({
               message={message === "Тест создан." ? "" : message}
               mode="create"
               models={models}
+              feedbackTemplates={feedbackTemplates}
               onChange={onFormChange}
               onSubmit={onCreate}
             />

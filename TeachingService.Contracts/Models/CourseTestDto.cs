@@ -12,6 +12,8 @@ public class CourseTestDto
     public int TimeLimitMinutes { get; set; }
     public string Summary { get; set; } = string.Empty;
     public int? LlmModelId { get; set; }
+    public Guid? FeedbackTemplateId { get; set; }
+    public FeedbackTemplateDto? FeedbackTemplate { get; set; }
     public List<GradingExampleDto> GradingExamples { get; set; } = new();
     public int VersionNumber { get; set; }
     public int ContentRevision { get; set; }

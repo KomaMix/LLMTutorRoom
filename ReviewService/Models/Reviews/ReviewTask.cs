@@ -29,4 +29,5 @@ public sealed class ReviewTask
     public decimal MaxScore { get; set; }
     public string Feedback { get; set; } = string.Empty;
     public string FindingsJson { get; set; } = "[]";
+    public string FeedbackSectionsJson { get; set; } = "[]";
 }

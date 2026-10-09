@@ -39,15 +39,21 @@ public sealed class ReviewScoringService : IReviewScoringService
     {
         existingResult.Status = ReviewTaskStatus.Succeeded;
         existingResult.Score = NormalizeScore(llmResult.Score, existingResult.MaxScore);
-        existingResult.Feedback = string.IsNullOrWhiteSpace(llmResult.Feedback)
-            ? "Ответ проверен автоматически."
-            : llmResult.Feedback.Trim();
+        existingResult.FeedbackSectionsJson = JsonSerializer.Serialize(
+            llmResult.Sections,
+            JsonHelper.Options);
+        existingResult.Feedback = llmResult.Sections
+            .Where(section => section.Format == FeedbackSectionFormat.Text)
+            .Select(section => section.Text)
+            .FirstOrDefault(text => !string.IsNullOrWhiteSpace(text))
+            ?? string.Empty;
         existingResult.FindingsJson = JsonSerializer.Serialize(
-            (llmResult.Findings ?? [])
+            llmResult.Sections
+                .Where(section => section.Format == FeedbackSectionFormat.List)
+                .SelectMany(section => section.Items)
                 .Where(finding => !string.IsNullOrWhiteSpace(finding))
                 .Select(finding => finding.Trim())
-                .Take(5)
-                .DefaultIfEmpty("Ответ проверен автоматически."),
+                .Take(10),
             JsonHelper.Options);
         existingResult.CompletedAt = now;
         existingResult.NextRetryAt = null;

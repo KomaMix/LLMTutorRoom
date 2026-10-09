@@ -500,7 +500,8 @@ public sealed class TestVersioningTests
     {
         return new TeachingCatalogService(
             dbContext,
-            new ReviewPolicyOutboxWriter(dbContext));
+            new ReviewPolicyOutboxWriter(dbContext),
+            new FeedbackTemplateService(dbContext));
     }
 
     private static CreateTestRequest CreateTestRequest(string title)

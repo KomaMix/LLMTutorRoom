@@ -103,10 +103,21 @@ namespace TeachingService.Controllers
             if (!TryGetTeacherUserId(out var teacherUserId))
                 return Unauthorized("Teacher user id claim is required.");
 
-            var test = await _teachingCatalogService.CreateTestAsync(
-                request,
-                teacherUserId,
-                cancellationToken);
+            CourseTestDto test;
+            try
+            {
+                test = await _teachingCatalogService.CreateTestAsync(
+                    request,
+                    teacherUserId,
+                    cancellationToken);
+            }
+            catch (ArgumentException exception)
+            {
+                return BadRequest(CreateProblem(
+                    StatusCodes.Status400BadRequest,
+                    "Invalid test settings",
+                    exception.Message));
+            }
 
             return CreatedAtAction(
                 nameof(GetTestVersion),

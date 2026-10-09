@@ -300,28 +300,37 @@ public class ReviewQueryService : IReviewQueryService
                 StringComparison.Ordinal));
         }
 
-        return new ReviewTaskResponse(
-            task.Id,
-            task.TaskId,
-            task.TaskTitle,
-            task.TaskPrompt,
-            task.StudentAnswer,
-            answerOptions,
-            task.CheckMode,
-            task.Status,
-            task.Attempts,
-            task.NextRetryAt,
-            task.CompletedAt,
-            task.LastError,
-            task.Score,
-            task.MaxScore,
-            feedback,
-            findings,
-            modelId.HasValue && task.LlmDeploymentId.HasValue && task.LlmDeploymentUpdatedAt.HasValue
-                ? new LlmExecutionResponse(modelId.Value, task.LlmModelDisplayName ?? string.Empty,
-                    task.LlmDeploymentId.Value, task.LlmDeploymentName ?? string.Empty,
-                    task.LlmProviderModelId ?? string.Empty, task.LlmDeploymentUpdatedAt.Value)
-                : null);
+        return new ReviewTaskResponse
+        {
+            Id = task.Id,
+            TaskId = task.TaskId,
+            TaskTitle = task.TaskTitle,
+            TaskPrompt = task.TaskPrompt,
+            StudentAnswer = task.StudentAnswer,
+            AnswerOptions = answerOptions,
+            CheckMode = task.CheckMode,
+            Status = task.Status,
+            Attempts = task.Attempts,
+            NextRetryAt = task.NextRetryAt,
+            CompletedAt = task.CompletedAt,
+            LastError = task.LastError,
+            Score = task.Score,
+            MaxScore = task.MaxScore,
+            Feedback = feedback,
+            Findings = findings,
+            FeedbackSections = DeserializeFeedbackSections(task.FeedbackSectionsJson),
+            LlmExecution = modelId.HasValue
+                && task.LlmDeploymentId.HasValue
+                && task.LlmDeploymentUpdatedAt.HasValue
+                    ? new LlmExecutionResponse(
+                        modelId.Value,
+                        task.LlmModelDisplayName ?? string.Empty,
+                        task.LlmDeploymentId.Value,
+                        task.LlmDeploymentName ?? string.Empty,
+                        task.LlmProviderModelId ?? string.Empty,
+                        task.LlmDeploymentUpdatedAt.Value)
+                    : null
+        };
     }
 
     private static List<ReviewAnswerOptionResponse> DeserializeAnswerOptions(string json)
@@ -345,5 +354,18 @@ public class ReviewQueryService : IReviewQueryService
         }
 
         return JsonSerializer.Deserialize<List<string>>(json, JsonHelper.Options) ?? [];
+    }
+
+    private static List<FeedbackSectionResponse> DeserializeFeedbackSections(string json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return [];
+        }
+
+        return JsonSerializer.Deserialize<List<FeedbackSectionResponse>>(
+                json,
+                JsonHelper.Options)
+            ?? [];
     }
 }

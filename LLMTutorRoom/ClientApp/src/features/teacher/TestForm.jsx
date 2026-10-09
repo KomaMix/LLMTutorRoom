@@ -1,6 +1,7 @@
 import { Loader2, Plus, Save } from "lucide-react";
 import { GradingExamplesEditor } from "./GradingExamplesEditor.jsx";
 import {
+  getFeedbackTemplateOptions,
   getModelOptionLabel,
   getModelOptions
 } from "./teacherTestHelpers.js";
@@ -12,6 +13,7 @@ export function TestForm({
   message,
   mode,
   models,
+  feedbackTemplates = [],
   onChange,
   onSubmit
 }) {
@@ -19,6 +21,9 @@ export function TestForm({
   const controlsDisabled = isDisabled || isSubmitting;
   const idPrefix = isEditing ? "edit-test" : "test";
   const modelOptions = getModelOptions(models, form.llmModelId);
+  const templateOptions = getFeedbackTemplateOptions(
+    feedbackTemplates,
+    form.feedbackTemplateId);
 
   function updateForm(field, value) {
     onChange(current => ({ ...current, [field]: value }));
@@ -108,6 +113,25 @@ export function TestForm({
             {modelOptions.map(model => (
               <option key={model.id} value={model.id}>
                 {getModelOptionLabel(model)}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="field">
+          <label htmlFor={`${idPrefix}-feedback-template`}>Шаблон обратной связи</label>
+          <select
+            id={`${idPrefix}-feedback-template`}
+            value={form.feedbackTemplateId}
+            disabled={controlsDisabled}
+            onChange={event => updateForm("feedbackTemplateId", event.target.value)}
+          >
+            {!form.feedbackTemplateId && (
+              <option value="">Сбалансированный системный</option>
+            )}
+            {templateOptions.map(template => (
+              <option key={template.id} value={template.id}>
+                {template.name}{template.isSystem ? " · системный" : ""}
               </option>
             ))}
           </select>

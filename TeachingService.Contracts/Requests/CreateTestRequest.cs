@@ -13,5 +13,6 @@ public class CreateTestRequest
     public int TimeLimitMinutes { get; set; } = 45;
     [Range(1, int.MaxValue)]
     public int? LlmModelId { get; set; }
+    public Guid? FeedbackTemplateId { get; set; }
     public List<GradingExampleDto> GradingExamples { get; set; } = new();
 }

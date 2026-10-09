@@ -4,6 +4,7 @@ import {
   CheckCircle2,
   ClipboardCheck,
   FileText,
+  MessageSquareText,
   Server,
   UsersRound
 } from "lucide-react";
@@ -18,6 +19,7 @@ export const navigation = {
   teacher: [
     { path: "/teacher/dashboard", label: "Панель", icon: BarChart3 },
     { path: "/teacher/tests", label: "Тесты", icon: BookOpen },
+    { path: "/teacher/feedback-templates", label: "Обратная связь", icon: MessageSquareText },
     { path: "/teacher/groups", label: "Группы", icon: UsersRound },
     { path: "/teacher/reviews", label: "Проверки", icon: ClipboardCheck },
     { path: "/teacher/models", label: "Модели", icon: Server }

@@ -67,6 +67,7 @@ public class ReviewCreationService : IReviewCreationService
             StudentUserId = studentUserId,
             StudentName = string.IsNullOrWhiteSpace(studentName) ? null : studentName.Trim(),
             ModelId = policy.ModelId,
+            FeedbackTemplateJson = policy.FeedbackTemplateJson,
             GradingExamplesJson = policy.GradingExamplesJson,
             SubmittedAt = submittedAt,
             MaxScore = policyTasks.Sum(task => task.MaxPoints),

@@ -15,13 +15,16 @@ namespace TeachingService.Services
     {
         private readonly TeachingDbContext _dbContext;
         private readonly IReviewPolicyOutboxWriter _reviewPolicyOutboxWriter;
+        private readonly FeedbackTemplateService _feedbackTemplateService;
 
         public TeachingCatalogService(
             TeachingDbContext dbContext,
-            IReviewPolicyOutboxWriter reviewPolicyOutboxWriter)
+            IReviewPolicyOutboxWriter reviewPolicyOutboxWriter,
+            FeedbackTemplateService feedbackTemplateService)
         {
             _dbContext = dbContext;
             _reviewPolicyOutboxWriter = reviewPolicyOutboxWriter;
+            _feedbackTemplateService = feedbackTemplateService;
         }
 
         public async Task<List<CourseTestDto>> GetAllTestsAsync(
@@ -140,11 +143,23 @@ namespace TeachingService.Services
             if (examplesError is not null)
                 throw new ArgumentException(examplesError, nameof(request));
 
+            var feedbackTemplate = await ResolveFeedbackTemplateAsync(
+                request.FeedbackTemplateId,
+                teacherUserId,
+                cancellationToken);
+            if (feedbackTemplate is null)
+            {
+                throw new ArgumentException(
+                    "The selected feedback template is not available to this teacher.",
+                    nameof(request));
+            }
+
             var testId = Guid.NewGuid();
             var version = CreateVersion(
                 testId,
                 versionNumber: 1,
                 request,
+                feedbackTemplate,
                 DateTimeOffset.UtcNow);
             var test = new CourseTest
             {
@@ -270,7 +285,18 @@ namespace TeachingService.Services
             if (examplesError is not null)
                 return new(CatalogOperationStatus.ValidationFailed, error: examplesError);
 
-            ApplyTestDetails(draft, request);
+            var feedbackTemplate = await ResolveFeedbackTemplateAsync(
+                request.FeedbackTemplateId,
+                teacherUserId,
+                cancellationToken);
+            if (feedbackTemplate is null)
+            {
+                return new(
+                    CatalogOperationStatus.ValidationFailed,
+                    error: "The selected feedback template is not available to this teacher.");
+            }
+
+            ApplyTestDetails(draft, request, feedbackTemplate);
             if (!await TrySaveDraftMutationAsync(draft, cancellationToken))
             {
                 return new(
@@ -830,6 +856,7 @@ namespace TeachingService.Services
             Guid testId,
             int versionNumber,
             CreateTestRequest request,
+            FeedbackTemplateDto feedbackTemplate,
             DateTimeOffset createdAt)
         {
             var version = new CourseTestVersion
@@ -840,7 +867,7 @@ namespace TeachingService.Services
                 Status = CourseTestStatus.Draft,
                 CreatedAt = createdAt
             };
-            ApplyTestDetails(version, request);
+            ApplyTestDetails(version, request, feedbackTemplate);
             return version;
         }
 
@@ -860,6 +887,8 @@ namespace TeachingService.Services
                 TimeLimitMinutes = source.TimeLimitMinutes,
                 Summary = source.Summary,
                 LlmModelId = source.LlmModelId,
+                FeedbackTemplateId = source.FeedbackTemplateId,
+                FeedbackTemplateSnapshotJson = source.FeedbackTemplateSnapshotJson,
                 GradingExamples = GradingExamples.Clone(source.GradingExamples),
                 CreatedAt = createdAt
             };
@@ -900,14 +929,26 @@ namespace TeachingService.Services
 
         private static void ApplyTestDetails(
             CourseTestVersion version,
-            CreateTestRequest request)
+            CreateTestRequest request,
+            FeedbackTemplateDto feedbackTemplate)
         {
             version.Title = request.Title.Trim();
             version.Subject = request.Subject.Trim();
             version.TimeLimitMinutes = request.TimeLimitMinutes;
             version.Summary = request.Summary?.Trim() ?? string.Empty;
             version.LlmModelId = request.LlmModelId;
+            version.FeedbackTemplateId = feedbackTemplate.Id;
+            version.FeedbackTemplateSnapshotJson = FeedbackTemplateJson.SerializeSnapshot(feedbackTemplate);
             version.GradingExamples = GradingExamples.ToModels(request.GradingExamples);
+        }
+
+        private Task<FeedbackTemplateDto?> ResolveFeedbackTemplateAsync(
+            Guid? feedbackTemplateId,
+            string teacherUserId,
+            CancellationToken cancellationToken)
+        {
+            var id = feedbackTemplateId ?? SystemFeedbackTemplates.BalancedId;
+            return _feedbackTemplateService.GetAvailableAsync(id, teacherUserId, cancellationToken);
         }
 
         private static TestTask CreateTask(
@@ -1008,6 +1049,16 @@ namespace TeachingService.Services
                 && (version.LlmModelId is null or <= 0))
             {
                 return "LlmModelId is required when a visible task uses LLM review.";
+            }
+
+            if (visibleTasks.Any(task => task.CheckMode == TestTaskCheckMode.Llm))
+            {
+                var feedbackTemplate = FeedbackTemplateJson.DeserializeSnapshot(
+                    version.FeedbackTemplateSnapshotJson);
+                if (feedbackTemplate is null || feedbackTemplate.Sections.Count == 0)
+                {
+                    return "A feedback template is required when a visible task uses LLM review.";
+                }
             }
 
             return null;

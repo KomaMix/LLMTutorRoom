@@ -8,6 +8,7 @@ public sealed class TestReviewPolicy
     public string TeacherUserId { get; set; } = string.Empty;
     public string TestTitle { get; set; } = string.Empty;
     public int? ModelId { get; set; }
+    public string FeedbackTemplateJson { get; set; } = "{}";
     public string TasksJson { get; set; } = "[]";
     public string GradingExamplesJson { get; set; } = "[]";
     public DateTimeOffset PublishedAt { get; set; }

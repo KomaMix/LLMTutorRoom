@@ -8,6 +8,7 @@ public interface ILlmGatewayReviewClient
     Task<LlmTaskReviewResult> ReviewFreeTextAnswerAsync(
         int modelId,
         ReviewTask task,
-        IReadOnlyList<GradingExampleSnapshot> testGradingExamples,
+        IList<GradingExampleSnapshot> testGradingExamples,
+        FeedbackTemplateSnapshot feedbackTemplate,
         CancellationToken cancellationToken);
 }

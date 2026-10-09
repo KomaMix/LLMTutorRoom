@@ -26,6 +26,8 @@ public class CourseTestVersion
     public int TimeLimitMinutes { get; set; }
     public string Summary { get; set; } = string.Empty;
     public int? LlmModelId { get; set; }
+    public Guid? FeedbackTemplateId { get; set; }
+    public string FeedbackTemplateSnapshotJson { get; set; } = "{}";
     public List<GradingExample> GradingExamples { get; set; } = [];
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset? PublishedAt { get; set; }

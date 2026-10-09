@@ -6,6 +6,21 @@ function requireArray(value, fieldName) {
 
 function validateReviewTaskResult(taskResult, fieldName) {
   requireArray(taskResult.findings, `${fieldName}.findings`);
+  requireArray(taskResult.feedbackSections, `${fieldName}.feedbackSections`);
+  taskResult.feedbackSections.forEach((section, sectionIndex) => {
+    if (!section || typeof section !== "object") {
+      throw new Error(`${fieldName}.feedbackSections[${sectionIndex}] must be an object.`);
+    }
+
+    if (typeof section.sectionId !== "string"
+      || typeof section.title !== "string"
+      || typeof section.text !== "string") {
+      throw new Error(
+        `${fieldName}.feedbackSections[${sectionIndex}] contains invalid text fields.`);
+    }
+
+    requireArray(section.items, `${fieldName}.feedbackSections[${sectionIndex}].items`);
+  });
   if (taskResult.answerOptions == null) {
     return;
   }

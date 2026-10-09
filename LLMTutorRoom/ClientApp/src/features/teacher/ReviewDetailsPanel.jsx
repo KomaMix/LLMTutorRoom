@@ -1,6 +1,7 @@
 import { formatReviewAnswer } from "../../shared/lib/answers.js";
 import { formatDate } from "../../shared/lib/dates.js";
 import { ChoiceReviewAnswers } from "../../shared/ui/ChoiceReviewAnswers.jsx";
+import { FeedbackSections } from "../../shared/ui/FeedbackSections.jsx";
 import { StatusBadge } from "../../shared/ui/StatusBadge.jsx";
 
 const completedTaskStatuses = new Set(["succeeded", "failed"]);
@@ -11,7 +12,7 @@ function getStudentName(review) {
 
 function getFindings(result) {
   return [...new Set(
-    result.findings
+    (result.findings ?? [])
       .filter(finding => typeof finding === "string")
       .map(finding => finding.trim())
       .filter(Boolean))];
@@ -23,6 +24,8 @@ function ReviewTaskResult({ result, taskIndex }) {
   const isManual = result.checkMode === "manual";
   const isFailed = result.status === "failed";
   const findings = getFindings(result);
+  const hasStructuredFeedback = Array.isArray(result.feedbackSections)
+    && result.feedbackSections.length > 0;
   const studentAnswer = formatReviewAnswer(result.studentAnswer, result.answerOptions);
   const checkModeLabel = isLlm
     ? "Проверка LLM"
@@ -77,14 +80,18 @@ function ReviewTaskResult({ result, taskIndex }) {
         </div>
       ) : !isAuto && (
         <>
-          {result.feedback?.trim() && (
+          {hasStructuredFeedback && (
+            <FeedbackSections sections={result.feedbackSections} variant="teacher" />
+          )}
+
+          {!hasStructuredFeedback && result.feedback?.trim() && (
             <div className={`teacher-review-copy-block feedback${isLlm ? " llm" : ""}`}>
               <span>{feedbackLabel}</span>
               <p>{result.feedback.trim()}</p>
             </div>
           )}
 
-          {findings.length > 0 && (
+          {!hasStructuredFeedback && findings.length > 0 && (
             <div className={`teacher-review-findings${isLlm ? " llm" : ""}`}>
               <span>{findingsLabel}</span>
               <ul>

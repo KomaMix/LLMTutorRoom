@@ -7,6 +7,8 @@ import {
   TeacherTests
 } from "./index.js";
 import { StudyGroupsPage } from "../groups/StudyGroupsPage.jsx";
+import { FeedbackTemplatesPage } from "./FeedbackTemplatesPage.jsx";
+import { useFeedbackTemplates } from "./useFeedbackTemplates.js";
 
 function TeacherDashboardRoute({ overview }) {
   const navigate = useNavigate();
@@ -21,7 +23,7 @@ function TeacherDashboardRoute({ overview }) {
   );
 }
 
-function TeacherTestsRoute({ overview, refresh }) {
+function TeacherTestsRoute({ feedbackTemplates, overview, refresh }) {
   const { testId = "" } = useParams();
   const navigate = useNavigate();
   const selectedTest = overview.tests.find(test => test.id === testId)
@@ -47,6 +49,7 @@ function TeacherTestsRoute({ overview, refresh }) {
     <TeacherTests
       tests={overview.tests}
       models={overview.models}
+      feedbackTemplates={feedbackTemplates}
       selectedTest={selectedTest}
       selectedTestId={selectedTest?.id ?? ""}
       onSelectTest={nextTestId => navigate(`/teacher/tests/${nextTestId}`)}
@@ -56,10 +59,25 @@ function TeacherTestsRoute({ overview, refresh }) {
 }
 
 export function TeacherRoutes({ overview, refresh }) {
+  const feedbackTemplateCatalog = useFeedbackTemplates();
+
   return (
     <Routes>
       <Route path="/teacher/dashboard" element={<TeacherDashboardRoute overview={overview} />} />
-      <Route path="/teacher/tests/:testId?" element={<TeacherTestsRoute overview={overview} refresh={refresh} />} />
+      <Route
+        path="/teacher/tests/:testId?"
+        element={(
+          <TeacherTestsRoute
+            feedbackTemplates={feedbackTemplateCatalog.templates}
+            overview={overview}
+            refresh={refresh}
+          />
+        )}
+      />
+      <Route
+        path="/teacher/feedback-templates"
+        element={<FeedbackTemplatesPage {...feedbackTemplateCatalog} />}
+      />
       <Route path="/teacher/groups" element={<StudyGroupsPage attempts={overview.attempts} onChanged={refresh} />} />
       <Route
         path="/teacher/reviews"

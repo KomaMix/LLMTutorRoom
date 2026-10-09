@@ -17,6 +17,7 @@ export function TestDetails({
   isSavingTask,
   isSavingTest,
   isVersionBusy,
+  feedbackTemplates = [],
   models,
   onCreateTask,
   onCreateVersion,
@@ -59,6 +60,9 @@ export function TestDetails({
   const modelDisplayName = selectedModel?.displayName
     || (selectedTest.llmModelId ? `Модель #${selectedTest.llmModelId}` : null)
     || "не выбрана";
+  const feedbackTemplateName = selectedTest.feedbackTemplate?.name
+    || feedbackTemplates.find(template => template.id === selectedTest.feedbackTemplateId)?.name
+    || "сбалансированный";
 
   return (
     <article className="detail-panel teacher-test-details">
@@ -91,6 +95,7 @@ export function TestDetails({
         <InfoTile label="Задания" value={createTaskCountSummary(selectedTest)} />
         <InfoTile label="Баллы" value={selectedTest.totalPoints} />
         <InfoTile label="LLM" value={modelDisplayName} />
+        <InfoTile label="Обратная связь" value={feedbackTemplateName} />
       </div>
 
       {isDraft && (
@@ -102,6 +107,7 @@ export function TestDetails({
             message={testEditMessage}
             mode="edit"
             models={models}
+            feedbackTemplates={feedbackTemplates}
             onChange={onTestFormChange}
             onSubmit={onUpdateTest}
           />

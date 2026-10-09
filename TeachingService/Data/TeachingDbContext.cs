@@ -14,6 +14,7 @@ namespace TeachingService.Data
         public DbSet<StudyGroup> StudyGroups { get; set; } = null!;
         public DbSet<StudyGroupStudent> StudyGroupStudents { get; set; } = null!;
         public DbSet<TestAssignment> TestAssignments { get; set; } = null!;
+        public DbSet<FeedbackTemplate> FeedbackTemplates { get; set; } = null!;
 
         public TeachingDbContext(DbContextOptions<TeachingDbContext> options) : base(options)
         {
@@ -49,6 +50,10 @@ namespace TeachingService.Data
                     .HasConversion<string>();
                 entity.Ignore(version => version.Status);
                 entity.Property(version => version.ContentRevision).IsConcurrencyToken();
+                entity.Property(version => version.FeedbackTemplateSnapshotJson)
+                    .HasColumnName("FeedbackTemplateSnapshot")
+                    .HasColumnType("jsonb")
+                    .HasDefaultValue("{}");
                 entity.OwnsMany(version => version.GradingExamples, examples =>
                 {
                     ConfigureGradingExamples(examples);
@@ -83,6 +88,23 @@ namespace TeachingService.Data
             modelBuilder.Entity<AnswerOption>(entity =>
             {
                 entity.HasKey(option => option.Id);
+            });
+
+            modelBuilder.Entity<FeedbackTemplate>(entity =>
+            {
+                entity.HasKey(template => template.Id);
+                entity.Property(template => template.TeacherUserId).HasMaxLength(450);
+                entity.Property(template => template.Name).HasMaxLength(120);
+                entity.Property(template => template.Description).HasMaxLength(500);
+                entity.Property(template => template.CustomInstruction).HasMaxLength(2000);
+                entity.Property(template => template.Tone).HasConversion<string>();
+                entity.Property(template => template.DetailLevel).HasConversion<string>();
+                entity.Property(template => template.AnswerDisclosure).HasConversion<string>();
+                entity.Property(template => template.SectionsJson)
+                    .HasColumnName("Sections")
+                    .HasColumnType("jsonb");
+                entity.Property(template => template.Revision).IsConcurrencyToken();
+                entity.HasIndex(template => template.TeacherUserId);
             });
 
             modelBuilder.Entity<StudyGroup>(entity =>

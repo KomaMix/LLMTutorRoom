@@ -85,6 +85,10 @@ public sealed class ReviewJobProcessor(
         }
 
         var retryDelaySeconds = 0;
+        var feedbackTemplate = JsonSerializer.Deserialize<FeedbackTemplateSnapshot>(
+                review.FeedbackTemplateJson,
+                JsonHelper.Options)
+            ?? throw new InvalidDataException("Review feedback template snapshot is missing.");
         foreach (var task in review.TaskResults.Where(task => task.CheckMode == ReviewCheckMode.Llm))
         {
             if (task.Status is ReviewTaskStatus.Succeeded or ReviewTaskStatus.ManualReview)
@@ -101,6 +105,7 @@ public sealed class ReviewJobProcessor(
                     task,
                     JsonSerializer.Deserialize<List<GradingExampleSnapshot>>(
                         review.GradingExamplesJson, JsonHelper.Options) ?? [],
+                    feedbackTemplate,
                     cancellationToken);
                 scoringService.ApplyLlmResult(task, llmResult, DateTimeOffset.UtcNow);
                 task.LlmDeploymentId = llmResult.Execution?.DeploymentId;

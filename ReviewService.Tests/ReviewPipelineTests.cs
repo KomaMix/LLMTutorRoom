@@ -627,6 +627,26 @@ public sealed class ReviewPipelineTests
             TeacherUserId = "teacher",
             TestTitle = "Test",
             ModelId = modelId,
+            FeedbackTemplate = new FeedbackTemplateSnapshot
+            {
+                Id = Guid.Parse("ab988221-5553-42ac-9c4a-8c70ec04a789"),
+                Name = "Test feedback",
+                Tone = FeedbackTone.Supportive,
+                DetailLevel = FeedbackDetailLevel.Standard,
+                AnswerDisclosure = FeedbackAnswerDisclosure.ExplainApproach,
+                Sections =
+                [
+                    new FeedbackTemplateSectionSnapshot
+                    {
+                        Id = Guid.Parse("d0aa1525-b151-42a4-b13c-67d9689bb60c"),
+                        Title = "Feedback",
+                        Instruction = "Explain the result.",
+                        Format = FeedbackSectionFormat.Text,
+                        MaxItems = 1,
+                        IsRequired = true
+                    }
+                ]
+            },
             Tasks = [task],
             PublishedAt = Now.AddMinutes(-10)
         };

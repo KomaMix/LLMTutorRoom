@@ -84,6 +84,30 @@ export function deleteTask(testId, versionNumber, contentRevision, taskId) {
   );
 }
 
+export function getFeedbackTemplates({ signal } = {}) {
+  return apiRequest("/api/teaching/feedback-templates", { signal });
+}
+
+export function createFeedbackTemplate(payload) {
+  return apiRequest("/api/teaching/feedback-templates", {
+    method: "POST",
+    body: payload
+  });
+}
+
+export function updateFeedbackTemplate(templateId, payload) {
+  return apiRequest(`/api/teaching/feedback-templates/${encodeURIComponent(templateId)}`, {
+    method: "PUT",
+    body: payload
+  });
+}
+
+export function deleteFeedbackTemplate(templateId) {
+  return apiRequest(`/api/teaching/feedback-templates/${encodeURIComponent(templateId)}`, {
+    method: "DELETE"
+  });
+}
+
 export function getStudyGroups({ signal } = {}) {
   return apiRequest("/api/teaching/groups", { signal });
 }

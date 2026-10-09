@@ -51,6 +51,7 @@ builder.Services.AddOptions<IntegrationEventOptions>()
     .ValidateOnStart();
 builder.Services.AddScoped<TeachingCatalogService>();
 builder.Services.AddScoped<StudyGroupService>();
+builder.Services.AddScoped<FeedbackTemplateService>();
 builder.Services.AddScoped<IReviewPolicyOutboxWriter, ReviewPolicyOutboxWriter>();
 builder.Services.AddSingleton<RabbitMqIntegrationConnectionProvider>();
 builder.Services.AddSingleton<IIntegrationEventPublisher, RabbitMqIntegrationEventPublisher>();

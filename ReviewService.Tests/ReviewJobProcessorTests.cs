@@ -20,6 +20,7 @@ namespace ReviewService.Tests;
 public sealed class ReviewJobProcessorTests
 {
     private static readonly DateTimeOffset Now = new(2026, 8, 15, 12, 0, 0, TimeSpan.Zero);
+    private static readonly Guid FeedbackSectionId = Guid.Parse("2e5202bb-e977-430c-b0bf-8af38fe57a01");
 
     [Theory]
     [InlineData(0)]
@@ -71,6 +72,9 @@ public sealed class ReviewJobProcessorTests
         Assert.Equal(12, storedTask.LlmDeploymentId);
         Assert.Equal("gemma3:12b", storedTask.LlmProviderModelId);
         var returnedTask = Assert.Single(ReviewQueryService.ToResponse(stored).TaskResults);
+        var returnedSection = Assert.Single(returnedTask.FeedbackSections);
+        Assert.Equal(FeedbackSectionId, returnedSection.SectionId);
+        Assert.Equal(new[] { "No issues." }, returnedSection.Items);
         Assert.Equal(new LlmExecutionResponse(1, "Grading model", 12, "Primary deployment",
             "gemma3:12b", new DateTimeOffset(2026, 9, 27, 10, 0, 0, TimeSpan.Zero)), returnedTask.LlmExecution);
     }
@@ -445,6 +449,9 @@ public sealed class ReviewJobProcessorTests
                 ? ReviewStatus.Queued
                 : ReviewStatus.RetryScheduled,
             ModelId = 1,
+            FeedbackTemplateJson = JsonSerializer.Serialize(
+                CreateFeedbackTemplate(),
+                JsonHelper.Options),
             LlmQuotaReservedAt = Now.AddMinutes(-5),
             SubmittedAt = Now.AddMinutes(-5),
             QueuedAt = Now.AddMinutes(-4),
@@ -474,23 +481,32 @@ public sealed class ReviewJobProcessorTests
     private sealed class SuccessfulLlmReviewClient : ILlmGatewayReviewClient
     {
         public int CallCount { get; private set; }
-        public IReadOnlyList<GradingExampleSnapshot> TestGradingExamples { get; private set; } = [];
+        public IList<GradingExampleSnapshot> TestGradingExamples { get; private set; } = [];
         public string TaskGradingExamplesJson { get; private set; } = "[]";
 
         public Task<LlmTaskReviewResult> ReviewFreeTextAnswerAsync(
             int modelId,
             ReviewTask task,
-            IReadOnlyList<GradingExampleSnapshot> testGradingExamples,
+            IList<GradingExampleSnapshot> testGradingExamples,
+            FeedbackTemplateSnapshot feedbackTemplate,
             CancellationToken cancellationToken)
         {
             CallCount++;
             TestGradingExamples = testGradingExamples.ToList();
             TaskGradingExamplesJson = task.GradingExamplesJson;
-            return Task.FromResult(new LlmTaskReviewResult(
-                task.MaxScore,
-                "Checked.",
-                ["No issues."])
+            return Task.FromResult(new LlmTaskReviewResult
             {
+                Score = task.MaxScore,
+                Sections =
+                [
+                    new LlmFeedbackSectionResult
+                    {
+                        SectionId = feedbackTemplate.Sections[0].Id,
+                        Title = feedbackTemplate.Sections[0].Title,
+                        Format = feedbackTemplate.Sections[0].Format,
+                        Items = ["No issues."]
+                    }
+                ],
                 Execution = new LlmExecutionResponse(modelId, "Grading model", 12, "Primary deployment",
                     "gemma3:12b", new DateTimeOffset(2026, 9, 27, 10, 0, 0, TimeSpan.Zero))
             });
@@ -507,10 +523,17 @@ public sealed class ReviewJobProcessorTests
         }
     }
 
-    private sealed class FailingLlmReviewClient(
-        TimeSpan delay,
-        Exception? exception = null) : ILlmGatewayReviewClient
+    private sealed class FailingLlmReviewClient : ILlmGatewayReviewClient
     {
+        private readonly TimeSpan _delay;
+        private readonly Exception? _exception;
+
+        public FailingLlmReviewClient(TimeSpan delay, Exception? exception = null)
+        {
+            _delay = delay;
+            _exception = exception;
+        }
+
         public int CallCount { get; private set; }
         public DateTimeOffset? CallStartedAt { get; private set; }
         public DateTimeOffset? FailedAt { get; private set; }
@@ -518,16 +541,43 @@ public sealed class ReviewJobProcessorTests
         public async Task<LlmTaskReviewResult> ReviewFreeTextAnswerAsync(
             int modelId,
             ReviewTask task,
-            IReadOnlyList<GradingExampleSnapshot> testGradingExamples,
+            IList<GradingExampleSnapshot> testGradingExamples,
+            FeedbackTemplateSnapshot feedbackTemplate,
             CancellationToken cancellationToken)
         {
             CallCount++;
             CallStartedAt = DateTimeOffset.UtcNow;
-            if (delay > TimeSpan.Zero)
-                await Task.Delay(delay, cancellationToken);
+            if (_delay > TimeSpan.Zero)
+            {
+                await Task.Delay(_delay, cancellationToken);
+            }
 
             FailedAt = DateTimeOffset.UtcNow;
-            throw exception ?? new InvalidOperationException("LLM failure.");
+            throw _exception ?? new InvalidOperationException("LLM failure.");
         }
+    }
+
+    private static FeedbackTemplateSnapshot CreateFeedbackTemplate()
+    {
+        return new FeedbackTemplateSnapshot
+        {
+            Id = Guid.Parse("13ccdf1e-bc16-4395-a59f-484020865b08"),
+            Name = "Test feedback",
+            Tone = FeedbackTone.Supportive,
+            DetailLevel = FeedbackDetailLevel.Standard,
+            AnswerDisclosure = FeedbackAnswerDisclosure.ExplainApproach,
+            Sections =
+            [
+                new FeedbackTemplateSectionSnapshot
+                {
+                    Id = FeedbackSectionId,
+                    Title = "Findings",
+                    Instruction = "List findings.",
+                    Format = FeedbackSectionFormat.List,
+                    MaxItems = 3,
+                    IsRequired = true
+                }
+            ]
+        };
     }
 }
